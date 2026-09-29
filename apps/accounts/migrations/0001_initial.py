@@ -1,0 +1,7 @@
+from django.conf import settings
+from django.db import migrations, models
+import django.db.models.deletion
+class Migration(migrations.Migration):
+    initial = True
+    dependencies = [migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
+    operations = [migrations.CreateModel(name="Profile", fields=[("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")), ("role", models.CharField(choices=[("developer", "Developer"), ("recruiter", "Recruiter"), ("organization", "Organization")], default="developer", max_length=20)), ("headline", models.CharField(blank=True, max_length=160)), ("location", models.CharField(blank=True, max_length=100)), ("bio", models.TextField(blank=True)), ("skills", models.CharField(blank=True, help_text="Comma-separated skills", max_length=500)), ("rank", models.PositiveIntegerField(blank=True, null=True)), ("score", models.PositiveIntegerField(default=0)), ("recruiter_visible", models.BooleanField(default=True)), ("avatar", models.ImageField(blank=True, upload_to="avatars/")), ("user", models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name="profile", to=settings.AUTH_USER_MODEL))])]
