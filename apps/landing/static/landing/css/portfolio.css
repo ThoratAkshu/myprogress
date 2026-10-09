@@ -76,3 +76,5 @@
 .app-dialog input:not([type=checkbox]),.app-dialog textarea{display:block;width:100%;padding:10px 12px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-weight:500;background:white}
 .app-dialog input:focus,.app-dialog textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 3px #6558e814}
 .page-actions{display:flex;flex-wrap:wrap;gap:8px}
+.profile-post h3 a{color:var(--ink)}
+.profile-post h3 a:hover{color:var(--violet)}

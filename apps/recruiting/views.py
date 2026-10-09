@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.decorators import role_required
 from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent
+from apps.notifications.services import notify
 from apps.core.services import CODE_ACTIONS, CONTRIBUTION_ACTIONS, active_coding_days, language_breakdown, platform_languages, visible_developers
 from .models import ContactRequest, Shortlist, ShortlistEntry
 recruiter_required = role_required("recruiter", "organization")
@@ -124,6 +125,7 @@ def contact_view(request, handle):
     try:
         with transaction.atomic():
             ContactRequest.objects.create(recruiter=request.user, developer=candidate.user, role_title=role_title, message=message)
+            notify(candidate.user, request.user, "contact_request", f"{request.user.get_full_name() or 'A recruiter'} wants to talk to you about {role_title}", reverse("landing:workspace_section", args=["network"]))
     except IntegrityError:
         messages.error(request, "You already have a pending request with this developer.")
         return redirect(_safe_next(request, fallback))
@@ -145,5 +147,6 @@ def respond_contact_view(request, request_id):
         contact.status = "accepted" if action == "accept" else "declined"
         contact.responded_at = timezone.now()
         contact.save(update_fields=["status", "responded_at"])
+        notify(contact.recruiter, request.user, "contact_response", f"{request.user.get_full_name() or 'A developer'} {contact.status} your request about {contact.role_title}", reverse("recruiting:outreach"))
         messages.success(request, "Request accepted. Your email is now shared with the recruiter." if action == "accept" else "Request declined.")
     return redirect("landing:workspace_section", section="network")

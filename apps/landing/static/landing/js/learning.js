@@ -1,0 +1,1 @@
+document.querySelectorAll('[data-post-form]').forEach(form=>{const sync=()=>{const kind=form.querySelector('input[name="kind"]:checked')?.value;form.querySelectorAll('[data-kind-section]').forEach(section=>{section.hidden=Boolean(kind)&&section.dataset.kindSection!==kind})};form.querySelectorAll('input[name="kind"]').forEach(radio=>radio.addEventListener('change',sync));sync()});

@@ -3,7 +3,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Sum
+from django.core.paginator import Paginator
+from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -21,6 +22,8 @@ from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository
 from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
+from apps.learning.views import record_post_view
+from apps.notifications.services import notify
 from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioView, ShortlistEntry
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -86,7 +89,7 @@ def account_identity_view(request):
 def _workspace_context(request, section="overview"):
     profile = refresh_rank(request.user)
     projects = request.user.projects.all()
-    posts = LearningPost.objects.filter(is_public=True).select_related("author")[:3]
+    posts = LearningPost.objects.filter(is_public=True).select_related("author__profile")[:3]
     project_count = request.user.projects.count()
     completed_count = request.user.projects.filter(status="complete").count()
     setup_items = [bool(profile.headline), bool(profile.skills), project_count > 0, True]
@@ -123,6 +126,17 @@ def workspace_section_view(request, section):
             top = language_breakdown([repository.languages for repository in entry.user.repositories.all()], limit=1)
             entry.top_language = top[0]["name"] if top else ""
         context.update({"score_components": score_breakdown(request.user), "leaderboard": board, "leaderboard_language": language, "languages": platform_languages(), "is_recruiter": context["profile"].role in RECRUITER_ROLES})
+    if section == "learning":
+        tabs = [("for-you", "For you"), ("following", "Following"), ("mine", f"My content {context['learning_count']}")]
+        tab = request.GET.get("tab") if request.GET.get("tab") in dict(tabs) else "for-you"
+        posts = LearningPost.objects.select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))
+        if tab == "mine":
+            posts = posts.filter(author=request.user)
+        elif tab == "following":
+            posts = posts.filter(is_public=True, author__in=request.user.following_relationships.values("following"))
+        else:
+            posts = posts.filter(is_public=True)
+        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_page": Paginator(posts.order_by("-published_at"), 12).get_page(request.GET.get("page"))})
     if section == "network":
         context["contact_requests"] = request.user.contact_requests.select_related("recruiter__profile")[:20]
     if section == "portfolio":
@@ -174,16 +188,12 @@ def update_project_view(request, project_id):
     return redirect("landing:workspace_section", section="projects")
 @login_required(login_url="landing:home")
 def learning_view(request, post_id):
+    """Old share links: record the view and send readers to the post page (never off-site)."""
     post = LearningPost.objects.filter(pk=post_id, is_public=True).first()
     if not post:
         return redirect("landing:workspace_section", section="learning")
-    if not request.session.session_key:
-        request.session.create()
-    view, created = ContentView.objects.get_or_create(post=post, session_key=request.session.session_key, viewed_on=timezone.localdate(), defaults={"viewer": request.user})
-    if created:
-        record_activity(request.user, "learning", "viewed_learning", 1, {"post_id": post.pk})
-    complete_daily_step(request.user, "learn")
-    return redirect(post.video_url or reverse("landing:workspace_section", kwargs={"section": "learning"}))
+    record_post_view(request, post)
+    return redirect("learning:detail", post_id=post.pk)
 @login_required(login_url="landing:home")
 @require_POST
 def complete_loop_view(request, step):
@@ -332,6 +342,9 @@ def public_profile_view(request, handle):
     repositories = owner.repositories.all()
     public_repositories = repositories.filter(visibility="public").select_related("project")
     projects = list(owner.projects.filter(is_public=True).select_related("repository").prefetch_related("milestones"))
+    explainers = dict(owner.learning_posts.filter(is_public=True, project__isnull=False).order_by("published_at").values_list("project_id", "pk"))
+    for project in projects:
+        project.explainer_id = explainers.get(project.pk)
     is_following = request.user.is_authenticated and Follow.objects.filter(follower=request.user, following=owner).exists()
     viewer_profile = Profile.objects.filter(user=request.user).first() if request.user.is_authenticated else None
     if viewer_profile and request.user != owner:
@@ -366,7 +379,10 @@ def follow_view(request, handle):
     profile = get_object_or_404(Profile.objects.select_related("user"), handle=handle)
     if profile.user != request.user:
         follow, created = Follow.objects.get_or_create(follower=request.user, following=profile.user)
-        if not created:
+        if created:
+            follower_handle = Profile.objects.get_or_create(user=request.user)[0].handle
+            notify(profile.user, request.user, "follow", f"{request.user.get_full_name() or follower_handle} started following you", reverse("landing:public_profile", args=[follower_handle]))
+        else:
             follow.delete()
         refresh_rank(profile.user)
     return redirect("landing:public_profile", handle=profile.handle)

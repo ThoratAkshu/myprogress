@@ -1,6 +1,6 @@
 from functools import lru_cache
 from apps.accounts.models import Profile
-from .models import RECRUITER_ROLES
+from apps.recruiting.models import RECRUITER_ROLES
 def workspace_navigation(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
@@ -16,4 +16,5 @@ def workspace_navigation(request):
         "nav_learning_count": lambda: user.learning_posts.count(),
         "nav_pending_requests": lambda: user.contact_requests.filter(status="pending").count(),
         "nav_shortlist_count": lambda: user.shortlists.count(),
+        "nav_unread_notifications": lambda: user.notifications.filter(read_at__isnull=True).count(),
     }

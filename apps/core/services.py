@@ -4,7 +4,7 @@ from django.db.models import Prefetch, Sum
 from django.utils import timezone
 from apps.accounts.models import Profile
 from .models import ActivityEvent, ContentView, DailyLoopCompletion, EarningTransaction, Repository
-CONTRIBUTION_ACTIONS = {"created_project", "created_repository", "created_repository_file", "pushed_commits"}
+CONTRIBUTION_ACTIONS = {"created_project", "created_repository", "created_repository_file", "pushed_commits", "published_learning"}
 CODE_ACTIONS = {"created_repository_file", "pushed_commits"}
 def record_activity(user, event_type, action, points=1, metadata=None):
     return ActivityEvent.objects.create(user=user, event_type=event_type, action=action, points=points, metadata=metadata or {})
@@ -21,14 +21,14 @@ def score_breakdown(user):
     building = len(verified) - shipped
     coding_days = active_coding_days(user)
     post_count = user.learning_posts.filter(is_public=True).count()
-    unique_views = ContentView.objects.filter(post__author=user, post__is_public=True).count()
+    unique_views = ContentView.objects.filter(post__author=user, post__is_public=True, viewer__isnull=False).exclude(viewer=user).values("post", "viewer").distinct().count()
     followers = user.follower_relationships.count()
     profile = Profile.objects.filter(user=user).first()
     profile_checks = [bool(profile and profile.headline), bool(profile and profile.bio), bool(profile and profile.skills), bool(profile and profile.location), any(project.is_public for project in projects)]
     components = [
         {"key": "shipped", "label": "Verified shipped work", "points": min(shipped * 12 + building * 4, 35), "max": 35, "detail": f"{shipped} shipped and {building} in progress with pushed code", "hint": "Push code to a project repository, then complete its milestones."},
         {"key": "consistency", "label": "Coding consistency", "points": min(coding_days, 25), "max": 25, "detail": f"{coding_days} active coding day{'s' if coding_days != 1 else ''} in the last 90", "hint": "Push commits on more days rather than more commits on one day."},
-        {"key": "teaching", "label": "Teaching", "points": min(post_count * 4 + unique_views // 10, 20), "max": 20, "detail": f"{post_count} published post{'s' if post_count != 1 else ''}, {unique_views} unique view{'s' if unique_views != 1 else ''}", "hint": "Explain how you built a project in a video or guide."},
+        {"key": "teaching", "label": "Teaching", "points": min(post_count * 4 + unique_views // 10, 20), "max": 20, "detail": f"{post_count} published post{'s' if post_count != 1 else ''}, {unique_views} signed-in reader{'s' if unique_views != 1 else ''}", "hint": "Explain how you built a project in a video or guide."},
         {"key": "community", "label": "Community", "points": min(followers, 10), "max": 10, "detail": f"{followers} follower{'s' if followers != 1 else ''}", "hint": "Help others and share your work so developers follow you."},
         {"key": "profile", "label": "Profile completeness", "points": sum(profile_checks) * 2, "max": 10, "detail": f"{sum(profile_checks)} of 5 sections complete", "hint": "Add a headline, about, skills, location, and a public project."},
     ]

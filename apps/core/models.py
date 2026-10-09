@@ -51,12 +51,28 @@ class LearningPost(models.Model):
     is_public = models.BooleanField(default=True)
     thumbnail = models.ImageField(upload_to="learning/", blank=True)
     video_url = models.URLField(blank=True)
+    video_file = models.FileField(upload_to="learning/videos/", blank=True)
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_posts", help_text="The project this post explains")
+    body = models.TextField(blank=True)
     views = models.PositiveIntegerField(default=0)
     earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     class Meta:
         ordering = ["-published_at"]
     def __str__(self):
         return self.title
+class PostLike(models.Model):
+    post = models.ForeignKey(LearningPost, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["post", "user"], name="unique_post_like")]
+class PostComment(models.Model):
+    post = models.ForeignKey(LearningPost, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_comments")
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["created_at"]
 class ContentView(models.Model):
     post = models.ForeignKey(LearningPost, on_delete=models.CASCADE, related_name="unique_views")
     viewer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="content_views")
