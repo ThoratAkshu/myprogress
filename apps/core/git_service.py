@@ -90,12 +90,57 @@ def commit_file(repository, relative_path, content, user, message=""):
         run_git("commit", "-m", (message.strip() or f"Add {relative_path}")[:200], cwd=checkout)
         run_git("push", "origin", repository.default_branch, cwd=checkout)
 def user_can_access(user, repository, write=False):
+    if user and user.is_authenticated:
+        if repository.owner_id == user.id:
+            return True
+        roles = ["write", "maintain"] if write else ["read", "write", "maintain"]
+        if repository.collaborators.filter(user=user, role__in=roles).exists():
+            return True
+    return not write and repository.visibility == "public"
+def user_can_administer(user, repository):
     if not user or not user.is_authenticated:
-        return not write and repository.visibility == "public"
-    if repository.owner_id == user.id:
-        return True
-    roles = ["write", "maintain"] if write else ["read", "write", "maintain"]
-    return repository.collaborators.filter(user=user, role__in=roles).exists()
+        return False
+    return repository.owner_id == user.id or repository.collaborators.filter(user=user, role="maintain").exists()
+LANGUAGE_FILENAMES = {"Dockerfile": "Dockerfile", "Makefile": "Makefile", "CMakeLists.txt": "CMake"}
+LANGUAGE_EXTENSIONS = {
+    ".py": "Python", ".ipynb": "Jupyter Notebook", ".js": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript", ".jsx": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript",
+    ".html": "HTML", ".htm": "HTML", ".css": "CSS", ".scss": "SCSS", ".sass": "SCSS", ".less": "Less", ".vue": "Vue", ".svelte": "Svelte",
+    ".java": "Java", ".kt": "Kotlin", ".kts": "Kotlin", ".scala": "Scala", ".groovy": "Groovy", ".go": "Go", ".rs": "Rust", ".rb": "Ruby", ".php": "PHP",
+    ".c": "C", ".h": "C", ".cpp": "C++", ".cc": "C++", ".cxx": "C++", ".hpp": "C++", ".cs": "C#", ".fs": "F#", ".swift": "Swift", ".m": "Objective-C", ".dart": "Dart",
+    ".sql": "SQL", ".sh": "Shell", ".bash": "Shell", ".ps1": "PowerShell", ".r": "R", ".jl": "Julia", ".lua": "Lua", ".pl": "Perl", ".ex": "Elixir", ".exs": "Elixir",
+    ".erl": "Erlang", ".hs": "Haskell", ".clj": "Clojure", ".sol": "Solidity", ".tf": "HCL", ".zig": "Zig",
+}
+VENDORED_DIRECTORIES = {"node_modules", "vendor", "dist", "build", "venv", ".venv", "__pycache__", "site-packages", "bower_components", ".next", "target"}
+def detect_languages(repository, ref=None):
+    ref = ref or repository.default_branch
+    result = run_git("ls-tree", "-r", "-l", "-z", "--full-tree", ref, cwd=repository_path(repository))
+    totals = {}
+    for entry in result.stdout.split("\0"):
+        if "\t" not in entry:
+            continue
+        metadata, name = entry.split("\t", 1)
+        _, kind, _, size = metadata.split()
+        path = Path(name)
+        if kind != "blob" or size == "-" or VENDORED_DIRECTORIES.intersection(path.parts[:-1]) or name.endswith((".min.js", ".min.css")):
+            continue
+        language = LANGUAGE_FILENAMES.get(path.name) or LANGUAGE_EXTENSIONS.get(path.suffix.lower())
+        if language:
+            totals[language] = totals.get(language, 0) + int(size)
+    return dict(sorted(totals.items(), key=lambda item: -item[1]))
+def refresh_repository_languages(repository):
+    branches = {branch["name"] for branch in list_branches(repository)}
+    repository.languages = detect_languages(repository) if repository.default_branch in branches else {}
+    repository.save(update_fields=["languages"])
+    return repository.languages
+def branch_heads(repository):
+    result = run_git("for-each-ref", "--format=%(objectname)", "refs/heads", cwd=repository_path(repository))
+    return set(result.stdout.split())
+def count_new_commits(repository, previous_heads):
+    new_heads = branch_heads(repository) - previous_heads
+    if not new_heads:
+        return 0
+    exclusions = ["--not", *previous_heads] if previous_heads else []
+    return int(run_git("rev-list", "--count", *new_heads, *exclusions, cwd=repository_path(repository)).stdout.strip() or 0)
 def authenticate_git_request(request):
     header = request.headers.get("Authorization", "")
     if not header.startswith("Basic "):

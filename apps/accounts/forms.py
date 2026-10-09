@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth import authenticate, password_validation
 from django.contrib.auth.models import User
+from .models import Profile
 class RegistrationForm(forms.Form):
     ROLE_CHOICES = [("developer", "Developer"), ("recruiter", "Recruiter"), ("organization", "Organization")]
     first_name = forms.CharField(max_length=150)
@@ -35,3 +36,15 @@ class EmailLoginForm(forms.Form):
             if not self.user.is_active:
                 raise forms.ValidationError("This account has been disabled.")
         return cleaned
+class ProfileForm(forms.ModelForm):
+    handle = forms.SlugField(min_length=3, max_length=40, help_text="Letters, numbers, and dashes.")
+    class Meta:
+        model = Profile
+        fields = ["handle", "headline", "location", "bio", "skills", "recruiter_visible"]
+    def clean_handle(self):
+        handle = self.cleaned_data["handle"].strip().lower()
+        if Profile.objects.filter(handle=handle).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("That portfolio address is already taken.")
+        return handle
+    def clean_skills(self):
+        return ", ".join(dict.fromkeys(skill.strip() for skill in self.cleaned_data["skills"].split(",") if skill.strip()))

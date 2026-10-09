@@ -97,6 +97,7 @@ class Repository(models.Model):
     storage_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     default_branch = models.CharField(max_length=100, default="main")
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default="private")
+    languages = models.JSONField(default=dict, blank=True, help_text="Bytes of code per language on the default branch")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:

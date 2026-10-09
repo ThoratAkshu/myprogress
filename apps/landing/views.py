@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Sum
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -17,11 +17,13 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, JsonResponse
 from django.utils.text import slugify
 from django.views.generic import TemplateView
-from apps.accounts.forms import EmailLoginForm, RegistrationForm
-from apps.accounts.models import Profile
+from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
+from apps.accounts.models import Follow, Profile
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository
-from apps.core.services import complete_daily_step, earning_balance, record_activity, refresh_rank
-from apps.core.git_service import authenticate_git_request, commit_file, create_branch, initialize_repository, list_branches, list_commits, list_contributors, list_files, smart_http, user_can_access
+from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, record_activity, refresh_rank
+from apps.core.git_service import authenticate_git_request, branch_heads, commit_file, count_new_commits, create_branch, initialize_repository, list_branches, list_commits, list_contributors, list_files, refresh_repository_languages, smart_http, user_can_access, user_can_administer
+import logging
+logger = logging.getLogger(__name__)
 @method_decorator(never_cache, name="dispatch")
 class LandingPageView(TemplateView):
     template_name = "landing/index.html"
@@ -156,7 +158,8 @@ def create_repository_view(request, project_id):
     while Repository.objects.filter(owner=request.user, slug=slug).exists():
         slug = f"{base_slug[:85]}-{counter}"
         counter += 1
-    repository = Repository.objects.create(project=project, owner=request.user, slug=slug, visibility=request.POST.get("visibility", "private"))
+    visibility = request.POST.get("visibility") if request.POST.get("visibility") in {"private", "public"} else "private"
+    repository = Repository.objects.create(project=project, owner=request.user, slug=slug, visibility=visibility)
     try:
         initialize_repository(repository)
     except Exception:
@@ -172,15 +175,21 @@ def repository_view(request, repository_id):
     if not repository or not user_can_access(request.user, repository):
         messages.error(request, "You do not have access to that repository.")
         return redirect("landing:workspace_section", section="projects")
-    allowed_tabs = {"code", "branches", "commits", "contributors", "settings"}
+    can_write = user_can_access(request.user, repository, write=True)
+    can_admin = user_can_administer(request.user, repository)
+    allowed_tabs = {"code", "branches", "commits", "contributors", "settings"} if can_admin else {"code", "branches", "commits", "contributors"}
     active_tab = request.GET.get("tab", "code")
     active_tab = active_tab if active_tab in allowed_tabs else "code"
     if request.method == "POST":
         action = request.POST.get("action")
+        if (action in {"add_file", "create_branch"} and not can_write) or (action == "settings" and not can_admin):
+            messages.error(request, "You do not have permission to change this repository.")
+            return redirect("landing:repository", repository_id=repository.pk)
         try:
             if action == "add_file":
                 commit_file(repository, request.POST.get("path", ""), request.POST.get("content", ""), request.user, request.POST.get("message", ""))
                 record_activity(request.user, "project", "created_repository_file", 2, {"repository_id": repository.pk})
+                refresh_repository_languages(repository)
                 messages.success(request, "File committed to the repository.")
                 return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=code')
             if action == "create_branch":
@@ -196,6 +205,7 @@ def repository_view(request, repository_id):
                 if default_branch in branch_names:
                     repository.default_branch = default_branch
                 repository.save(update_fields=["visibility", "default_branch", "updated_at"])
+                refresh_repository_languages(repository)
                 messages.success(request, "Repository settings updated.")
                 return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
         except (ValueError, RuntimeError) as error:
@@ -207,12 +217,13 @@ def repository_view(request, repository_id):
     files = list_files(repository) if branches and active_tab == "code" else []
     commits = list_commits(repository) if branches and active_tab in {"commits", "contributors"} else []
     contributors = list_contributors(repository) if branches and active_tab == "contributors" else []
-    context = {"repository": repository, "branches": branches, "files": files, "commits": commits, "contributors": contributors, "active_tab": active_tab, "clone_url": clone_url, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "initials": ((request.user.first_name[:1] + request.user.last_name[:1]) or request.user.username[:2]).upper()}
+    context = {"repository": repository, "can_write": can_write, "can_admin": can_admin, "branches": branches, "files": files, "commits": commits, "contributors": contributors, "active_tab": active_tab, "clone_url": clone_url, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "initials": ((request.user.first_name[:1] + request.user.last_name[:1]) or request.user.username[:2]).upper()}
     return render(request, "landing/repository.html", context)
 @login_required(login_url="landing:home")
 @require_POST
 def issue_git_token_view(request):
-    token, raw = GitAccessToken.issue(request.user, request.POST.get("name", "Local development")[:80], request.POST.get("scope", "write"))
+    scope = request.POST.get("scope") if request.POST.get("scope") in {"read", "write"} else "write"
+    token, raw = GitAccessToken.issue(request.user, request.POST.get("name", "Local development")[:80], scope)
     request.session["new_git_token"] = raw
     messages.success(request, "MyProgress write key created. Copy it now; it will not be shown again.")
     repository = Repository.objects.filter(pk=request.POST.get("repository_id"), owner=request.user).first()
@@ -238,12 +249,61 @@ def git_http_view(request, owner_id, slug, service_path=""):
         response["X-MyProgress-Auth"] = "account-email-and-write-key"
         return response
     request.user = git_user or request.user
+    previous_heads = None
+    if write and request.method == "POST":
+        try:
+            previous_heads = branch_heads(repository)
+        except Exception:
+            logger.exception("Could not snapshot branches before push to repository %s", repository.pk)
     try:
         status, headers, body = smart_http(repository, request, service_path)
     except Exception:
         return HttpResponse("Git service unavailable", status=500)
+    if previous_heads is not None and status == 200:
+        _record_push(repository, git_user, previous_heads)
     response = HttpResponse(body, status=status)
     for key in ["Content-Type", "Cache-Control", "Expires", "Pragma"]:
         if key in headers:
             response[key] = headers[key]
     return response
+def _record_push(repository, user, previous_heads):
+    try:
+        commits = count_new_commits(repository, previous_heads)
+        refresh_repository_languages(repository)
+        if commits:
+            record_activity(user, "project", "pushed_commits", min(commits, 5), {"repository_id": repository.pk, "commits": commits})
+            complete_daily_step(user, "build")
+    except Exception:
+        logger.exception("Could not record push activity for repository %s", repository.pk)
+def public_profile_view(request, handle):
+    profile = get_object_or_404(Profile.objects.select_related("user"), handle=handle)
+    owner = profile.user
+    profile = refresh_rank(owner)
+    repositories = owner.repositories.all()
+    public_repositories = repositories.filter(visibility="public").select_related("project")
+    projects = owner.projects.filter(is_public=True).select_related("repository").prefetch_related("milestones")
+    is_following = request.user.is_authenticated and Follow.objects.filter(follower=request.user, following=owner).exists()
+    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True)[:6], "completed_count": projects.filter(status="complete").count(), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    return render(request, "landing/profile.html", context)
+@login_required(login_url="landing:home")
+@require_POST
+def update_profile_view(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    form = ProfileForm(request.POST, instance=profile)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Portfolio updated.")
+    else:
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(request, error)
+    return redirect("landing:workspace_section", section="portfolio")
+@login_required(login_url="landing:home")
+@require_POST
+def follow_view(request, handle):
+    profile = get_object_or_404(Profile.objects.select_related("user"), handle=handle)
+    if profile.user != request.user:
+        follow, created = Follow.objects.get_or_create(follower=request.user, following=profile.user)
+        if not created:
+            follow.delete()
+    return redirect("landing:public_profile", handle=profile.handle)

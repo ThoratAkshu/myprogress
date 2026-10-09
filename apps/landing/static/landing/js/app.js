@@ -20,3 +20,4 @@ if(projectControls){
  update();
 }
 document.querySelector('[data-copy-token]')?.addEventListener('click',async e=>{const token=e.currentTarget.previousElementSibling.textContent.trim();await navigator.clipboard.writeText(token);e.currentTarget.textContent='Copied ✓'});
+document.querySelectorAll('[data-open-dialog]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.openDialog)?.showModal()));document.querySelectorAll('[data-close-dialog]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog')?.close()));document.querySelectorAll('dialog.profile-dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d)d.close()}));
