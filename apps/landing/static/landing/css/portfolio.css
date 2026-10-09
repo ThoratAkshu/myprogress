@@ -62,17 +62,17 @@
 .repo-row b{display:block;color:var(--ink);font-size:13px}
 .repo-row small{color:var(--muted);font-size:11px}
 .portfolio-link{display:inline-flex;gap:6px;align-items:center;margin-top:8px;font-size:12px;color:var(--violet)}
-.profile-dialog label{display:grid;gap:6px;margin-top:12px;font-size:12px;font-weight:700}
-.profile-dialog .checkbox-row{display:flex;align-items:center;gap:8px;font-weight:600}
-.profile-dialog .checkbox-row input{width:auto}
-.profile-dialog small{color:var(--muted);font-weight:500}
+.app-dialog label{display:grid;gap:6px;margin-top:12px;font-size:12px;font-weight:700}
+.app-dialog .checkbox-row{display:flex;align-items:center;gap:8px;font-weight:600}
+.app-dialog .checkbox-row input{width:auto}
+.app-dialog small{color:var(--muted);font-weight:500}
 @media(max-width:900px){.profile-columns{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:560px){.public-profile .workspace-topbar{padding:0 16px;gap:10px}.public-profile .brand>span:last-child{display:none}.public-profile .top-actions{gap:8px}.public-profile .top-actions .button{padding:8px 12px;font-size:13px}.profile-shell{width:calc(100% - 32px);padding-top:16px}.profile-card{padding:18px}.profile-stats{gap:14px 24px}.public-profile .brand small{display:none}.profile-name{font-size:23px}}
-.profile-dialog{width:min(540px,calc(100% - 24px));max-height:calc(100% - 32px);padding:0;border:0;border-radius:13px;box-shadow:0 30px 90px #10162d4d}
-.profile-dialog::backdrop{background:#11182a8c;backdrop-filter:blur(3px)}
-.profile-dialog form{padding:26px}
-.profile-dialog h2{font-size:21px;margin:7px 0}
-.profile-dialog p{font-size:11px;color:var(--muted)}
-.profile-dialog input:not([type=checkbox]),.profile-dialog textarea{display:block;width:100%;padding:10px 12px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-weight:500;background:white}
-.profile-dialog input:focus,.profile-dialog textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 3px #6558e814}
+.app-dialog{width:min(540px,calc(100% - 24px));max-height:calc(100% - 32px);padding:0;border:0;border-radius:13px;box-shadow:0 30px 90px #10162d4d}
+.app-dialog::backdrop{background:#11182a8c;backdrop-filter:blur(3px)}
+.app-dialog form{padding:26px}
+.app-dialog h2{font-size:21px;margin:7px 0}
+.app-dialog p{font-size:11px;color:var(--muted)}
+.app-dialog input:not([type=checkbox]),.app-dialog textarea{display:block;width:100%;padding:10px 12px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-weight:500;background:white}
+.app-dialog input:focus,.app-dialog textarea:focus{outline:none;border-color:var(--violet);box-shadow:0 0 0 3px #6558e814}
 .page-actions{display:flex;flex-wrap:wrap;gap:8px}

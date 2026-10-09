@@ -91,10 +91,10 @@ class ContributionAndLanguageTests(TestCase):
         user = make_user("asha@example.com")
         languages = {"Python": 600, "JavaScript": 200, "HTML": 100, "CSS": 50, "Shell": 20, "Go": 15, "Rust": 10, "C": 5}
         Repository.objects.create(project=Project.objects.create(owner=user, title="One"), owner=user, slug="one", languages=languages)
-        breakdown = language_breakdown(user.repositories.all())
+        breakdown = language_breakdown(user.repositories.values_list("languages", flat=True))
         self.assertEqual(breakdown[0], {"name": "Python", "percent": 60.0})
         self.assertEqual(breakdown[-1], {"name": "Other", "percent": 1.5})
-        self.assertEqual(language_breakdown(Repository.objects.none()), [])
+        self.assertEqual(language_breakdown([]), [])
 class RepositoryPermissionTests(TestCase):
     def setUp(self):
         self.storage = tempfile.TemporaryDirectory()

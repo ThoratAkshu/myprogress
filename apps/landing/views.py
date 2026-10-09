@@ -20,7 +20,11 @@ from django.views.generic import TemplateView
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository
-from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, record_activity, refresh_rank
+from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
+from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioView, ShortlistEntry
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
+from django.db import IntegrityError
 from apps.core.git_service import authenticate_git_request, branch_heads, commit_file, count_new_commits, create_branch, initialize_repository, list_branches, list_commits, list_contributors, list_files, refresh_repository_languages, smart_http, user_can_access, user_can_administer
 import logging
 logger = logging.getLogger(__name__)
@@ -71,6 +75,8 @@ def logout_view(request):
 @login_required(login_url="landing:home")
 @never_cache
 def dashboard_view(request):
+    if Profile.objects.filter(user=request.user, role__in=RECRUITER_ROLES).exists():
+        return redirect("recruiting:search")
     return render(request, "landing/dashboard.html", _workspace_context(request))
 
 @login_required(login_url="landing:home")
@@ -110,6 +116,19 @@ def workspace_section_view(request, section):
         context["project_skills"] = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0].lower()))
         context["repositories"] = request.user.repositories.select_related("project")
         context["new_git_token"] = request.session.pop("new_git_token", None)
+    if section == "rankings":
+        language = request.GET.get("language", "").strip()
+        board = list(leaderboard(language or None))
+        for entry in board:
+            top = language_breakdown([repository.languages for repository in entry.user.repositories.all()], limit=1)
+            entry.top_language = top[0]["name"] if top else ""
+        context.update({"score_components": score_breakdown(request.user), "leaderboard": board, "leaderboard_language": language, "languages": platform_languages(), "is_recruiter": context["profile"].role in RECRUITER_ROLES})
+    if section == "network":
+        context["contact_requests"] = request.user.contact_requests.select_related("recruiter__profile")[:20]
+    if section == "portfolio":
+        views = PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30))
+        context["portfolio_views"] = views.count()
+        context["recruiter_views"] = views.filter(viewer_role__in=RECRUITER_ROLES).count()
     return render(request, "landing/workspace_section.html", context)
 @login_required(login_url="landing:home")
 @require_POST
@@ -122,8 +141,37 @@ def create_project_view(request):
     ProjectMilestone.objects.bulk_create([ProjectMilestone(project=project, title=title, position=position) for position, title in enumerate(["Plan the solution", "Build the core", "Document the work", "Publish a demo"])])
     record_activity(request.user, "project", "created_project", 3, {"project_id": project.pk})
     complete_daily_step(request.user, "build")
+    refresh_rank(request.user)
     messages.success(request, "Project created. You can now add its proof of work.")
     return redirect("landing:dashboard")
+@login_required(login_url="landing:home")
+@require_POST
+def update_project_view(request, project_id):
+    project = get_object_or_404(Project, pk=project_id, owner=request.user)
+    live_url = request.POST.get("live_url", "").strip()
+    if live_url:
+        try:
+            URLValidator(schemes=["http", "https"])(live_url)
+        except ValidationError:
+            messages.error(request, "Enter a full live demo URL starting with https://.")
+            return redirect("landing:workspace_section", section="projects")
+    project.summary = request.POST.get("summary", "").strip()
+    project.skills = ", ".join(dict.fromkeys(skill.strip() for skill in request.POST.get("skills", "").split(",") if skill.strip()))[:500]
+    project.live_url = live_url[:200]
+    project.is_public = request.POST.get("is_public") == "on"
+    completed_ids = {int(value) for value in request.POST.getlist("milestones") if value.isdigit()}
+    milestones = list(project.milestones.all())
+    for milestone in milestones:
+        if (milestone.pk in completed_ids) != milestone.is_complete:
+            milestone.is_complete = milestone.pk in completed_ids
+            milestone.completed_at = timezone.now() if milestone.is_complete else None
+    ProjectMilestone.objects.bulk_update(milestones, ["is_complete", "completed_at"])
+    completed = sum(milestone.is_complete for milestone in milestones)
+    project.status = "complete" if milestones and completed == len(milestones) else "building" if completed else "planning"
+    project.save(update_fields=["summary", "skills", "live_url", "is_public", "status", "updated_at"])
+    refresh_rank(request.user)
+    messages.success(request, "Project shipped. Push code to its repository so it counts as verified." if project.status == "complete" and not project.has_verified_code else "Project updated.")
+    return redirect("landing:workspace_section", section="projects")
 @login_required(login_url="landing:home")
 def learning_view(request, post_id):
     post = LearningPost.objects.filter(pk=post_id, is_public=True).first()
@@ -190,6 +238,7 @@ def repository_view(request, repository_id):
                 commit_file(repository, request.POST.get("path", ""), request.POST.get("content", ""), request.user, request.POST.get("message", ""))
                 record_activity(request.user, "project", "created_repository_file", 2, {"repository_id": repository.pk})
                 refresh_repository_languages(repository)
+                refresh_rank(request.user)
                 messages.success(request, "File committed to the repository.")
                 return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=code')
             if action == "create_branch":
@@ -273,6 +322,7 @@ def _record_push(repository, user, previous_heads):
         if commits:
             record_activity(user, "project", "pushed_commits", min(commits, 5), {"repository_id": repository.pk, "commits": commits})
             complete_daily_step(user, "build")
+            refresh_rank(user)
     except Exception:
         logger.exception("Could not record push activity for repository %s", repository.pk)
 def public_profile_view(request, handle):
@@ -281,9 +331,20 @@ def public_profile_view(request, handle):
     profile = refresh_rank(owner)
     repositories = owner.repositories.all()
     public_repositories = repositories.filter(visibility="public").select_related("project")
-    projects = owner.projects.filter(is_public=True).select_related("repository").prefetch_related("milestones")
+    projects = list(owner.projects.filter(is_public=True).select_related("repository").prefetch_related("milestones"))
     is_following = request.user.is_authenticated and Follow.objects.filter(follower=request.user, following=owner).exists()
-    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True)[:6], "completed_count": projects.filter(status="complete").count(), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    viewer_profile = Profile.objects.filter(user=request.user).first() if request.user.is_authenticated else None
+    if viewer_profile and request.user != owner:
+        try:
+            PortfolioView.objects.get_or_create(profile=profile, viewer=request.user, viewed_on=timezone.localdate(), defaults={"viewer_role": viewer_profile.role})
+        except IntegrityError:
+            pass
+    can_recruit = bool(viewer_profile and viewer_profile.role in RECRUITER_ROLES and profile.role == "developer" and profile.recruiter_visible and request.user != owner)
+    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True)[:6], "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    if can_recruit:
+        context["viewer_shortlists"] = request.user.shortlists.all()
+        context["is_shortlisted"] = ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=owner).exists()
+        context["contact_status"] = ContactRequest.objects.filter(recruiter=request.user, developer=owner).order_by("-created_at").values_list("status", flat=True).first()
     return render(request, "landing/profile.html", context)
 @login_required(login_url="landing:home")
 @require_POST
@@ -292,6 +353,7 @@ def update_profile_view(request):
     form = ProfileForm(request.POST, instance=profile)
     if form.is_valid():
         form.save()
+        refresh_rank(request.user)
         messages.success(request, "Portfolio updated.")
     else:
         for errors in form.errors.values():
@@ -306,4 +368,5 @@ def follow_view(request, handle):
         follow, created = Follow.objects.get_or_create(follower=request.user, following=profile.user)
         if not created:
             follow.delete()
+        refresh_rank(profile.user)
     return redirect("landing:public_profile", handle=profile.handle)

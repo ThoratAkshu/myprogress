@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, workspace_section_view
+from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view
 app_name = "landing"
 urlpatterns = [
     path("", LandingPageView.as_view(), name="home"),
@@ -10,6 +10,7 @@ urlpatterns = [
     path("account/identity/", account_identity_view, name="account_identity"),
     path("dashboard/<str:section>/", workspace_section_view, name="workspace_section"),
     path("projects/create/", create_project_view, name="create_project"),
+    path("projects/<int:project_id>/update/", update_project_view, name="update_project"),
     path("learning/<int:post_id>/view/", learning_view, name="learning_view"),
     path("daily-loop/<str:step>/complete/", complete_loop_view, name="complete_loop"),
     path("projects/<int:project_id>/repository/create/", create_repository_view, name="create_repository"),

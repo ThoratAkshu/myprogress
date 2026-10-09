@@ -1,0 +1,4 @@
+document.querySelectorAll('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.openDialog)?.showModal()));
+document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
+document.querySelectorAll('dialog.app-dialog').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close()}));
+document.querySelectorAll('[data-contact]').forEach(button=>button.addEventListener('click',()=>{const dialog=document.getElementById('contact-dialog');if(!dialog)return;dialog.querySelector('[data-contact-form]').action=button.dataset.contact;dialog.querySelector('[data-contact-target]').textContent=button.dataset.contactName;dialog.showModal()}));

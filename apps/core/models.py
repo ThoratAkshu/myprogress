@@ -30,6 +30,10 @@ class Project(models.Model):
     def calculated_progress(self):
         total = self.milestones.count()
         return round(self.milestones.filter(is_complete=True).count() / total * 100) if total else self.progress
+    @property
+    def has_verified_code(self):
+        repository = getattr(self, "repository", None)
+        return bool(repository and repository.languages)
 class ProjectMilestone(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="milestones")
     title = models.CharField(max_length=160)
