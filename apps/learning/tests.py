@@ -295,3 +295,66 @@ class StudioTests(TestCase):
         post = LearningPost.objects.get(title="Refunds")
         self.assertRedirects(response, reverse("learning:detail", args=[post.pk]))
         self.assertEqual(post.branch, "feature/refunds")
+    def test_drafts_can_come_from_a_recording_transcript_without_a_project(self):
+        transcript = "Today I'll show how the ledger posts balanced entries. Every entry has a debit and a credit."
+        response = self.client.post(reverse("learning:studio_draft"), {"project": "", "transcript": transcript, "chapters": "0:00 Intro\n1:05 Posting entries", "kind": "video"})
+        draft = response.json()
+        self.assertEqual(draft["source"], "starter")
+        self.assertEqual(draft["title"], "Today I'll show how the ledger posts balanced entries")
+        self.assertIn("- 1:05 Posting entries", draft["body"])
+        self.assertIn("your recording", draft["notice"])
+        self.assertEqual(self.client.post(reverse("learning:studio_draft"), {"project": ""}).status_code, 400)
+        from types import SimpleNamespace
+        from unittest import mock
+        reply = SimpleNamespace(stop_reason="tool_use", content=[SimpleNamespace(type="tool_use", input={"title": "Balanced entries", "summary": "s", "body": "b", "video_script": "v"})])
+        with override_settings(ANTHROPIC_API_KEY="test-key"), mock.patch("anthropic.Anthropic") as client_class:
+            client_class.return_value.messages.create.return_value = reply
+            self.client.post(reverse("learning:studio_draft"), {"project": self.project.pk, "branch": "main", "transcript": transcript})
+        prompt = client_class.return_value.messages.create.call_args.kwargs["messages"][0]["content"]
+        self.assertIn('"recording"', prompt)
+        self.assertIn("debit and a credit", prompt)
+class TimelineTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # publishing is rate limited per user, and user ids repeat between tests
+    def test_chapters_are_parsed_sorted_and_validated(self):
+        from .timeline import clean_chapters, parse_chapters
+        self.assertEqual(clean_chapters("1:20 The data model\n0:00   Intro\n\n1:02:03 Wrap up"), "0:00 Intro\n1:20 The data model\n1:02:03 Wrap up")
+        self.assertEqual(parse_chapters("0:00 Intro\nnot a chapter\n0:45 Setup")[1], {"seconds": 45, "stamp": "0:45", "title": "Setup"})
+        for bad in ["Intro at the start", "0:75 Too many seconds"]:
+            with self.assertRaises(ValueError):
+                clean_chapters(bad)
+    def test_captions_are_validated_and_read_as_a_transcript(self):
+        from .timeline import clean_captions, parse_captions
+        vtt = "WEBVTT\n\n1\n00:00:01.500 --> 00:00:04.000\nHello <b>everyone</b>\n\n2\n00:01:05.000 --> 00:01:07.000\nNow the <script>code</script>\n"
+        self.assertEqual(parse_captions(vtt), [{"seconds": 1, "stamp": "0:01", "text": "Hello everyone"}, {"seconds": 65, "stamp": "1:05", "text": "Now the code"}])
+        self.assertEqual(clean_captions(""), "")
+        with self.assertRaises(ValueError):
+            clean_captions("1\n00:00:01.000 --> 00:00:02.000\nNo header")
+    def test_published_chapters_and_captions_show_on_the_post_and_player(self):
+        author = make_user("author@example.com", "Asha", "Rao")
+        reader = make_user("reader@example.com", "Ravi", "Reader")
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, True)
+        with override_settings(MEDIA_ROOT=media):
+            self.client.force_login(author)
+            video = lambda: SimpleUploadedFile("walkthrough.webm", b"\x1aE\xdf\xa3" + b"\x00" * 64, content_type="video/webm")
+            data = {"title": "Ledger tour", "kind": "video", "summary": "", "body": "", "is_public": "on", "chapters": "1:20 Posting\n0:00 Intro", "captions": "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHi, I'm Asha & this is <i>Ledger</i>\n"}
+            response = self.client.post(reverse("learning:create"), {**data, "video_file": video(), "chapters": "Posting at one twenty"})
+            self.assertContains(response, "isn&#x27;t a chapter")
+            self.client.post(reverse("learning:create"), {**data, "video_file": video()})
+            post = LearningPost.objects.get(title="Ledger tour")
+            self.assertEqual(post.chapters, "0:00 Intro\n1:20 Posting")
+            self.client.force_login(reader)
+            page = self.client.get(reverse("learning:detail", args=[post.pk]))
+            self.assertContains(page, f'<track kind="captions" label="Captions" src="/learn/{post.pk}/captions.vtt" default>')
+            self.assertContains(page, '<button type="button" data-seek="80"><span>1:20</span>Posting</button>', html=False)
+            self.assertContains(page, "Hi, I&#x27;m Asha &amp; this is Ledger")
+            captions = self.client.get(reverse("learning:captions", args=[post.pk]))
+            self.assertEqual(captions["Content-Type"], "text/vtt; charset=utf-8")
+            self.assertTrue(captions.content.startswith(b"WEBVTT"))
+            LearningPost.objects.filter(pk=post.pk).update(is_public=False)
+            self.assertEqual(self.client.get(reverse("learning:captions", args=[post.pk])).status_code, 404)
+            editor = self.client.get(reverse("learning:create"), {"kind": "video"})
+            for control in ['data-setting="layout"', 'value="bottom-left" data-setting="position"', 'value="sunset" data-setting="background"', 'data-setting="captions"', 'data-recorder-action="chapter"', "recorder-scene.js"]:
+                self.assertContains(editor, control)

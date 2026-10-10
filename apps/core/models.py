@@ -56,6 +56,8 @@ class LearningPost(models.Model):
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_posts", help_text="The project this post explains")
     branch = models.CharField(max_length=255, blank=True, help_text="The repository branch this post explains")
     video_script = models.TextField(blank=True, help_text="Private script the author reads while recording")
+    chapters = models.TextField(blank=True, help_text="One chapter per line, like 1:20 The data model")
+    captions = models.TextField(blank=True, help_text="WebVTT captions for the video")
     body = models.TextField(blank=True)
     views = models.PositiveIntegerField(default=0)
     earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)

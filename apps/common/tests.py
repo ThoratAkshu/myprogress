@@ -181,3 +181,26 @@ class OperationsTests(TestCase):
         self.assertEqual(base.STORAGES["staticfiles"]["BACKEND"], "whitenoise.storage.CompressedManifestStaticFilesStorage")
         self.assertFalse(hasattr(base, "STATICFILES_STORAGE"))
         self.assertEqual(base.DATA_UPLOAD_MAX_MEMORY_SIZE, 10 * 1024 * 1024)
+class DevelopmentMediaTests(TestCase):
+    def test_uploads_are_served_with_byte_ranges_so_videos_can_seek(self):
+        from django.http import Http404
+        from django.test import RequestFactory
+        from apps.common.views import serve_media
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, True)
+        Path(media, "learning").mkdir()
+        Path(media, "learning", "clip.webm").write_bytes(bytes(range(100)))
+        factory = RequestFactory()
+        with override_settings(MEDIA_ROOT=media):
+            whole = serve_media(factory.get("/media/learning/clip.webm"), "learning/clip.webm")
+            self.assertEqual((whole.status_code, whole["Accept-Ranges"]), (200, "bytes"))
+            self.assertEqual(b"".join(whole.streaming_content), bytes(range(100)))
+            part = serve_media(factory.get("/media/learning/clip.webm", HTTP_RANGE="bytes=10-19"), "learning/clip.webm")
+            self.assertEqual((part.status_code, part["Content-Range"], part["Content-Length"]), (206, "bytes 10-19/100", "10"))
+            self.assertEqual(b"".join(part.streaming_content), bytes(range(10, 20)))
+            tail = serve_media(factory.get("/", HTTP_RANGE="bytes=-5"), "learning/clip.webm")
+            self.assertEqual(b"".join(tail.streaming_content), bytes(range(95, 100)))
+            self.assertEqual(serve_media(factory.get("/", HTTP_RANGE="bytes=500-"), "learning/clip.webm").status_code, 416)
+            for path in ["../secret.txt", "learning/missing.webm"]:
+                with self.assertRaises(Http404):
+                    serve_media(factory.get("/"), path)

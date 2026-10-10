@@ -1,6 +1,6 @@
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
+from apps.common.views import serve_media
 from django.urls import include, path
 from django.contrib.staticfiles.views import serve as serve_static
 from django.urls import re_path
@@ -14,4 +14,5 @@ urlpatterns = [
     re_path(r"^static/(?P<path>.*)$", serve_static),
 ]
 # Development only: production should serve uploads from object storage or the web server.
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.DEBUG:
+    urlpatterns += [re_path(rf"^{settings.MEDIA_URL.lstrip('/')}(?P<path>.*)$", serve_media)]

@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count, F
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +18,7 @@ from apps.notifications.services import notify
 from .forms import LearningPostForm
 from .media import youtube_embed_url
 from .studio import StudioError, draft_post, project_branches
+from .timeline import parse_captions, parse_chapters
 logger = logging.getLogger(__name__)
 def _display_name(user):
     return user.get_full_name() or getattr(getattr(user, "profile", None), "handle", None) or "A developer"
@@ -64,6 +65,8 @@ def post_detail_view(request, post_id):
         "more_posts": post.author.learning_posts.filter(is_public=True).exclude(pk=post.pk).annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))[:6],
         "is_following": request.user.is_authenticated and post.author.follower_relationships.filter(follower=request.user).exists(),
         "reading_minutes": max(1, round(len(post.body.split()) / 200)),
+        "chapters": parse_chapters(post.chapters),
+        "transcript": parse_captions(post.captions),
     }
     return render(request, "learning/post_detail.html", context)
 @login_required(login_url="landing:home")
@@ -83,11 +86,22 @@ def post_create_view(request):
         refresh_rank(request.user)
         messages.success(request, "Published. Share the link so other developers can learn from it." if post.is_public else "Saved as a private draft.")
         return _published(request, post)
-    return render(request, "learning/post_form.html", {"section": "learning", "form": form, "studio_projects": _studio_projects(request.user)})
+    return render(request, "learning/post_form.html", _form_context(request, form))
 def _published(request, post):
     """Studio uploads run in the background and get the post's address as JSON, so the success message waits for that page."""
     url = reverse("learning:detail", args=[post.pk])
     return JsonResponse({"redirect": url}) if request.headers.get("X-Requested-With") == "XMLHttpRequest" else redirect(url)
+# Choices for the recorder's layout templates; colors match recorder-scene.js.
+RECORDER_CORNERS = [("top-left", "Top left"), ("top-right", "Top right"), ("bottom-left", "Bottom left"), ("bottom-right", "Bottom right")]
+RECORDER_BACKGROUNDS = [("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("ocean", "Ocean", ("#1d4ed8", "#0ea5e9")), ("sunset", "Sunset", ("#f97316", "#db2777")), ("forest", "Forest", ("#065f46", "#0d9488")), ("graphite", "Graphite", ("#111827", "#374151"))]
+def _form_context(request, form, post=None):
+    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS}
+def captions_view(request, post_id):
+    """The post's captions as a WebVTT file for the video player."""
+    post = _visible_post(request, post_id)
+    if not post.captions:
+        raise Http404
+    return HttpResponse(post.captions, content_type="text/vtt; charset=utf-8")
 def _studio_projects(user):
     """The author's projects as cards for the studio's project picker."""
     cards = []
@@ -113,14 +127,20 @@ def studio_branches_view(request):
 @require_POST
 @rate_limit("studio-draft", 20, 3600)
 def studio_draft_view(request):
-    project = _owned_project(request, request.POST.get("project", ""))
+    recording = {"transcript": request.POST.get("transcript", "").strip()[:20000], "chapters": request.POST.get("chapters", "").strip()[:3000]}
+    if request.POST.get("project", ""):
+        project = _owned_project(request, request.POST.get("project", ""))
+    elif recording["transcript"]:
+        project = None
+    else:
+        return JsonResponse({"error": "Pick a project, or record with live captions on so the studio can draft from what you said."}, status=400)
     kind = "video" if request.POST.get("kind") == "video" else "article"
     try:
-        draft, source, notice = draft_post(project, request.POST.get("branch", "").strip(), _display_name(request.user), kind)
+        draft, source, notice = draft_post(project, request.POST.get("branch", "").strip() if project else "", _display_name(request.user), kind, recording)
     except StudioError as error:
         return JsonResponse({"error": str(error)}, status=400)
     except (subprocess.CalledProcessError, OSError, ValueError):
-        logger.exception("Could not read branch for project %s", project.pk)
+        logger.exception("Could not read branch for project %s", getattr(project, "pk", None))
         return JsonResponse({"error": "Could not read that branch. Try again."}, status=500)
     return JsonResponse({**draft, "source": source, "notice": notice})
 @login_required(login_url="landing:home")
@@ -134,7 +154,7 @@ def post_edit_view(request, post_id):
         refresh_rank(request.user)
         messages.success(request, "Post updated.")
         return _published(request, post)
-    return render(request, "learning/post_form.html", {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user)})
+    return render(request, "learning/post_form.html", _form_context(request, form, post))
 @login_required(login_url="landing:home")
 @require_POST
 def post_delete_view(request, post_id):

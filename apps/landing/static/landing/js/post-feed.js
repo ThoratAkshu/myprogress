@@ -19,6 +19,15 @@
     });
   });
 
+  // Chapters and transcript lines jump the post's video to that moment.
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-seek]");
+    const video = button?.closest(".ig-post, .post-card")?.querySelector("video");
+    if (!video) return;
+    video.currentTime = Number(button.dataset.seek) || 0;
+    video.play().catch(() => {});
+  });
+
   let viewer = null;
   let openedFrom = null;
   let returnTo = location.pathname + location.search;

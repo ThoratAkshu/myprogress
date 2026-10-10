@@ -1,4 +1,5 @@
-// Learning studio: list the chosen project's branches and fill the form with a drafted post.
+// Learning studio: list the chosen project's branches and fill the form with a drafted post. After a
+// recording with live captions, the draft also uses what the author said (and works without a project).
 document.querySelectorAll("[data-studio]").forEach(studio => {
   const form = studio.closest("form");
   const branchSelect = studio.querySelector('select[name="branch"]');
@@ -7,13 +8,16 @@ document.querySelectorAll("[data-studio]").forEach(studio => {
   const draftFields = ["title", "summary", "body", "video_script"].map(name => form.elements[name]).filter(Boolean);
   const say = (text, tone = "") => { status.textContent = text; status.dataset.tone = tone; };
   const selectedProject = () => form.querySelector('input[name="project"]:checked')?.value || "";
+  // The spoken words from the WebVTT captions, without the header, cue numbers, and timings.
+  const transcript = () => (form.elements.captions?.value || "").split(/\r?\n/).filter(line => line.trim() && !line.startsWith("WEBVTT") && !line.includes("-->") && !/^\d+$/.test(line.trim())).join(" ").trim();
+  const canDraft = () => Boolean(selectedProject() || transcript());
   function setOptions(options, disabled) {
     branchSelect.replaceChildren(...options.map(([label, value]) => new Option(label, value)));
     branchSelect.disabled = disabled;
   }
   async function loadBranches(keep) {
     const project = selectedProject();
-    draftButton.disabled = !project;
+    draftButton.disabled = !canDraft();
     if (!project) return setOptions([["Pick a project first", ""]], true);
     setOptions([["Loading branches…", ""]], true);
     try {
@@ -31,16 +35,20 @@ document.querySelectorAll("[data-studio]").forEach(studio => {
     }
   }
   form.querySelectorAll('input[name="project"]').forEach(radio => radio.addEventListener("change", () => loadBranches("")));
+  form.elements.captions?.addEventListener("input", () => { draftButton.disabled = !canDraft(); });
   draftButton.addEventListener("click", async () => {
     if (draftFields.some(field => field.value.trim()) && !confirm("Replace the title, summary, article, and video script with a new draft?")) return;
     const body = new FormData();
     body.append("csrfmiddlewaretoken", form.elements.csrfmiddlewaretoken.value);
     body.append("project", selectedProject());
-    body.append("branch", branchSelect.value);
+    body.append("branch", selectedProject() ? branchSelect.value : "");
     body.append("kind", form.querySelector('input[name="kind"]:checked')?.value || "article");
+    body.append("transcript", transcript());
+    body.append("chapters", form.elements.chapters?.value || "");
     draftButton.disabled = true;
     studio.classList.add("is-drafting");
-    say(branchSelect.value ? `Reading ${branchSelect.value} and writing your draft. This can take up to a minute.` : "Writing your draft from the project details.", "busy");
+    const from = [selectedProject() && branchSelect.value && `${branchSelect.value}`, transcript() && "your recording"].filter(Boolean);
+    say(from.length ? `Reading ${from.join(" and ")} and writing your draft. This can take up to a minute.` : "Writing your draft from the project details.", "busy");
     try {
       const response = await fetch(studio.dataset.draftUrl, { method: "POST", body, headers: { Accept: "application/json" } });
       const draft = await response.json().catch(() => ({}));
@@ -53,7 +61,7 @@ document.querySelectorAll("[data-studio]").forEach(studio => {
     } catch (error) {
       say(error.message, "error");
     } finally {
-      draftButton.disabled = !selectedProject();
+      draftButton.disabled = !canDraft();
       studio.classList.remove("is-drafting");
     }
   });

@@ -3,6 +3,7 @@ from django import forms
 from apps.core.git_service import list_branches
 from apps.core.models import LearningPost
 from .media import MAX_THUMBNAIL_BYTES, validate_video_file
+from .timeline import clean_captions, clean_chapters
 MIN_ARTICLE_LENGTH = 200
 class LearningPostForm(forms.ModelForm):
     kind = forms.ChoiceField(choices=[("article", "Article"), ("video", "Video")], widget=forms.RadioSelect)
@@ -10,10 +11,10 @@ class LearningPostForm(forms.ModelForm):
     thumbnail = forms.ImageField(required=False, widget=forms.ClearableFileInput(attrs={"accept": "image/*"}))
     class Meta:
         model = LearningPost
-        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "video_url", "video_file", "thumbnail", "is_public"]
+        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "chapters", "captions", "video_url", "video_file", "thumbnail", "is_public"]
         labels = {"project": "Project this explains", "video_script": "Video script", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly"}
-        help_texts = {"project": "", "video_script": ""}
-        widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."}), "video_script": forms.Textarea(attrs={"rows": 12, "placeholder": "INTRO\nHi, I'm ... In this video I'll show how I built ...\n\nDEMO\n[SHOW: the running app]"})}
+        help_texts = {"project": "", "video_script": "", "chapters": "", "captions": ""}
+        widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."}), "chapters": forms.Textarea(attrs={"rows": 5, "placeholder": "0:00 Intro\n1:20 The data model\n4:05 Deploying"}), "captions": forms.Textarea(attrs={"rows": 6, "placeholder": "WEBVTT", "spellcheck": "false"}), "video_script": forms.Textarea(attrs={"rows": 12, "placeholder": "INTRO\nHi, I'm ... In this video I'll show how I built ...\n\nDEMO\n[SHOW: the running app]"})}
     def __init__(self, *args, user=None, **kwargs):
         kwargs.setdefault("label_suffix", "")
         super().__init__(*args, **kwargs)
@@ -24,6 +25,16 @@ class LearningPostForm(forms.ModelForm):
         if url and not url.lower().startswith(("https://", "http://")):
             raise forms.ValidationError("Video links must start with https://.")
         return url
+    def clean_chapters(self):
+        try:
+            return clean_chapters(self.cleaned_data.get("chapters"))
+        except ValueError as error:
+            raise forms.ValidationError(str(error))
+    def clean_captions(self):
+        try:
+            return clean_captions(self.cleaned_data.get("captions"))
+        except ValueError as error:
+            raise forms.ValidationError(str(error))
     def clean_thumbnail(self):
         thumbnail = self.cleaned_data.get("thumbnail")
         if thumbnail and getattr(thumbnail, "size", 0) > MAX_THUMBNAIL_BYTES:

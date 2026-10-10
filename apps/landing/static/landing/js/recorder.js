@@ -1,17 +1,24 @@
-// Learning studio recorder: record the camera, the screen, or both (camera as a corner bubble) in the
-// browser, with the post's video script as a teleprompter, then attach the video and a thumbnail to the
-// post form. Also shows upload progress when a post with a video file is published.
+// Learning studio recorder: record the camera, the screen, or both in the browser using a layout template,
+// with the post's video script as a teleprompter, a floating camera window while presenting other screens,
+// chapter markers, and optional live captions. The video, a styled thumbnail, chapters, and captions are
+// then attached to the post form. Also shows upload progress when a post with a video file is published.
 (() => {
   const card = document.querySelector("[data-recorder]");
   const dialog = document.getElementById("recorder-dialog");
   const form = card?.closest("form");
-  if (!card || !dialog || !form) return;
-  const MAX_SECONDS = 10 * 60;
+  if (!card || !dialog || !form || !window.StudioScene) return;
   const MAX_BYTES = 195 * 1024 * 1024; // the server accepts videos up to 200 MB
+  const AUDIO_BPS = 128_000;
+  const QUALITIES = { 720: { width: 1280, height: 720, bps: 2_000_000 }, 1080: { width: 1920, height: 1080, bps: 3_000_000 } };
+  const FONT_SIZES = { small: "18px", medium: "22px", large: "28px" };
   const MIME_TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+  const SETTINGS_KEY = "myprogress-studio-recorder";
+  const Captions = window.StudioCaptions || { supported: false, LANGUAGES: [] };
   const videoInput = form.elements.video_file;
   const thumbnailInput = form.elements.thumbnail;
   const scriptField = form.elements.video_script;
+  const titleField = form.elements.title;
+  const authorName = card.dataset.authorName || "";
   const find = selector => dialog.querySelector(selector);
   const live = find("[data-recorder-live]");
   const review = find("[data-recorder-review]");
@@ -19,22 +26,28 @@
   const badge = find("[data-recorder-badge]");
   const clock = find("[data-recorder-time]");
   const message = find("[data-recorder-message]");
+  const captionLine = find("[data-recorder-caption]");
   const micSelect = find("[data-recorder-mic]");
   const cameraSelect = find("[data-recorder-camera]");
   const meter = find("[data-recorder-meter]");
   const prompter = find("[data-teleprompter]");
   const autoScroll = find("[data-teleprompter-auto]");
   const speed = find("[data-teleprompter-speed]");
+  const thumbnailPreview = find("[data-thumbnail-preview]");
   const attached = card.querySelector("[data-recorder-attached]");
-  const state = { phase: "idle" };
+  const state = { phase: "idle", chapters: [] };
   const canRecord = window.isSecureContext && Boolean(navigator.mediaDevices?.getUserMedia) && "MediaRecorder" in window;
   const canShareScreen = canRecord && Boolean(navigator.mediaDevices.getDisplayMedia);
+  const canFloat = "documentPictureInPicture" in window || Boolean(document.pictureInPictureEnabled);
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const formatTime = seconds => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   const formatSize = bytes => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   const say = (text, tone = "") => { message.textContent = text; message.dataset.tone = tone; };
   const recording = () => ["recording", "paused"].includes(state.phase);
   const seconds = () => (state.elapsed + (state.phase === "recording" ? performance.now() - state.resumedAt : 0)) / 1000;
+  const quality = () => QUALITIES[settings.quality] || QUALITIES[720];
+  // Longest recording that stays under the upload limit at the chosen quality, in whole minutes, at most 10.
+  const maxSeconds = () => Math.min(600, Math.floor((MAX_BYTES * 8) / (quality().bps + AUDIO_BPS) / 60) * 60);
 
   if (!canRecord) {
     card.querySelectorAll("[data-record-mode]").forEach(button => { button.disabled = true; });
@@ -45,13 +58,70 @@
   }
   if (!canShareScreen) card.querySelectorAll('[data-record-mode^="screen"]').forEach(button => { button.hidden = true; });
 
+  // Settings, remembered in this browser.
+  const DEFAULTS = { layout: "full", position: "bottom-right", size: "medium", shape: "circle", background: "midnight", mirror: false, nameTag: false, name: "", subtitle: "", quality: "720", countdown: "3", floating: true, captions: false, captionLang: Captions.LANGUAGES.find(([code]) => code === navigator.language)?.[0] || "en-IN", fontSize: "medium", thumbStyle: "title" };
+  const settings = { ...DEFAULTS };
+  try {
+    Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
+  } catch {
+    // private browsing or blocked storage: use the defaults
+  }
+  const saveSettings = () => {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+      // not saved; the settings still apply to this visit
+    }
+  };
+  const sceneOptions = () => ({ ...settings, name: settings.name.trim() || authorName, subtitle: settings.subtitle.trim() || titleField?.value || "", showCamera: !state.cameraInCapture });
+
+  const captionLanguage = find('[data-setting="captionLang"]');
+  captionLanguage.replaceChildren(...Captions.LANGUAGES.map(([code, label]) => new Option(label, code)));
+  if (!Captions.supported) {
+    find('[data-setting="captions"]').disabled = true;
+    captionLanguage.disabled = true;
+    find("[data-captions-note]").textContent = "Live captions need Chrome or Edge. You can still add captions to the post by hand.";
+  }
+  if (!canFloat) {
+    find('[data-setting="floating"]').disabled = true;
+    find("[data-floating-note]").textContent = "Your browser can't show a floating camera. Chrome and Edge can.";
+  }
+
+  function applySettings(changed) {
+    prompter.style.fontSize = FONT_SIZES[settings.fontSize] || FONT_SIZES.medium;
+    if (["idle", "starting", "ready", "error"].includes(state.phase)) clock.textContent = `0:00 / ${formatTime(maxSeconds())}`;
+    if (changed === "quality" && state.phase === "ready") buildPipeline();
+    if (changed === "mirror" && state.floating?.video) state.floating.video.classList.toggle("mirror", settings.mirror);
+    if (changed === "thumbStyle" || ((changed === "background" || changed === "name") && state.phase === "review")) renderThumbnail();
+  }
+  dialog.querySelectorAll("[data-setting]").forEach(control => {
+    const key = control.dataset.setting;
+    if (control.type === "radio") control.checked = settings[key] === control.value;
+    else if (control.type === "checkbox") control.checked = Boolean(settings[key]) && !control.disabled;
+    else control.value = settings[key];
+    control.addEventListener(control.type === "text" ? "input" : "change", () => {
+      settings[key] = control.type === "checkbox" ? control.checked : control.value;
+      saveSettings();
+      applySettings(key);
+    });
+  });
+  find('[data-setting="name"]').placeholder = authorName || "Your name";
+  dialog.querySelectorAll("[data-panel-tab]").forEach(tab => tab.addEventListener("click", () => {
+    dialog.querySelectorAll("[data-panel-tab]").forEach(other => other.setAttribute("aria-selected", String(other === tab)));
+    dialog.querySelectorAll("[data-pane]").forEach(pane => { pane.hidden = pane.dataset.pane !== tab.dataset.panelTab; });
+  }));
+  applySettings();
+
   function setPhase(phase) {
     state.phase = phase;
     dialog.dataset.phase = phase;
     dialog.querySelectorAll("[data-show]").forEach(element => { element.hidden = !element.dataset.show.split(" ").includes(phase); });
+    find('[data-setting="quality"]').disabled = phase !== "ready" && phase !== "idle";
+    if (state.floating?.pauseButton) state.floating.pauseButton.textContent = phase === "paused" ? "Resume" : "Pause";
+    if (state.floating?.time) state.floating.time.classList.toggle("paused", phase === "paused");
   }
 
-  // Teleprompter: section labels, on-screen cues, and spoken lines from the video script.
+  // Teleprompter: section labels (click one while recording to mark a chapter), on-screen cues, and spoken lines.
   function renderScript() {
     const lines = (scriptField?.value || "").split(/\r?\n/);
     const elements = [];
@@ -67,7 +137,7 @@
       let element;
       if (!text) { element = document.createElement("div"); element.className = "teleprompter-gap"; }
       else if (cue) { element = document.createElement("p"); element.className = "teleprompter-cue"; element.textContent = `On screen: ${cue[1]}`; }
-      else if (/^[A-Z][A-Z0-9 &'-]{1,30}$/.test(text)) { element = document.createElement("h3"); element.textContent = text; }
+      else if (/^[A-Z][A-Z0-9 &'-]{1,30}$/.test(text)) { element = document.createElement("h3"); element.textContent = text; element.title = "While recording, click to mark a chapter here"; }
       else { element = document.createElement("p"); element.textContent = text; }
       elements.push(element);
     }
@@ -136,53 +206,6 @@
     return video;
   }
 
-  // Screen + camera: draw both onto a canvas, the camera as a round bubble in the bottom-right corner.
-  function composite(screenTrack, cameraTrack) {
-    const screenVideo = sourceVideo(screenTrack);
-    const cameraVideo = sourceVideo(cameraTrack);
-    const { width = 1920, height = 1080 } = screenTrack.getSettings();
-    const scale = Math.min(1, 1920 / width, 1080 / height);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
-    const context = canvas.getContext("2d");
-    const draw = () => {
-      if (screenVideo.videoWidth) {
-        const ratio = Math.min(canvas.width / screenVideo.videoWidth, canvas.height / screenVideo.videoHeight);
-        const w = screenVideo.videoWidth * ratio;
-        const h = screenVideo.videoHeight * ratio;
-        context.fillStyle = "#0f172a";
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(screenVideo, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-      }
-      if (cameraVideo.videoWidth) {
-        const size = Math.round(Math.min(canvas.width, canvas.height) * 0.26);
-        const margin = Math.round(size * 0.12);
-        const x = canvas.width - size - margin;
-        const y = canvas.height - size - margin;
-        const side = Math.min(cameraVideo.videoWidth, cameraVideo.videoHeight);
-        const circle = () => { context.beginPath(); context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); };
-        context.save();
-        circle();
-        context.clip();
-        context.drawImage(cameraVideo, (cameraVideo.videoWidth - side) / 2, (cameraVideo.videoHeight - side) / 2, side, side, x, y, size, size);
-        context.restore();
-        context.lineWidth = Math.max(3, size * 0.03);
-        context.strokeStyle = "#fff";
-        circle();
-        context.stroke();
-      }
-    };
-    // A worker clock keeps frames coming while this tab is in the background; page timers and
-    // animation frames slow down or stop there, which would freeze the recording.
-    const clockUrl = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 1000 / 30)"], { type: "text/javascript" }));
-    state.ticker = new Worker(clockUrl);
-    URL.revokeObjectURL(clockUrl);
-    state.ticker.onmessage = draw;
-    state.sources = [screenVideo, cameraVideo];
-    return canvas.captureStream(30).getVideoTracks()[0];
-  }
-
   function stopPipeline() {
     state.ticker?.terminate();
     state.ticker = null;
@@ -194,23 +217,37 @@
     state.levels = null;
   }
 
+  // Every recording is drawn onto one canvas with the chosen layout, so styles can change live.
   function buildPipeline() {
     stopPipeline();
+    const { width, height } = quality();
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
     const cameraTrack = state.user.getVideoTracks()[0];
     const screenTrack = state.screen?.getVideoTracks()[0];
-    let videoTrack = cameraTrack;
-    if (state.mode === "screen" || (state.mode === "screen-camera" && !cameraTrack)) videoTrack = screenTrack;
-    else if (state.mode === "screen-camera") videoTrack = composite(screenTrack, cameraTrack);
+    const sources = { screen: screenTrack && sourceVideo(screenTrack), camera: cameraTrack && sourceVideo(cameraTrack) };
+    state.sources = Object.values(sources).filter(Boolean);
+    const draw = () => window.StudioScene.draw(context, width, height, sources, sceneOptions());
+    draw();
+    // A worker clock keeps frames coming while this tab is in the background; page timers and
+    // animation frames slow down or stop there, which would freeze the recording.
+    const clockUrl = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 1000 / 30)"], { type: "text/javascript" }));
+    state.ticker = new Worker(clockUrl);
+    URL.revokeObjectURL(clockUrl);
+    state.ticker.onmessage = draw;
+    const videoTrack = canvas.captureStream(30).getVideoTracks()[0];
     // Mix the microphone with any audio shared from the screen or tab.
     const audioTracks = [...state.user.getAudioTracks(), ...(state.screen?.getAudioTracks() || [])];
     let audioTrack = null;
     if (audioTracks.length) {
-      const context = state.audioContext = new AudioContext();
-      const destination = context.createMediaStreamDestination();
-      state.analyser = context.createAnalyser();
+      const audioContext = state.audioContext = new AudioContext();
+      const destination = audioContext.createMediaStreamDestination();
+      state.analyser = audioContext.createAnalyser();
       state.analyser.fftSize = 512;
       audioTracks.forEach(track => {
-        const source = context.createMediaStreamSource(new MediaStream([track]));
+        const source = audioContext.createMediaStreamSource(new MediaStream([track]));
         source.connect(destination);
         source.connect(state.analyser);
       });
@@ -218,22 +255,151 @@
     }
     state.stream = new MediaStream([videoTrack, audioTrack].filter(Boolean));
     live.srcObject = new MediaStream([videoTrack]);
-    live.classList.toggle("is-mirrored", state.mode === "camera");
     live.play().catch(() => {});
+  }
+
+  // Floating camera: a small always-on-top window with the camera, the timer, and the controls, so the
+  // presenter sees themselves while showing other screens. Must be opened from a click.
+  const FLOATING_CSS = "html,body{margin:0;height:100%;background:#0b1220;color:#f8fafc;font:600 13px system-ui,sans-serif}.floating{display:flex;flex-direction:column;height:100%}video{display:block;width:calc(100% - 28px);aspect-ratio:1;margin:12px auto 4px;border:3px solid #fff;border-radius:50%;object-fit:cover;background:#111827}video.mirror{transform:scaleX(-1)}.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 10px 10px}.time{margin-right:auto;color:#fca5a5;font-variant-numeric:tabular-nums}.time.paused{color:#cbd5e1}button{padding:6px 9px;border:1px solid #334155;border-radius:8px;background:#1e293b;color:#fff;font:inherit;cursor:pointer}button.stop{border-color:#dc2626;background:#dc2626}";
+  async function openFloating() {
+    if (!settings.floating || !canFloat || state.mode === "camera" || state.floating) return;
+    const cameraTrack = state.user?.getVideoTracks()[0];
+    try {
+      if ("documentPictureInPicture" in window) {
+        const pip = await window.documentPictureInPicture.requestWindow({ width: 240, height: cameraTrack ? 300 : 96 });
+        const doc = pip.document;
+        doc.title = "Recording · MyProgress";
+        const style = doc.createElement("style");
+        style.textContent = FLOATING_CSS;
+        doc.head.append(style);
+        const root = doc.createElement("div");
+        root.className = "floating";
+        let video = null;
+        if (cameraTrack) {
+          video = doc.createElement("video");
+          video.muted = true;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.srcObject = new MediaStream([cameraTrack]);
+          video.classList.toggle("mirror", settings.mirror);
+          root.append(video);
+        }
+        const bar = doc.createElement("div");
+        bar.className = "bar";
+        const time = doc.createElement("span");
+        time.className = "time";
+        time.textContent = "REC 0:00";
+        const button = (label, action, className = "") => {
+          const element = doc.createElement("button");
+          element.type = "button";
+          element.textContent = label;
+          element.className = className;
+          element.addEventListener("click", action);
+          return element;
+        };
+        const pauseButton = button("Pause", () => (state.phase === "paused" ? resume() : state.phase === "recording" && pause()));
+        bar.append(time, button("Chapter", () => markChapter()), pauseButton, button("Stop", () => recording() && stop(), "stop"));
+        root.append(bar);
+        doc.body.append(root);
+        state.floating = { time, pauseButton, video, close: () => pip.close() };
+        pip.addEventListener("pagehide", () => {
+          state.floating = null;
+          refreshCameraRule();
+        });
+      } else if (cameraTrack) {
+        const video = sourceVideo(cameraTrack);
+        video.className = "floating-source";
+        document.body.append(video);
+        await video.play();
+        await video.requestPictureInPicture();
+        video.addEventListener("leavepictureinpicture", () => {
+          video.remove();
+          state.floating = null;
+          refreshCameraRule();
+        }, { once: true });
+        state.floating = { close: () => document.exitPictureInPicture().catch(() => {}) };
+      }
+    } catch {
+      state.floating = null; // the floating camera is optional; keep recording without it
+    }
+    refreshCameraRule();
+  }
+  function closeFloating() {
+    state.floating?.close();
+    state.floating = null;
+    refreshCameraRule();
+  }
+  // When the whole screen is being recorded, the floating camera window is in the recording already,
+  // so the layout leaves out its own camera bubble rather than showing the presenter twice.
+  function refreshCameraRule() {
+    const surface = state.screen?.getVideoTracks()[0]?.getSettings().displaySurface;
+    state.cameraInCapture = surface === "monitor" && Boolean(state.floating) && Boolean(state.user?.getVideoTracks().length);
+  }
+
+  // Chapters: marked during recording from the button, the M key, a script section, or the floating window.
+  // The script section on screen in the teleprompter, or else the next section not yet marked.
+  function nextHeading() {
+    const headings = [...prompter.querySelectorAll("h3")];
+    const used = new Set(state.chapters.map(chapter => chapter.title.toLowerCase()));
+    const unused = heading => !used.has(chapterTitle(heading.textContent).toLowerCase());
+    const onScreen = prompter.offsetParent ? headings.find(heading => heading.offsetTop + heading.offsetHeight > prompter.scrollTop + 4) : null;
+    return (onScreen && unused(onScreen) ? onScreen : headings.find(unused))?.textContent || "";
+  }
+  function chapterTitle(text) {
+    const title = text.trim().slice(0, 80);
+    return title === title.toUpperCase() ? title.charAt(0) + title.slice(1).toLowerCase() : title;
+  }
+  function markChapter(text) {
+    if (!recording()) return;
+    const time = Math.floor(seconds());
+    if (state.chapters.some(chapter => Math.abs(chapter.time - time) < 2)) return;
+    const title = chapterTitle(text || nextHeading() || `Chapter ${state.chapters.length + 1}`);
+    state.chapters.push({ time, title });
+    say(`Chapter marked at ${formatTime(time)}: ${title}`, "ok");
+  }
+  function chaptersText() {
+    const chapters = [...state.chapters].sort((a, b) => a.time - b.time);
+    if (!chapters.length) return "";
+    if (chapters[0].time <= 5) chapters[0] = { ...chapters[0], time: 0 };
+    else chapters.unshift({ time: 0, title: "Introduction" });
+    return chapters.map(chapter => `${formatTime(chapter.time)} ${chapter.title}`).join("\n");
+  }
+  prompter.addEventListener("click", event => {
+    const heading = event.target.closest("h3");
+    if (heading && recording()) markChapter(heading.textContent);
+  });
+
+  function showCaption(text, final) {
+    captionLine.hidden = false;
+    captionLine.textContent = text;
+    clearTimeout(state.captionTimer);
+    if (final) state.captionTimer = setTimeout(() => { captionLine.hidden = true; }, 3500);
   }
 
   function release() {
     clearInterval(state.clock);
     cancelAnimationFrame(state.frame);
     state.lastFrame = 0;
+    state.captions?.stop();
+    state.captions = null;
+    captionLine.hidden = true;
+    closeFloating();
     stopPipeline();
     [state.screen, state.user].forEach(stream => stream?.getTracks().forEach(track => track.stop()));
     state.screen = state.user = state.stream = null;
     live.srcObject = null;
+    clearReview();
+  }
+
+  function clearReview() {
     review.pause();
     if (review.src) URL.revokeObjectURL(review.src);
     review.removeAttribute("src");
-    state.blob = state.thumbnail = state.autoThumbnail = null;
+    if (thumbnailPreview.src) URL.revokeObjectURL(thumbnailPreview.src);
+    thumbnailPreview.removeAttribute("src");
+    state.blob = state.thumbnail = null;
+    state.thumbnailTime = null;
+    state.vtt = "";
   }
 
   function permissionMessage(error) {
@@ -248,7 +414,7 @@
     state.mode = mode;
     dialog.dataset.mode = mode;
     renderScript();
-    clock.textContent = `0:00 / ${formatTime(MAX_SECONDS)}`;
+    clock.textContent = `0:00 / ${formatTime(maxSeconds())}`;
     if (!dialog.open) dialog.showModal();
     setPhase("starting");
     say(mode === "camera" ? "Allow camera and microphone access to start." : "Choose the screen, window, or tab you want to record.");
@@ -264,7 +430,8 @@
       await listDevices();
       setPhase("ready");
       state.frame = requestAnimationFrame(animate);
-      say(state.noMic ? "No microphone is available, so this recording will be silent." : mode === "camera" ? "Check your framing and sound, then start recording." : "Ready. Start recording, then switch to what you want to show.", state.noMic ? "warn" : "");
+      const tip = mode === "camera" ? "Check your framing and sound, then start recording." : "Ready. Pick a style on the right, start recording, then switch to what you want to show.";
+      say(state.noMic ? "No microphone is available, so this recording will be silent." : tip, state.noMic ? "warn" : "");
     } catch (error) {
       release();
       setPhase("error");
@@ -273,26 +440,32 @@
   }
 
   async function start() {
+    if (state.phase !== "ready") return;
+    const floating = openFloating(); // first, while the click still allows opening a window
     state.audioContext?.resume();
     renderScript();
+    state.chapters = [];
     setPhase("countdown");
-    for (const number of [3, 2, 1]) {
+    const count = Number(settings.countdown) || 0;
+    for (let number = count; number > 0; number -= 1) {
       countdown.textContent = number;
       await wait(1000);
       if (state.phase !== "countdown") return;
     }
+    await floating;
     const mimeType = MIME_TYPES.find(type => MediaRecorder.isTypeSupported(type)) || "";
+    const limit = maxSeconds();
     state.chunks = [];
     state.bytes = 0;
     state.elapsed = 0;
     state.resumedAt = performance.now();
-    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: 2_000_000, audioBitsPerSecond: 128_000 });
+    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS });
     state.recorder.addEventListener("dataavailable", event => {
       if (event.data.size) {
         state.chunks.push(event.data);
         state.bytes += event.data.size;
       }
-      if (recording() && (state.bytes >= MAX_BYTES || seconds() >= MAX_SECONDS)) {
+      if (recording() && (state.bytes >= MAX_BYTES || seconds() >= limit)) {
         state.limitReached = true;
         stop();
       }
@@ -301,18 +474,22 @@
     state.limitReached = false;
     state.recorder.start(1000);
     setPhase("recording");
-    say("");
+    state.captions = settings.captions && Captions.supported ? Captions.create({ lang: settings.captionLang, clock: seconds, onText: showCaption, onError: code => say(code === "not-allowed" || code === "service-not-allowed" ? "Live captions stopped because the browser blocked speech recognition. Recording continues." : "Live captions stopped: the browser's speech service isn't reachable (it needs an internet connection). Recording continues.", "warn") }) : null;
+    state.captions?.start();
+    say(state.cameraInCapture ? "You're recording your whole screen, so the floating camera window is your camera in the video. Drag it where you want it." : "");
     clearInterval(state.clock);
     state.clock = setInterval(() => {
       const elapsed = formatTime(seconds());
-      clock.textContent = `${elapsed} / ${formatTime(MAX_SECONDS)}`;
+      clock.textContent = `${elapsed} / ${formatTime(limit)}`;
       badge.textContent = state.phase === "paused" ? `Paused ${elapsed}` : `REC ${elapsed}`;
+      if (state.floating?.time) state.floating.time.textContent = badge.textContent;
     }, 250);
   }
 
   function pause() {
     state.recorder.pause();
     state.elapsed += performance.now() - state.resumedAt;
+    state.captions?.stop();
     setPhase("paused");
   }
 
@@ -320,11 +497,14 @@
     state.recorder.resume();
     state.resumedAt = performance.now();
     setPhase("recording");
+    state.captions?.start();
   }
 
   function stop() {
     if (state.phase === "recording") state.elapsed += performance.now() - state.resumedAt;
     clearInterval(state.clock);
+    state.captions?.stop();
+    closeFloating();
     setPhase("saving");
     say("Saving your recording…");
     if (state.recorder?.state !== "inactive") state.recorder.stop();
@@ -337,17 +517,20 @@
     state.chunks = [];
     if (type === "video/webm") blob = await withDuration(blob, state.elapsed);
     state.blob = blob;
-    state.thumbnail = null;
+    state.vtt = state.captions?.vtt() || "";
+    state.captions = null;
+    captionLine.hidden = true;
     review.src = URL.createObjectURL(blob);
     setPhase("review");
-    state.autoThumbnail = frameAt(review, "auto"); // also moves the player off its blank first frame
-    const limit = state.limitReached ? "You reached the 10-minute or 200 MB limit, so recording stopped. " : "";
-    say(`${limit}${formatTime(state.elapsed / 1000)} recorded (${formatSize(blob.size)}). Watch it back, then use it or record again.`, state.limitReached ? "warn" : "");
+    renderThumbnail(); // also moves the player off its blank first frame
+    const extras = [state.chapters.length && `${state.chapters.length} chapter${state.chapters.length === 1 ? "" : "s"}`, state.vtt && "captions"].filter(Boolean);
+    const limit = state.limitReached ? `You reached the ${formatTime(maxSeconds())} or 200 MB limit, so recording stopped. ` : "";
+    say(`${limit}${formatTime(state.elapsed / 1000)} recorded (${formatSize(blob.size)})${extras.length ? ` with ${extras.join(" and ")}` : ""}. Watch it back, then use it or record again.`, state.limitReached ? "warn" : "");
   }
 
-  // Grab a JPEG of the video at `time` seconds ("auto" picks an early frame, null keeps the current one).
+  // Move the video to `time` seconds ("auto" picks an early frame, null keeps the current one).
   // Polls instead of waiting for media events, which may already have fired.
-  async function frameAt(video, time) {
+  async function seekTo(video, time) {
     const deadline = Date.now() + 5000;
     const settle = async test => {
       while (!test()) {
@@ -356,18 +539,30 @@
       }
       return true;
     };
-    if (!await settle(() => video.readyState >= 2 && video.videoWidth)) return null;
+    if (!await settle(() => video.readyState >= 2 && video.videoWidth)) return false;
     const target = time === "auto" ? Math.min(1.5, (Number.isFinite(video.duration) ? video.duration : 0) / 4) : time;
     if (target !== null && Math.abs(video.currentTime - target) >= 0.05) {
       video.currentTime = target;
-      if (!await settle(() => !video.seeking && video.readyState >= 2)) return null;
+      if (!await settle(() => !video.seeking && video.readyState >= 2)) return false;
     }
-    const scale = Math.min(1, 1280 / video.videoWidth);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
-    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-    return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return true;
+  }
+
+  // The thumbnail: a frame of the recording in the chosen style, previewed under the player.
+  function renderThumbnail() {
+    if (!state.blob) return;
+    const render = async () => {
+      if (!await seekTo(review, state.thumbnailTime ?? "auto")) return null;
+      const options = sceneOptions();
+      return window.StudioScene.thumbnail(review, settings.thumbStyle, { title: titleField?.value || "", name: options.name, background: settings.background });
+    };
+    state.thumbnail = render().then(image => {
+      if (image) {
+        if (thumbnailPreview.src) URL.revokeObjectURL(thumbnailPreview.src);
+        thumbnailPreview.src = URL.createObjectURL(image);
+      }
+      return image;
+    });
   }
 
   function setFiles(input, file) {
@@ -383,8 +578,8 @@
     const file = new File([state.blob], `walkthrough-${new Date().toISOString().slice(0, 10)}.${extension}`, { type: state.blob.type });
     // Fill the thumbnail too, unless the author already chose their own image.
     const ownThumbnail = thumbnailInput.files.length && thumbnailInput.files[0] !== state.attachedThumbnail;
-    if (state.thumbnail || !ownThumbnail) {
-      const image = state.thumbnail || await state.autoThumbnail || await frameAt(review, "auto");
+    if (!ownThumbnail || state.thumbnailTime !== null) {
+      const image = await state.thumbnail;
       if (image) {
         state.attachedThumbnail = new File([image], "thumbnail.jpg", { type: "image/jpeg" });
         setFiles(thumbnailInput, state.attachedThumbnail);
@@ -392,6 +587,17 @@
     }
     state.attachedVideo = file;
     setFiles(videoInput, file);
+    const added = [];
+    if (state.chapters.length && form.elements.chapters) {
+      form.elements.chapters.value = chaptersText();
+      added.push("chapters");
+    }
+    if (state.vtt && form.elements.captions) {
+      form.elements.captions.value = state.vtt;
+      form.elements.captions.dispatchEvent(new Event("input", { bubbles: true })); // lets Draft with AI use it
+      added.push("captions");
+    }
+    if (added.length) form.querySelector("[data-video-extras]")?.setAttribute("open", "");
     const videoKind = form.querySelector('input[name="kind"][value="video"]');
     if (videoKind && !videoKind.checked) {
       videoKind.checked = true;
@@ -400,7 +606,7 @@
     const preview = attached.querySelector("video");
     if (preview.src) URL.revokeObjectURL(preview.src);
     preview.src = URL.createObjectURL(file);
-    attached.querySelector("[data-recorder-summary]").textContent = `Recording attached: ${formatTime(state.elapsed / 1000)}, ${formatSize(file.size)}`;
+    attached.querySelector("[data-recorder-summary]").textContent = `Recording attached: ${formatTime(state.elapsed / 1000)}, ${formatSize(file.size)}${added.length ? `, with ${added.join(" and ")}` : ""}`;
     attached.hidden = false;
     close(true);
   }
@@ -418,26 +624,40 @@
     pause,
     resume,
     stop,
+    chapter: () => markChapter(),
     close: () => close(false),
     use: useRecording,
     retake: () => {
       const screenEnded = state.screen?.getVideoTracks()[0]?.readyState === "ended";
       if (screenEnded || !state.stream) return open(state.mode);
-      review.pause();
-      if (review.src) URL.revokeObjectURL(review.src);
-      review.removeAttribute("src");
-      state.blob = state.thumbnail = state.autoThumbnail = null;
+      clearReview();
+      state.chapters = [];
       setPhase("ready");
       say("Ready when you are.");
     },
-    thumbnail: async () => {
-      state.thumbnail = await frameAt(review, null);
-      say(state.thumbnail ? `Thumbnail set from ${formatTime(review.currentTime)}.` : "Couldn't capture that frame. Try another moment.", state.thumbnail ? "ok" : "error");
+    thumbnail: () => {
+      state.thumbnailTime = review.currentTime;
+      renderThumbnail();
+      say(`Thumbnail set from ${formatTime(review.currentTime)}.`, "ok");
     },
   };
   dialog.addEventListener("click", event => {
     const button = event.target.closest("[data-recorder-action]");
     if (button) actions[button.dataset.recorderAction]?.();
+  });
+  // Keyboard shortcuts: R start or resume, P pause or resume, S stop, M mark a chapter.
+  dialog.addEventListener("keydown", event => {
+    if (event.target.closest("input, select, textarea") || event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    let action = null;
+    if (key === "r") action = state.phase === "ready" ? "start" : state.phase === "paused" ? "resume" : null;
+    else if (key === "p") action = state.phase === "recording" ? "pause" : state.phase === "paused" ? "resume" : null;
+    else if (key === "s" && recording()) action = "stop";
+    else if (key === "m" && recording()) action = "chapter";
+    if (action) {
+      event.preventDefault();
+      actions[action]();
+    }
   });
   dialog.addEventListener("cancel", event => { event.preventDefault(); close(false); });
   [micSelect, cameraSelect].forEach(select => select.addEventListener("change", async () => {
