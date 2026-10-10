@@ -151,6 +151,10 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 GIT_REPOSITORY_ROOT = Path(config("GIT_REPOSITORY_ROOT", default=str(BASE_DIR / "repositories")))
 GIT_EXECUTABLE = config("GIT_EXECUTABLE", default="git")
+# Learning studio drafts. Without a key the studio still builds a starter draft from the branch.
+ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
+AI_MODEL = config("AI_MODEL", default="claude-opus-5-5")
+AI_TIMEOUT = config("AI_TIMEOUT", default=90, cast=int)
 # Color theme for the app: ocean, emerald, or midnight.
 UI_THEME = config("UI_THEME", default="midnight")
 # Git requests are streamed, so form posts no longer need a large in-memory limit.

@@ -121,3 +121,35 @@ a.icon-button{display:grid;place-items:center;color:var(--ink);text-decoration:n
 .recruiter-badge.verified{background:#e4f7ef;color:#16805f}
 .limit-banner{margin:0 0 14px;padding:12px 16px;border:1px solid #f3dcae;border-radius:10px;background:#fff8ea;font-size:13px;color:#7a5a1c}
 @media(max-width:800px){.verify-nudge{display:none}}
+/* Learning studio: project picker and AI draft */
+.studio-source{display:grid;gap:14px;padding:18px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--violet-soft),transparent 140px)}
+.studio-head{display:flex;gap:12px;align-items:flex-start}
+.studio-head h2{margin:0;font-size:16px}
+.studio-head p{margin:2px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
+.studio-badge{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--accent);color:#fff;flex:none}
+.studio-projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:0;padding:0;border:0;min-width:0}
+.studio-projects legend{margin-bottom:8px;font-size:12px;font-weight:700}
+.post-form .studio-project{position:relative;display:flex;align-items:center;gap:10px;margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface,#fff);cursor:pointer;min-width:0}
+.studio-project input{position:absolute;opacity:0;pointer-events:none}
+.studio-project:hover{border-color:var(--muted)}
+.studio-project:has(input:checked){border-color:var(--violet);box-shadow:0 0 0 1px var(--violet);background:var(--violet-soft)}
+.studio-project:has(input:focus-visible){outline:2px solid var(--violet);outline-offset:2px}
+.studio-project-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:var(--canvas,#f3f4f6);color:var(--violet);flex:none}
+.studio-project:has(input:checked) .studio-project-icon{background:#fff}
+.studio-project-text{min-width:0}
+.studio-project-text b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.studio-project-text small{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;font-weight:500}
+.studio-project-text .lang-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.studio-controls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.post-form .studio-branch{flex:1;min-width:220px;margin:0}
+.studio-branch span{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.studio-controls .button{display:inline-flex;align-items:center;gap:6px;height:40px}
+.studio-status{margin:0;font-size:13px;color:var(--muted)}
+.studio-status:empty{display:none}
+.studio-status[data-tone=ok]{color:#15803d}
+.studio-status[data-tone=error]{color:#b4443a}
+.studio-status[data-tone=busy]::before{content:"";display:inline-block;width:12px;height:12px;margin-right:8px;vertical-align:-2px;border:2px solid var(--line);border-top-color:var(--violet);border-radius:50%;animation:studio-spin .8s linear infinite}
+.studio-source.is-drafting .studio-projects{opacity:.6;pointer-events:none}
+.post-form textarea[name=video_script]{min-height:260px;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
+@keyframes studio-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.studio-status[data-tone=busy]::before{animation:none}}

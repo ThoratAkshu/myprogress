@@ -80,7 +80,7 @@ class PublishingTests(TestCase):
         self.assertEqual((post.author, post.project), (self.author, self.project))
         self.assertTrue(self.author.activity_events.filter(action="published_learning").exists())
         self.assertTrue(self.author.daily_loop_completions.filter(step="share").exists())
-        self.assertContains(self.client.get(reverse("learning:create"), {"project": self.project.pk}), f'<option value="{self.project.pk}" selected>')
+        self.assertContains(self.client.get(reverse("learning:create"), {"project": self.project.pk}), f'<input type="radio" name="project" value="{self.project.pk}" checked>')
     def test_video_upload_replace_and_delete_manage_files(self):
         self.client.post(reverse("learning:create"), {"title": "Walkthrough", "kind": "video", "video_file": SimpleUploadedFile("one.mp4", MP4_BYTES, content_type="video/mp4"), "is_public": "on"})
         post = LearningPost.objects.get()
@@ -190,3 +190,70 @@ class FeedTests(TestCase):
         post = LearningPost.objects.create(author=author, title="How I built Ledger", project=project)
         response = self.client.get(reverse("landing:public_profile", args=["asha-rao"]))
         self.assertContains(response, f'<a href="{reverse("learning:detail", args=[post.pk])}">▷ How I built this</a>', html=False)
+class StudioTests(TestCase):
+    def setUp(self):
+        from apps.core.git_service import commit_file, create_branch, initialize_repository
+        from apps.core.models import Repository
+        self.storage = tempfile.TemporaryDirectory()
+        self.override = override_settings(GIT_REPOSITORY_ROOT=self.storage.name, ANTHROPIC_API_KEY="")
+        self.override.enable()
+        self.author = make_user("author@example.com", "Asha", "Rao")
+        self.project = Project.objects.create(owner=self.author, title="Ledger", summary="A double-entry ledger service.")
+        self.repository = Repository.objects.create(project=self.project, owner=self.author, slug="ledger")
+        initialize_repository(self.repository)
+        commit_file(self.repository, "README.md", "# Ledger\n\nTracks money with double-entry bookkeeping.\n", self.author, "Add README")
+        commit_file(self.repository, "ledger/post.py", "def post(entry):\n    return entry\n", self.author, "Post balanced entries")
+        create_branch(self.repository, "feature/refunds", "main")
+        self.client.force_login(self.author)
+    def tearDown(self):
+        self.override.disable()
+        self.storage.cleanup()
+    def draft(self, **data):
+        return self.client.post(reverse("learning:studio_draft"), {"project": self.project.pk, "branch": "main", "kind": "article", **data})
+    def test_branches_are_listed_only_for_the_owner(self):
+        response = self.client.get(reverse("learning:studio_branches"), {"project": self.project.pk})
+        self.assertEqual(response.json()["default"], "main")
+        self.assertEqual({branch["name"] for branch in response.json()["branches"]}, {"main", "feature/refunds"})
+        self.client.force_login(make_user("other@example.com", "Oth", "Er"))
+        self.assertEqual(self.client.get(reverse("learning:studio_branches"), {"project": self.project.pk}).status_code, 404)
+        self.assertEqual(self.draft().status_code, 404)
+    def test_starter_draft_is_built_from_the_branch_without_an_api_key(self):
+        draft = self.draft().json()
+        self.assertEqual(draft["source"], "starter")
+        self.assertEqual(draft["title"], "How I built Ledger")
+        self.assertIn("Post balanced entries", draft["body"])
+        self.assertIn("`ledger/`", draft["body"])
+        self.assertIn("**Python**", draft["body"])
+        self.assertIn("[SHOW: ledger/]", draft["video_script"])
+        self.assertIn("ANTHROPIC_API_KEY", draft["notice"])
+        self.assertGreaterEqual(len(draft["body"]), 200)
+    def test_ai_draft_uses_the_model_and_sends_branch_facts_not_source_code(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        reply = SimpleNamespace(stop_reason="tool_use", content=[SimpleNamespace(type="tool_use", input={"title": "How I built a ledger in Python", "summary": "Double-entry basics.", "body": "## What it is\n\nA ledger.", "video_script": "INTRO\nHi."})])
+        with override_settings(ANTHROPIC_API_KEY="test-key", AI_MODEL="test-model"), mock.patch("anthropic.Anthropic") as client_class:
+            client_class.return_value.messages.create.return_value = reply
+            draft = self.draft(kind="video").json()
+        self.assertEqual(draft["source"], "ai")
+        self.assertEqual(draft["title"], "How I built a ledger in Python")
+        call = client_class.return_value.messages.create.call_args.kwargs
+        self.assertEqual(call["model"], "test-model")
+        prompt = call["messages"][0]["content"]
+        self.assertIn("Post balanced entries", prompt)
+        self.assertIn("ledger/post.py", prompt)
+        self.assertNotIn("return entry", prompt)
+    def test_ai_failure_falls_back_to_a_starter_draft(self):
+        from unittest import mock
+        with override_settings(ANTHROPIC_API_KEY="test-key"), mock.patch("anthropic.Anthropic", side_effect=RuntimeError("network down")):
+            draft = self.draft().json()
+        self.assertEqual(draft["source"], "starter")
+        self.assertIn("unavailable", draft["notice"])
+    def test_unknown_branch_is_rejected_when_drafting_and_publishing(self):
+        self.assertEqual(self.draft(branch="nope").status_code, 400)
+        data = {"title": "Refunds", "kind": "article", "project": self.project.pk, "summary": "", "body": ARTICLE, "is_public": "on"}
+        response = self.client.post(reverse("learning:create"), {**data, "branch": "nope"})
+        self.assertContains(response, "Pick a branch from this project")
+        response = self.client.post(reverse("learning:create"), {**data, "branch": "feature/refunds", "video_script": "INTRO"})
+        post = LearningPost.objects.get(title="Refunds")
+        self.assertRedirects(response, reverse("learning:detail", args=[post.pk]))
+        self.assertEqual(post.branch, "feature/refunds")

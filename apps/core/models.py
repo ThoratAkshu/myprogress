@@ -53,6 +53,8 @@ class LearningPost(models.Model):
     video_url = models.URLField(blank=True)
     video_file = models.FileField(upload_to="learning/videos/", blank=True)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_posts", help_text="The project this post explains")
+    branch = models.CharField(max_length=255, blank=True, help_text="The repository branch this post explains")
+    video_script = models.TextField(blank=True, help_text="Private script the author reads while recording")
     body = models.TextField(blank=True)
     views = models.PositiveIntegerField(default=0)
     earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)

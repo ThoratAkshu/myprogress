@@ -15,6 +15,7 @@ grows.
 | Disk: `GIT_REPOSITORY_ROOT` | Bare repositories | Back up |
 | Disk: `MEDIA_ROOT` | Uploaded videos and images | Back up |
 | Redis (optional) | Shared cache for rate limits | Required with more than one gunicorn worker for limits to be shared |
+| Claude API (optional) | AI drafts in the learning studio | Set `ANTHROPIC_API_KEY`; without it the studio writes starter drafts from the branch |
 
 ## 1. Configure
 
@@ -25,6 +26,9 @@ Copy `.env.example` to `.env` and fill in every value. Before going live:
 - `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` list your real domain (`https://…` for CSRF)
 - Email settings point at a real SMTP provider (used for email confirmation and password reset)
 - `TRUST_X_FORWARDED_FOR=true` only if nginx sets that header (config below does)
+- `ANTHROPIC_API_KEY` is set if you want AI-written learning drafts. The studio sends the
+  branch's README, dependency files, file paths, and commit messages (never source files)
+  to the Claude API, and each author can request 20 drafts an hour.
 
 Production settings refuse to start without `ALLOWED_HOSTS`.
 

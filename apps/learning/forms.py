@@ -1,4 +1,6 @@
+import subprocess
 from django import forms
+from apps.core.git_service import list_branches
 from apps.core.models import LearningPost
 from .media import MAX_THUMBNAIL_BYTES, validate_video_file
 MIN_ARTICLE_LENGTH = 200
@@ -8,10 +10,10 @@ class LearningPostForm(forms.ModelForm):
     thumbnail = forms.ImageField(required=False, widget=forms.ClearableFileInput(attrs={"accept": "image/*"}))
     class Meta:
         model = LearningPost
-        fields = ["title", "kind", "project", "summary", "body", "video_url", "video_file", "thumbnail", "is_public"]
-        labels = {"project": "Project this explains", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly"}
-        help_texts = {"project": ""}
-        widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."})}
+        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "video_url", "video_file", "thumbnail", "is_public"]
+        labels = {"project": "Project this explains", "video_script": "Video script", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly"}
+        help_texts = {"project": "", "video_script": ""}
+        widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."}), "video_script": forms.Textarea(attrs={"rows": 12, "placeholder": "INTRO\nHi, I'm ... In this video I'll show how I built ...\n\nDEMO\n[SHOW: the running app]"})}
     def __init__(self, *args, user=None, **kwargs):
         kwargs.setdefault("label_suffix", "")
         super().__init__(*args, **kwargs)
@@ -29,6 +31,16 @@ class LearningPostForm(forms.ModelForm):
         return thumbnail
     def clean(self):
         cleaned = super().clean()
+        project, branch = cleaned.get("project"), (cleaned.get("branch") or "").strip()
+        cleaned["branch"] = branch
+        if branch:
+            repository = getattr(project, "repository", None) if project else None
+            try:
+                known = {item["name"] for item in list_branches(repository)} if repository else set()
+            except (subprocess.CalledProcessError, OSError, ValueError):
+                known = set()
+            if branch not in known:
+                self.add_error("branch", "Pick a branch from this project's repository.")
         kind = cleaned.get("kind")
         has_video = bool(cleaned.get("video_file") or cleaned.get("video_url"))
         if kind == "video" and not has_video:

@@ -1,20 +1,24 @@
+import logging
+import subprocess
 from apps.common.http import redirect_back
 from apps.common.ratelimit import rate_limit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Count, F
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
-from apps.core.models import ContentView, LearningPost, PostComment, PostLike
+from apps.core.models import ContentView, LearningPost, PostComment, PostLike, Project
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
 from apps.notifications.services import notify
 from .forms import LearningPostForm
 from .media import youtube_embed_url
+from .studio import StudioError, draft_post, project_branches
+logger = logging.getLogger(__name__)
 def _display_name(user):
     return user.get_full_name() or getattr(getattr(user, "profile", None), "handle", None) or "A developer"
 def _visible_post(request, post_id):
@@ -79,7 +83,42 @@ def post_create_view(request):
         refresh_rank(request.user)
         messages.success(request, "Published. Share the link so other developers can learn from it." if post.is_public else "Saved as a private draft.")
         return redirect("learning:detail", post_id=post.pk)
-    return render(request, "learning/post_form.html", {"section": "learning", "form": form})
+    return render(request, "learning/post_form.html", {"section": "learning", "form": form, "studio_projects": _studio_projects(request.user)})
+def _studio_projects(user):
+    """The author's projects as cards for the studio's project picker."""
+    cards = []
+    for project in user.projects.select_related("repository").order_by("-updated_at"):
+        repository = getattr(project, "repository", None)
+        languages = repository.languages if repository else {}
+        cards.append({"pk": project.pk, "title": project.title, "language": next(iter(languages), ""), "has_code": bool(languages), "has_repository": repository is not None})
+    return cards
+def _owned_project(request, project_id):
+    if not str(project_id).isdigit():
+        raise Http404
+    return get_object_or_404(Project.objects.select_related("repository"), pk=project_id, owner=request.user)
+@login_required(login_url="landing:home")
+def studio_branches_view(request):
+    project = _owned_project(request, request.GET.get("project", ""))
+    try:
+        repository, branches = project_branches(project)
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        logger.exception("Could not list branches for project %s", project.pk)
+        return JsonResponse({"error": "Could not read this project's repository."}, status=500)
+    return JsonResponse({"has_repository": repository is not None, "default": repository.default_branch if repository else "", "branches": [{"name": branch["name"], "updated": branch["updated"][:10], "subject": branch["subject"]} for branch in branches]})
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("studio-draft", 20, 3600)
+def studio_draft_view(request):
+    project = _owned_project(request, request.POST.get("project", ""))
+    kind = "video" if request.POST.get("kind") == "video" else "article"
+    try:
+        draft, source, notice = draft_post(project, request.POST.get("branch", "").strip(), _display_name(request.user), kind)
+    except StudioError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        logger.exception("Could not read branch for project %s", project.pk)
+        return JsonResponse({"error": "Could not read that branch. Try again."}, status=500)
+    return JsonResponse({**draft, "source": source, "notice": notice})
 @login_required(login_url="landing:home")
 def post_edit_view(request, post_id):
     post = get_object_or_404(LearningPost, pk=post_id, author=request.user)
@@ -91,7 +130,7 @@ def post_edit_view(request, post_id):
         refresh_rank(request.user)
         messages.success(request, "Post updated.")
         return redirect("learning:detail", post_id=post.pk)
-    return render(request, "learning/post_form.html", {"section": "learning", "form": form, "post": post})
+    return render(request, "learning/post_form.html", {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user)})
 @login_required(login_url="landing:home")
 @require_POST
 def post_delete_view(request, post_id):
