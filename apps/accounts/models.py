@@ -22,6 +22,7 @@ class Profile(models.Model):
     rank = models.PositiveIntegerField(null=True, blank=True)
     score = models.PositiveIntegerField(default=0)
     recruiter_visible = models.BooleanField(default=True)
+    show_email = models.BooleanField(default=False, help_text="Show the account email to everyone who views the profile")
     avatar = models.ImageField(upload_to="avatars/", blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):

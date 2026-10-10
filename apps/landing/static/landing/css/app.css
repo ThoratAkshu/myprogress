@@ -39,6 +39,7 @@ body.app :focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 .app-menu-profile{align-items:flex-start!important}
 .app-menu-profile b,.app-menu-profile small{display:block}
 .app-menu-profile small{color:var(--muted);font-size:12.5px;line-height:1.35}
+.app-menu-profile .app-menu-email{margin-top:2px;overflow-wrap:anywhere}
 .app-menu-panel .button.block{justify-content:center;margin:4px 0 2px;color:var(--violet)}
 .app-create{align-items:center;margin-left:6px}
 .app-create>summary.button{flex-direction:row;min-width:0;height:36px;padding:0 14px;border:0;border-radius:99px;color:#fff;font-size:14px}
@@ -163,6 +164,8 @@ body.app .profile-name{margin:12px 0 2px;font-size:26px}
 .profile-meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0 0 12px;color:var(--muted);font-size:14px}
 .profile-meta span{display:inline-flex;align-items:center;gap:4px}
 .profile-meta b{color:var(--ink)}
+.profile-meta a{color:var(--violet)}
+.profile-private{margin-left:4px;padding:1px 8px;border-radius:99px;background:var(--canvas);font-size:12px}
 .stat-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
 .stat-strip b{display:block;font:800 22px Manrope,"DM Sans",sans-serif}
 .stat-strip small{color:var(--muted);font-size:12.5px}

@@ -417,6 +417,8 @@ def public_profile_view(request, handle):
         context["viewer_shortlists"] = request.user.shortlists.all()
         context["is_shortlisted"] = ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=owner).exists()
         context["contact_status"] = ContactRequest.objects.filter(recruiter=request.user, developer=owner).order_by("-created_at").values_list("status", flat=True).first()
+    # The owner always sees their email; everyone else only when the owner shares it or accepted their contact request.
+    context["email_visible"] = bool(owner.email) and (request.user == owner or profile.show_email or context.get("contact_status") == "accepted")
     return render(request, "landing/profile.html", context)
 @login_required(login_url="landing:home")
 @require_POST

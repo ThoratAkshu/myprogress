@@ -41,6 +41,17 @@ class PublicPortfolioTests(TestCase):
         self.assertNotContains(response, "asha@example.com")
         self.assertContains(response, "Sign in to follow")
         self.assertEqual(self.client.get(reverse("landing:public_profile", args=["nobody-here"])).status_code, 404)
+    def test_profile_email_shows_to_owner_and_to_visitors_only_when_shared(self):
+        user = make_user("asha@example.com")
+        Profile.objects.create(user=user)
+        url = reverse("landing:public_profile", args=["asha-rao"])
+        self.client.force_login(user)
+        self.assertContains(self.client.get(url), "Only you can see this")
+        self.client.logout()
+        self.assertNotContains(self.client.get(url), "asha@example.com")
+        user.profile.show_email = True
+        user.profile.save(update_fields=["show_email"])
+        self.assertContains(self.client.get(url), 'href="mailto:asha@example.com"')
     def test_owner_can_edit_portfolio_and_handle_must_be_unique(self):
         user = make_user("asha@example.com")
         Profile.objects.create(user=make_user("taken@example.com", "Taken", "Name"))

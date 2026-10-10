@@ -40,7 +40,7 @@ class ProfileForm(forms.ModelForm):
     handle = forms.SlugField(min_length=3, max_length=40, help_text="Letters, numbers, and dashes.")
     class Meta:
         model = Profile
-        fields = ["handle", "headline", "location", "bio", "skills", "recruiter_visible"]
+        fields = ["handle", "headline", "location", "bio", "skills", "recruiter_visible", "show_email"]
     def clean_handle(self):
         handle = self.cleaned_data["handle"].strip().lower()
         if Profile.objects.filter(handle=handle).exclude(pk=self.instance.pk).exists():
