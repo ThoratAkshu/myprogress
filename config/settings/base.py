@@ -152,7 +152,7 @@ MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 GIT_REPOSITORY_ROOT = Path(config("GIT_REPOSITORY_ROOT", default=str(BASE_DIR / "repositories")))
 GIT_EXECUTABLE = config("GIT_EXECUTABLE", default="git")
 # Color theme for the app: ocean, emerald, or midnight.
-UI_THEME = config("UI_THEME", default="ocean")
+UI_THEME = config("UI_THEME", default="midnight")
 # Git requests are streamed, so form posts no longer need a large in-memory limit.
 GIT_MAX_REQUEST_BYTES = config("GIT_MAX_REQUEST_BYTES", default=1024 * 1024 * 1024, cast=int)
 GIT_HTTP_TIMEOUT = config("GIT_HTTP_TIMEOUT", default=600, cast=int)

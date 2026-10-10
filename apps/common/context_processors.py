@@ -9,7 +9,7 @@ def ui_theme(request):
     if requested in THEMES and hasattr(request, "session"):
         request.session["ui_theme"] = requested
     session_theme = request.session.get("ui_theme") if hasattr(request, "session") else None
-    return {"ui_theme": session_theme if session_theme in THEMES else (settings.UI_THEME if settings.UI_THEME in THEMES else "ocean")}
+    return {"ui_theme": session_theme if session_theme in THEMES else (settings.UI_THEME if settings.UI_THEME in THEMES else "midnight")}
 def workspace_navigation(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
