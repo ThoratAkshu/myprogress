@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ActivityEvent, ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository, RepositoryCollaborator
+from .models import ActivityEvent, ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, Issue, IssueComment, LearningPost, PostComment, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 admin.site.register(Project)
 admin.site.register(LearningPost)
 admin.site.register(ProjectMilestone)
@@ -10,3 +10,7 @@ admin.site.register(DailyLoopCompletion)
 admin.site.register(Repository)
 admin.site.register(RepositoryCollaborator)
 admin.site.register(GitAccessToken)
+admin.site.register(Issue)
+admin.site.register(IssueComment)
+admin.site.register(PostLike)
+admin.site.register(PostComment)

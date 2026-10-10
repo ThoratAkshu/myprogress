@@ -154,3 +154,33 @@ class GitAccessToken(models.Model):
     @property
     def is_valid(self):
         return self.revoked_at is None and (self.expires_at is None or self.expires_at > timezone.now())
+class Issue(models.Model):
+    """Issues and pull requests share one model so they share one number sequence per repository."""
+    KIND_CHOICES = [("issue", "Issue"), ("pull", "Pull request")]
+    STATE_CHOICES = [("open", "Open"), ("closed", "Closed"), ("merged", "Merged")]
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE, related_name="issues")
+    number = models.PositiveIntegerField()
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES, default="issue")
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="authored_issues")
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    state = models.CharField(max_length=10, choices=STATE_CHOICES, default="open")
+    source_branch = models.CharField(max_length=100, blank=True)
+    target_branch = models.CharField(max_length=100, blank=True)
+    merge_commit = models.CharField(max_length=40, blank=True)
+    closed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    closed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["-number"]
+        constraints = [models.UniqueConstraint(fields=["repository", "number"], name="unique_repository_issue_number")]
+    def __str__(self):
+        return f"#{self.number} {self.title}"
+class IssueComment(models.Model):
+    issue = models.ForeignKey(Issue, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="issue_comments")
+    body = models.TextField(max_length=5000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["created_at"]

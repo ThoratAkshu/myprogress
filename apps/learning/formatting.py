@@ -2,25 +2,34 @@
 
 Everything is HTML-escaped first; only a fixed set of tags is added back:
 headings (#, ##, ###), fenced code blocks, inline code, **bold**, "- " lists,
-paragraphs, and auto-linked http(s) URLs. No author-supplied markup reaches the page.
+paragraphs, [text](https://...) links, and auto-linked http(s) URLs.
+No author-supplied markup reaches the page.
 """
 import re
 from html import escape
 from django.utils.safestring import mark_safe
 URL_PATTERN = re.compile(r"https?://[^\s<]+[^\s<.,;:!?)\]'\"]")
+MARKDOWN_LINK = re.compile(r"\[([^\]\n]+)\]\((https?://[^\s)]+)\)")
 HEADING_PATTERN = re.compile(r"^(#{1,3})\s+(.+)$")
 LIST_PATTERN = re.compile(r"^\s*[-*]\s+(.+)$")
 LANGUAGE_PATTERN = re.compile(r"^[A-Za-z0-9+#.-]{1,20}$")
+def _link(href, label):
+    return f'<a href="{href}" rel="nofollow noopener" target="_blank">{label}</a>'
+def _text(raw, autolink=True):
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escape(raw))
+    return URL_PATTERN.sub(lambda match: _link(match.group(0), match.group(0)), text) if autolink else text
 def _inline(raw):
     pieces = []
     for index, part in enumerate(re.split(r"`([^`\n]+)`", raw)):
         if index % 2:
             pieces.append(f"<code>{escape(part)}</code>")
             continue
-        text = escape(part)
-        text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-        text = URL_PATTERN.sub(lambda match: f'<a href="{match.group(0)}" rel="nofollow noopener" target="_blank">{match.group(0)}</a>', text)
-        pieces.append(text)
+        position = 0
+        for match in MARKDOWN_LINK.finditer(part):
+            pieces.append(_text(part[position:match.start()]))
+            pieces.append(_link(escape(match.group(2)), _text(match.group(1), autolink=False)))
+            position = match.end()
+        pieces.append(_text(part[position:]))
     return "".join(pieces)
 def render_article(source):
     lines = (source or "").replace("\r\n", "\n").split("\n")

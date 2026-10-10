@@ -20,7 +20,7 @@ from django.utils.text import slugify
 from django.views.generic import TemplateView
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
-from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository
+from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
 from apps.learning.views import record_post_view
 from apps.notifications.services import notify
@@ -28,7 +28,9 @@ from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioVie
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import IntegrityError
-from apps.core.git_service import authenticate_git_request, branch_heads, commit_file, count_new_commits, create_branch, initialize_repository, list_branches, list_commits, list_contributors, list_files, refresh_repository_languages, smart_http, user_can_access, user_can_administer
+from apps.core.git_service import authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
+from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
+from urllib.parse import urlencode
 import logging
 logger = logging.getLogger(__name__)
 @method_decorator(never_cache, name="dispatch")
@@ -118,6 +120,7 @@ def workspace_section_view(request, section):
         context["project_status_counts"] = Counter(project.status for project in projects)
         context["project_skills"] = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0].lower()))
         context["repositories"] = request.user.repositories.select_related("project")
+        context["shared_repositories"] = request.user.repository_memberships.select_related("repository__owner__profile")
         context["new_git_token"] = request.session.pop("new_git_token", None)
     if section == "rankings":
         language = request.GET.get("language", "").strip()
@@ -227,17 +230,15 @@ def create_repository_view(request, project_id):
     record_activity(request.user, "project", "created_repository", 5, {"repository_id": repository.pk})
     messages.success(request, "Repository created. Create a token before your first push.")
     return redirect("landing:repository", repository_id=repository.pk)
-@login_required(login_url="landing:home")
 def repository_view(request, repository_id):
-    repository = Repository.objects.select_related("project", "owner").filter(pk=repository_id).first()
-    if not repository or not user_can_access(request.user, repository):
-        messages.error(request, "You do not have access to that repository.")
-        return redirect("landing:workspace_section", section="projects")
-    can_write = user_can_access(request.user, repository, write=True)
-    can_admin = user_can_administer(request.user, repository)
+    try:
+        repository = load_repository(request, repository_id)
+    except RepositoryDenied as denied:
+        return denied.response
+    context = repository_context(request, repository, "code")
+    can_write, can_admin, branches = context["can_write"], context["can_admin"], context["branches"]
     allowed_tabs = {"code", "branches", "commits", "contributors", "settings"} if can_admin else {"code", "branches", "commits", "contributors"}
-    active_tab = request.GET.get("tab", "code")
-    active_tab = active_tab if active_tab in allowed_tabs else "code"
+    active_tab = request.GET.get("tab", "code") if request.GET.get("tab", "code") in allowed_tabs else "code"
     if request.method == "POST":
         action = request.POST.get("action")
         if (action in {"add_file", "create_branch"} and not can_write) or (action == "settings" and not can_admin):
@@ -271,12 +272,33 @@ def repository_view(request, repository_id):
             messages.error(request, str(error))
         except Exception:
             messages.error(request, "The Git operation could not be completed. Check the values and try again.")
-    branches = list_branches(repository)
-    clone_url = request.build_absolute_uri(reverse("landing:git_root", kwargs={"owner_id": repository.owner_id, "slug": repository.slug}))
-    files = list_files(repository) if branches and active_tab == "code" else []
-    commits = list_commits(repository) if branches and active_tab in {"commits", "contributors"} else []
-    contributors = list_contributors(repository) if branches and active_tab == "contributors" else []
-    context = {"repository": repository, "can_write": can_write, "can_admin": can_admin, "branches": branches, "files": files, "commits": commits, "contributors": contributors, "active_tab": active_tab, "clone_url": clone_url, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "initials": ((request.user.first_name[:1] + request.user.last_name[:1]) or request.user.username[:2]).upper()}
+    ref, path, files, readme, latest, commits, contributors = repository.default_branch, "", [], None, None, [], []
+    if branches:
+        try:
+            ref = resolve_ref(repository, request.GET.get("ref"))
+            path = clean_repo_path(request.GET.get("path"))
+        except ValueError as error:
+            messages.error(request, str(error))
+            return redirect("landing:repository", repository_id=repository.pk)
+    if branches and active_tab == "code":
+        kind = object_type(repository, ref, path) if path else "tree"
+        if kind == "blob":
+            return redirect(f'{reverse("code:blob", args=[repository.pk])}?{urlencode({"ref": ref, "path": path})}')
+        if kind != "tree":
+            messages.error(request, "That folder does not exist on this branch.")
+            return redirect(f'{reverse("landing:repository", args=[repository.pk])}?{urlencode({"ref": ref})}')
+        files = list_tree(repository, ref, path)
+        readme_entry = find_readme(files)
+        if readme_entry:
+            blob = read_blob(repository, ref, readme_entry["path"])
+            if not blob["binary"] and not blob["truncated"]:
+                readme = {"name": readme_entry["name"], "text": blob["data"].decode("utf-8", errors="replace"), "markdown": readme_entry["name"].lower().endswith((".md", ".markdown"))}
+        latest = last_commit(repository, ref, path)
+    if branches and active_tab == "commits":
+        commits = list_commits(repository, ref)
+    if branches and active_tab == "contributors":
+        contributors = list_contributors(repository, ref)
+    context.update({"active_tab": active_tab, "ref": ref, "path": path, "crumbs": breadcrumbs(path), "parent_path": "/".join(path.split("/")[:-1]) if path else None, "files": files, "readme": readme, "latest_commit": latest, "commits": commits, "contributors": contributors, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.is_authenticated and request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "collaborators": repository.collaborators.select_related("user__profile") if active_tab == "settings" else [], "role_choices": RepositoryCollaborator.ROLE_CHOICES})
     return render(request, "landing/repository.html", context)
 @login_required(login_url="landing:home")
 @require_POST

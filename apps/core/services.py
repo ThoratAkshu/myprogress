@@ -4,7 +4,7 @@ from django.db.models import Prefetch, Sum
 from django.utils import timezone
 from apps.accounts.models import Profile
 from .models import ActivityEvent, ContentView, DailyLoopCompletion, EarningTransaction, Repository
-CONTRIBUTION_ACTIONS = {"created_project", "created_repository", "created_repository_file", "pushed_commits", "published_learning"}
+CONTRIBUTION_ACTIONS = {"created_project", "created_repository", "created_repository_file", "pushed_commits", "published_learning", "opened_issue", "opened_pull_request", "merged_pull_request"}
 CODE_ACTIONS = {"created_repository_file", "pushed_commits"}
 def record_activity(user, event_type, action, points=1, metadata=None):
     return ActivityEvent.objects.create(user=user, event_type=event_type, action=action, points=points, metadata=metadata or {})

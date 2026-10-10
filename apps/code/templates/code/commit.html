@@ -1,0 +1,4 @@
+{% extends "code/repository_base.html" %}
+{% block title %}{{ commit.subject }} · {{ commit.short_id }}{% endblock %}
+{% block repo_main %}<section class="commit-header"><span class="repo-kicker">COMMIT</span><h2>{{ commit.subject }}</h2>{% if commit.body %}<pre class="commit-body">{{ commit.body }}</pre>{% endif %}<div class="commit-meta"><b>{{ commit.author }}</b>{% if show_email %}<small>&lt;{{ commit.email }}&gt;</small>{% endif %}<small>committed {{ commit.date|slice:":10" }}</small><code>{{ commit.id }}</code>{% for parent in commit.parents %}<a href="{% url 'code:commit' repository.pk parent %}">parent {{ parent|slice:":7" }}</a>{% endfor %}</div></section>
+{% include "code/_diff.html" %}{% endblock %}

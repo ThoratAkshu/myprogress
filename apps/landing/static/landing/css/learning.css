@@ -104,3 +104,4 @@ a.icon-button{display:grid;place-items:center;color:var(--ink);text-decoration:n
 .workspace-topbar>.brand+.top-actions{margin-left:auto}
 .post-form input[type=radio],.post-form input[type=checkbox]{display:inline-block;width:auto;flex:none;margin:3px 0 0;padding:0}
 .post-form input[type=file]{width:100%;margin:0;padding:8px;border:1px dashed #c9d1dc;border-radius:8px;background:#fafbfc}
+.shared-label{margin:14px 0 6px;font-size:10px;font-weight:800;letter-spacing:1.3px;color:var(--muted)}

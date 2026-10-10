@@ -16,7 +16,9 @@ def repository_path(repository):
         raise ValueError("Invalid repository storage path")
     return path
 def run_git(*args, cwd=None, timeout=30):
-    return subprocess.run([settings.GIT_EXECUTABLE, *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=timeout)
+    return subprocess.run([settings.GIT_EXECUTABLE, *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=True, timeout=timeout)
+def run_git_bytes(*args, cwd=None, timeout=30):
+    return subprocess.run([settings.GIT_EXECUTABLE, *args], cwd=cwd, capture_output=True, check=True, timeout=timeout).stdout
 def initialize_repository(repository):
     path = repository_path(repository)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,3 +178,130 @@ def smart_http(repository, request, service_path):
         else:
             headers[key.strip()] = value.strip()
     return status, headers, body
+COMMIT_SHA = re.compile(r"^[0-9a-f]{7,40}$")
+MAX_VIEW_BYTES = 1_000_000
+MAX_RAW_BYTES = 25 * 1024 * 1024
+MAX_DIFF_CHARS = 400_000
+README_NAMES = ("readme.md", "readme.markdown", "readme.txt", "readme")
+class MergeConflict(Exception):
+    pass
+def resolve_ref(repository, ref=None):
+    names = {branch["name"] for branch in list_branches(repository)}
+    ref = ref or repository.default_branch
+    if ref not in names:
+        raise ValueError("That branch does not exist.")
+    return ref
+def clean_repo_path(path):
+    path = (path or "").replace("\\", "/").strip("/")
+    if any(character in path for character in "\x00\n\r") or ".." in path.split("/") or len(path) > 400:
+        raise ValueError("Invalid path.")
+    return "/".join(part for part in path.split("/") if part)
+def object_type(repository, ref, path):
+    try:
+        return run_git("cat-file", "-t", f"{ref}:{path}", cwd=repository_path(repository)).stdout.strip()
+    except subprocess.CalledProcessError:
+        return None
+def list_tree(repository, ref, path=""):
+    output = run_git_bytes("ls-tree", "-l", "-z", f"{ref}:{path}", cwd=repository_path(repository)).decode("utf-8", errors="replace")
+    entries = []
+    for entry in output.split("\0"):
+        if "\t" not in entry:
+            continue
+        metadata, name = entry.split("\t", 1)
+        mode, kind, object_id, size = metadata.split()
+        entries.append({"name": name, "path": f"{path}/{name}" if path else name, "kind": kind, "size": None if size == "-" else int(size), "object_id": object_id, "mode": mode})
+    return sorted(entries, key=lambda item: (item["kind"] != "tree", item["name"].lower()))
+def read_blob(repository, ref, path, limit=MAX_VIEW_BYTES):
+    cwd = repository_path(repository)
+    size = int(run_git("cat-file", "-s", f"{ref}:{path}", cwd=cwd).stdout.strip())
+    data = run_git_bytes("cat-file", "blob", f"{ref}:{path}", cwd=cwd) if size <= limit else b""
+    return {"size": size, "data": data, "truncated": size > limit, "binary": b"\0" in data[:8000]}
+def find_readme(entries):
+    by_name = {entry["name"].lower(): entry for entry in entries if entry["kind"] == "blob"}
+    return next((by_name[name] for name in README_NAMES if name in by_name), None)
+def last_commit(repository, ref, path=""):
+    args = ["log", "-1", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ad%x1f%s", ref]
+    if path:
+        args += ["--", path]
+    line = run_git(*args, cwd=repository_path(repository)).stdout.strip()
+    return dict(zip(("id", "short_id", "author", "date", "subject"), line.split("\x1f", 4))) if line else None
+def parse_diff(text):
+    files, current, old_line, new_line, in_hunk = [], None, 0, 0, False
+    for raw in text.splitlines():
+        if raw.startswith("diff --git "):
+            parts = raw.split(" b/", 1)
+            current = {"path": parts[1] if len(parts) > 1 else raw[11:], "lines": [], "additions": 0, "deletions": 0, "binary": False, "status": "modified"}
+            files.append(current)
+            in_hunk = False
+            continue
+        if current is None:
+            continue
+        if raw.startswith("@@"):
+            match = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+            old_line, new_line = (int(match.group(1)), int(match.group(2))) if match else (0, 0)
+            current["lines"].append({"kind": "hunk", "text": raw, "old": "", "new": ""})
+            in_hunk = True
+            continue
+        if not in_hunk:
+            if raw.startswith("new file mode"):
+                current["status"] = "added"
+            elif raw.startswith("deleted file mode"):
+                current["status"] = "deleted"
+            elif raw.startswith(("rename from", "similarity index")):
+                current["status"] = "renamed"
+            elif raw.startswith(("Binary files", "GIT binary patch")):
+                current["binary"] = True
+            continue
+        if raw.startswith("+"):
+            current["lines"].append({"kind": "add", "text": raw[1:], "old": "", "new": new_line})
+            current["additions"] += 1
+            new_line += 1
+        elif raw.startswith("-"):
+            current["lines"].append({"kind": "del", "text": raw[1:], "old": old_line, "new": ""})
+            current["deletions"] += 1
+            old_line += 1
+        elif not raw.startswith("\\"):
+            current["lines"].append({"kind": "context", "text": raw[1:] if raw.startswith(" ") else raw, "old": old_line, "new": new_line})
+            old_line += 1
+            new_line += 1
+    return files
+def _diff_text(*args, cwd):
+    text = run_git_bytes(*args, cwd=cwd, timeout=60).decode("utf-8", errors="replace")
+    return text[:MAX_DIFF_CHARS], len(text) > MAX_DIFF_CHARS
+def commit_detail(repository, sha):
+    cwd = repository_path(repository)
+    if not COMMIT_SHA.fullmatch(sha or ""):
+        raise ValueError("Unknown commit.")
+    try:
+        kind = run_git("cat-file", "-t", sha, cwd=cwd).stdout.strip()
+    except subprocess.CalledProcessError:
+        kind = None
+    if kind != "commit":
+        raise ValueError("Unknown commit.")
+    meta = run_git("show", "-s", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%s%x1f%P%x1f%b", sha, cwd=cwd).stdout
+    commit = dict(zip(("id", "short_id", "author", "email", "date", "subject", "parents", "body"), meta.split("\x1f", 7)))
+    commit["parents"] = commit.get("parents", "").split()
+    commit["body"] = commit.get("body", "").strip()
+    text, truncated = _diff_text("show", "--format=", "--patch", "--no-color", "--find-renames", sha, cwd=cwd)
+    return commit, parse_diff(text), truncated
+def compare_branches(repository, base, head):
+    cwd = repository_path(repository)
+    log = run_git("log", "--date=iso-strict", "--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%s", f"{base}..{head}", cwd=cwd).stdout
+    commits = [dict(zip(("id", "short_id", "author", "email", "date", "subject"), line.split("\x1f", 5))) for line in log.splitlines()]
+    text, truncated = _diff_text("diff", "--no-color", "--find-renames", f"{base}...{head}", cwd=cwd)
+    return commits, parse_diff(text), truncated
+def can_merge_cleanly(repository, base, head):
+    result = subprocess.run([settings.GIT_EXECUTABLE, "merge-tree", "--write-tree", base, head], cwd=repository_path(repository), capture_output=True, timeout=60)
+    return {0: True, 1: False}.get(result.returncode)
+def merge_branches(repository, base, head, user, message):
+    with tempfile.TemporaryDirectory() as checkout_root:
+        checkout = Path(checkout_root) / "checkout"
+        run_git("clone", "--branch", base, str(repository_path(repository)), str(checkout), timeout=120)
+        run_git("config", "user.name", user.get_full_name() or user.username, cwd=checkout)
+        run_git("config", "user.email", user.email or user.username, cwd=checkout)
+        merge = subprocess.run([settings.GIT_EXECUTABLE, "merge", "--no-ff", "-m", message[:200], f"origin/{head}"], cwd=checkout, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+        if merge.returncode:
+            raise MergeConflict("These branches have conflicts. Merge them locally, push the result, then try again.")
+        sha = run_git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
+        run_git("push", "origin", f"HEAD:refs/heads/{base}", cwd=checkout, timeout=120)
+    return sha
