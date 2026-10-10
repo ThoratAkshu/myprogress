@@ -484,11 +484,6 @@ body.app .button.primary:hover{background:var(--violet-dark)}
 .app-banner{background:#fff8c5;border-bottom-color:#eedfa1;color:#5c4400}
 .app-banner button{border-color:#d4a72c}
 
-/* Themes: every color decision lives in these tokens. Default comes from UI_THEME; ?theme= previews one for the session. */
-body.app{--accent:#f97316;--accent-dark:#ea580c;--header-bg:#fff;--header-fg:var(--ink);--header-muted:var(--muted);--search-bg:#eef0f4}
-body.app.theme-ocean{--violet:#2563eb;--violet-dark:#1d4ed8;--violet-soft:#eff6ff;--accent:#f97316;--accent-dark:#ea580c;--canvas:#f5f7fb;--banner:linear-gradient(120deg,#bfdbfe 0%,#c7d2fe 50%,#fbcfe8 100%);--hero-bg:linear-gradient(120deg,#1e3a8a,#2563eb);--tile-0:linear-gradient(135deg,#2563eb,#7c3aed);--tile-1:linear-gradient(135deg,#0d9488,#22c55e);--tile-2:linear-gradient(135deg,#f97316,#e11d48);--tile-3:linear-gradient(135deg,#0ea5e9,#2563eb);--tile-4:linear-gradient(135deg,#9333ea,#db2777);--tile-5:linear-gradient(135deg,#f59e0b,#ea580c)}
-body.app.theme-emerald{--violet:#0d9488;--violet-dark:#0f766e;--violet-soft:#f0fdfa;--accent:#f59e0b;--accent-dark:#d97706;--canvas:#f3f8f6;--banner:linear-gradient(120deg,#99f6e4 0%,#bae6fd 55%,#fde68a 100%);--hero-bg:linear-gradient(120deg,#134e4a,#0d9488);--tile-0:linear-gradient(135deg,#0d9488,#22c55e);--tile-1:linear-gradient(135deg,#0ea5e9,#14b8a6);--tile-2:linear-gradient(135deg,#f59e0b,#f97316);--tile-3:linear-gradient(135deg,#059669,#84cc16);--tile-4:linear-gradient(135deg,#0891b2,#2563eb);--tile-5:linear-gradient(135deg,#e11d48,#f97316)}
-body.app.theme-midnight{--violet:#0369a1;--violet-dark:#075985;--violet-soft:#e0f2fe;--accent:#16a34a;--accent-dark:#15803d;--canvas:#f1f5f9;--header-bg:#0f172a;--header-fg:#f8fafc;--header-muted:#94a3b8;--search-bg:rgba(255,255,255,.1);--banner:linear-gradient(120deg,#0f172a 0%,#1e3a8a 55%,#0369a1 100%);--hero-bg:linear-gradient(120deg,#0f172a,#1e3a8a);--tile-0:linear-gradient(135deg,#0f172a,#0369a1);--tile-1:linear-gradient(135deg,#134e4a,#0d9488);--tile-2:linear-gradient(135deg,#312e81,#6366f1);--tile-3:linear-gradient(135deg,#1e3a8a,#0ea5e9);--tile-4:linear-gradient(135deg,#881337,#e11d48);--tile-5:linear-gradient(135deg,#78350f,#f59e0b)}
 .app-header{background:var(--header-bg)}
 .app-logo b{color:var(--header-fg)}
 .app-search{background:var(--search-bg);color:var(--header-muted)}
