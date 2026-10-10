@@ -61,7 +61,7 @@ body.app :focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 .card-head a{color:var(--violet);font-size:13.5px;font-weight:600}
 .list-card{padding-top:4px;padding-bottom:4px}
 .list-card>.card-head{margin:12px 0 4px}
-.avatar{flex:none;display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#e8f1fb;color:#0a66c2;font-weight:800;font-size:15px;text-decoration:none}
+.avatar{flex:none;display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--violet-soft);color:var(--violet);font-weight:800;font-size:15px;text-decoration:none}
 .avatar-xs{width:24px;height:24px;font-size:10px}.avatar-sm{width:28px;height:28px;font-size:11px}.avatar-lg{width:72px;height:72px;font-size:24px}.avatar-xl{width:136px;height:136px;font-size:44px;border:4px solid #fff;box-shadow:0 2px 8px rgba(16,24,40,.12)}
 body.app .button{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border:1px solid transparent;border-radius:8px;font:inherit;font-size:14px;font-weight:700;line-height:1.3;text-decoration:none;cursor:pointer;box-shadow:none}
 body.app .button.primary{background:var(--violet);color:#fff}
@@ -71,7 +71,7 @@ body.app .button.soft:hover{background:#f5f6f8;border-color:#b8c0ca}
 body.app .button.pill{border-radius:99px;padding:6px 14px;font-size:13.5px}
 body.app .button.block{width:100%}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px}
-.chip,.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;background:var(--violet-soft);color:#004182;font-size:12.5px;font-weight:600}
+.chip,.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;background:var(--violet-soft);color:var(--violet-dark);font-size:12.5px;font-weight:600}
 .pill{background:#f1f3f5;color:var(--muted);border:1px solid var(--line);padding:1px 8px;font-size:12px}
 .tabs{display:flex;gap:4px;overflow-x:auto;margin:16px 0;border-bottom:1px solid var(--line)}
 .tabs a{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:2px solid transparent;color:var(--muted);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
@@ -483,3 +483,28 @@ body.app .button.primary:hover{background:var(--violet-dark)}
 .status-tag.status-planning{background:#eaeef2;color:#57606a}
 .app-banner{background:#fff8c5;border-bottom-color:#eedfa1;color:#5c4400}
 .app-banner button{border-color:#d4a72c}
+
+/* Themes: every color decision lives in these tokens. Default comes from UI_THEME; ?theme= previews one for the session. */
+body.app{--accent:#f97316;--accent-dark:#ea580c;--header-bg:#fff;--header-fg:var(--ink);--header-muted:var(--muted);--search-bg:#eef0f4}
+body.app.theme-ocean{--violet:#2563eb;--violet-dark:#1d4ed8;--violet-soft:#eff6ff;--accent:#f97316;--accent-dark:#ea580c;--canvas:#f5f7fb;--banner:linear-gradient(120deg,#bfdbfe 0%,#c7d2fe 50%,#fbcfe8 100%);--hero-bg:linear-gradient(120deg,#1e3a8a,#2563eb);--tile-0:linear-gradient(135deg,#2563eb,#7c3aed);--tile-1:linear-gradient(135deg,#0d9488,#22c55e);--tile-2:linear-gradient(135deg,#f97316,#e11d48);--tile-3:linear-gradient(135deg,#0ea5e9,#2563eb);--tile-4:linear-gradient(135deg,#9333ea,#db2777);--tile-5:linear-gradient(135deg,#f59e0b,#ea580c)}
+body.app.theme-emerald{--violet:#0d9488;--violet-dark:#0f766e;--violet-soft:#f0fdfa;--accent:#f59e0b;--accent-dark:#d97706;--canvas:#f3f8f6;--banner:linear-gradient(120deg,#99f6e4 0%,#bae6fd 55%,#fde68a 100%);--hero-bg:linear-gradient(120deg,#134e4a,#0d9488);--tile-0:linear-gradient(135deg,#0d9488,#22c55e);--tile-1:linear-gradient(135deg,#0ea5e9,#14b8a6);--tile-2:linear-gradient(135deg,#f59e0b,#f97316);--tile-3:linear-gradient(135deg,#059669,#84cc16);--tile-4:linear-gradient(135deg,#0891b2,#2563eb);--tile-5:linear-gradient(135deg,#e11d48,#f97316)}
+body.app.theme-midnight{--violet:#0369a1;--violet-dark:#075985;--violet-soft:#e0f2fe;--accent:#16a34a;--accent-dark:#15803d;--canvas:#f1f5f9;--header-bg:#0f172a;--header-fg:#f8fafc;--header-muted:#94a3b8;--search-bg:rgba(255,255,255,.1);--banner:linear-gradient(120deg,#0f172a 0%,#1e3a8a 55%,#0369a1 100%);--hero-bg:linear-gradient(120deg,#0f172a,#1e3a8a);--tile-0:linear-gradient(135deg,#0f172a,#0369a1);--tile-1:linear-gradient(135deg,#134e4a,#0d9488);--tile-2:linear-gradient(135deg,#312e81,#6366f1);--tile-3:linear-gradient(135deg,#1e3a8a,#0ea5e9);--tile-4:linear-gradient(135deg,#881337,#e11d48);--tile-5:linear-gradient(135deg,#78350f,#f59e0b)}
+.app-header{background:var(--header-bg)}
+.app-logo b{color:var(--header-fg)}
+.app-search{background:var(--search-bg);color:var(--header-muted)}
+.app-search input{color:var(--header-fg)}
+.app-search input::placeholder{color:var(--header-muted)}
+.app-search:focus-within{background:var(--surface);color:var(--muted)}
+.app-search:focus-within input{color:var(--ink)}
+.app-nav>a,.app-menu>summary{color:var(--header-muted)}
+.app-nav>a:hover,.app-menu>summary:hover,.app-nav>a.active{color:var(--header-fg)}
+.app-nav>a.active{border-bottom-color:var(--header-fg)}
+body.app .app-create>summary.button{background:var(--accent)}
+body.app .app-create>summary.button:hover{background:var(--accent-dark)}
+.profile-mini-cover,.profile-header-cover,body.app .profile-cover{background:var(--banner)}
+body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:var(--hero-bg)}
+.tone-0{background:var(--tile-0)!important}.tone-1{background:var(--tile-1)!important}.tone-2{background:var(--tile-2)!important}.tone-3{background:var(--tile-3)!important}.tone-4{background:var(--tile-4)!important}.tone-5{background:var(--tile-5)!important}
+.story-ring.is-new{background:conic-gradient(from 210deg,var(--accent),var(--violet),var(--accent))}
+.week-dots li.active i{background:var(--accent)}
+/* Colorful initials, one stable color per person */
+.avatar.av-0{background:#dbeafe;color:#1d4ed8}.avatar.av-1{background:#dcfce7;color:#15803d}.avatar.av-2{background:#fef3c7;color:#b45309}.avatar.av-3{background:#fce7f3;color:#be185d}.avatar.av-4{background:#ede9fe;color:#6d28d9}.avatar.av-5{background:#cffafe;color:#0e7490}.avatar.av-6{background:#ffedd5;color:#c2410c}.avatar.av-7{background:#e0e7ff;color:#4338ca}

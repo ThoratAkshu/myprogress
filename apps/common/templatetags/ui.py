@@ -70,3 +70,7 @@ def initials(user):
 def tone(obj):
     """Stable muted background tone (tone-0..tone-5) for items without an image."""
     return f"tone-{(getattr(obj, 'pk', 0) or 0) % 6}"
+@register.filter
+def avatar_tone(user):
+    """Stable pastel color class (av-0..av-7) for a person's initials."""
+    return f"av-{(getattr(user, 'pk', 0) or 0) % 8}"

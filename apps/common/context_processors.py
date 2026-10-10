@@ -1,6 +1,15 @@
 from functools import lru_cache
+from django.conf import settings
 from apps.accounts.models import Profile
 from apps.recruiting.models import RECRUITER_ROLES
+THEMES = {"ocean", "emerald", "midnight"}
+def ui_theme(request):
+    """The color theme: ?theme= previews one for the rest of the session, otherwise UI_THEME."""
+    requested = request.GET.get("theme") if hasattr(request, "GET") else None
+    if requested in THEMES and hasattr(request, "session"):
+        request.session["ui_theme"] = requested
+    session_theme = request.session.get("ui_theme") if hasattr(request, "session") else None
+    return {"ui_theme": session_theme if session_theme in THEMES else (settings.UI_THEME if settings.UI_THEME in THEMES else "ocean")}
 def workspace_navigation(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
