@@ -25,7 +25,7 @@ body.app :focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 .app-nav>a,.app-menu>summary{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:74px;padding:0 8px;color:var(--muted);font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;border-bottom:2px solid transparent}
 .app-nav>a:hover,.app-menu>summary:hover{color:var(--ink)}
 .app-nav>a.active{color:var(--ink);border-bottom-color:var(--ink)}
-.app-nav>a span,.app-menu>summary span{display:flex;align-items:center;gap:2px;white-space:nowrap}
+.app-nav>a span,.app-menu>summary span:not(.avatar){display:flex;align-items:center;gap:2px;white-space:nowrap}
 .nav-badge{position:absolute;top:6px;left:calc(50% + 4px);min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font-size:11px;font-style:normal;font-weight:700;line-height:18px;text-align:center}
 .app-nav-guest{align-items:center;gap:8px}
 .app-menu{position:relative;display:flex}
