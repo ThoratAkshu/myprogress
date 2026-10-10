@@ -58,7 +58,7 @@ class BrowsingTests(RepositoryTestCase):
         response = self.client.get(self.url)
         names = [item["name"] for item in response.context["files"]]
         self.assertEqual(names, ["src", "web", "logo.bin", "README.md"])
-        self.assertContains(response, "<h2>Ledger</h2>", html=False)
+        self.assertContains(response, '<h2 id="ledger">Ledger</h2>', html=False)
         self.assertContains(response, '<a href="https://example.com/docs" rel="nofollow noopener" target="_blank">docs</a>', html=False)
         self.assertContains(response, "Initial commit")
     def test_folders_breadcrumbs_and_redirect_to_files(self):
@@ -78,7 +78,7 @@ class BrowsingTests(RepositoryTestCase):
         self.assertNotContains(response, "<script>alert(1)</script>")
         self.assertContains(response, 'id="L1"')
         readme = self.client.get(self.blob_url("README.md"))
-        self.assertContains(readme, "<h2>Ledger</h2>", html=False)
+        self.assertContains(readme, '<h2 id="ledger">Ledger</h2>', html=False)
         self.assertContains(self.client.get(self.blob_url("README.md", source=1)), "# Ledger")
         self.assertContains(self.client.get(self.blob_url("logo.bin")), "Binary file.")
     def test_branch_switch_shows_branch_files(self):

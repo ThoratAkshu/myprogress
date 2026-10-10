@@ -32,6 +32,13 @@ def _sample(items, count):
         return items
     step = (len(items) - 1) / (count - 1)
     return [items[round(index * step)] for index in range(count)]
+def branch_paths(repository, branch):
+    """Every file path on the branch, leaving out dependency and build folders."""
+    try:
+        listing = run_git("ls-tree", "-r", "--name-only", "-z", "--full-tree", branch, cwd=repository_path(repository)).stdout.split("\0")
+    except subprocess.CalledProcessError:
+        return []
+    return [name for name in listing if name and not VENDORED_DIRECTORIES.intersection(PurePosixPath(name).parts[:-1])]
 def branch_snapshot(project, branch=""):
     """Everything the draft is allowed to know about the project and one branch."""
     if project is None:
@@ -56,11 +63,7 @@ def branch_snapshot(project, branch=""):
             blob = read_blob(repository, branch, entry["path"], limit=200_000)
             if not blob["binary"]:
                 manifests[entry["name"]] = blob["data"].decode("utf-8", errors="replace")[:MAX_MANIFEST_CHARS]
-    try:
-        listing = run_git("ls-tree", "-r", "--name-only", "-z", "--full-tree", branch, cwd=path).stdout.split("\0")
-    except subprocess.CalledProcessError:
-        listing = []
-    paths = [name for name in listing if name and not VENDORED_DIRECTORIES.intersection(PurePosixPath(name).parts[:-1])]
+    paths = branch_paths(repository, branch)
     languages = detect_languages(repository, ref=branch)
     total = sum(languages.values()) or 1
     snapshot["branch"] = {

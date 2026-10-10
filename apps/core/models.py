@@ -73,6 +73,11 @@ class LearningPost(models.Model):
     @property
     def reading_minutes(self):
         return max(1, round(len(self.body.split()) / 200))
+class ArticleImage(models.Model):
+    """An image an author uploaded to use inside their articles."""
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="article_images")
+    image = models.ImageField(upload_to="learning/images/")
+    created_at = models.DateTimeField(auto_now_add=True)
 class PostLike(models.Model):
     post = models.ForeignKey(LearningPost, on_delete=models.CASCADE, related_name="likes")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_likes")

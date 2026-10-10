@@ -32,7 +32,7 @@ class ArticleFormattingTests(SimpleTestCase):
     def test_supported_blocks(self):
         source = "# Architecture\nThe **core** uses `select_related`.\n\n- Fast\n- Simple\n\n```python\nif a < b and '**x**':\n    pass\n```"
         html = render_article(source)
-        self.assertIn("<h2>Architecture</h2>", html)
+        self.assertIn('<h2 id="architecture">Architecture</h2>', html)
         self.assertIn("<p>The <strong>core</strong> uses <code>select_related</code>.</p>", html)
         self.assertIn("<ul><li>Fast</li><li>Simple</li></ul>", html)
         self.assertIn('<pre><code class="language-python">if a &lt; b and &#x27;**x**&#x27;:\n    pass</code></pre>', html)
@@ -135,7 +135,7 @@ class ReadingAndEngagementTests(TestCase):
         self.url = reverse("learning:detail", args=[self.post.pk])
     def test_public_posts_render_for_anyone_and_drafts_only_for_the_author(self):
         response = self.client.get(self.url)
-        self.assertContains(response, "<h3>Design</h3>", html=False)
+        self.assertContains(response, '<h3 id="design">Design</h3>', html=False)
         self.assertContains(response, "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ")
         self.assertNotContains(response, "author@example.com")
         draft = LearningPost.objects.create(author=self.author, title="Draft", is_public=False)
@@ -148,7 +148,7 @@ class ReadingAndEngagementTests(TestCase):
         article = LearningPost.objects.create(author=self.author, title="Queues explained", body="## Why queues\nThey smooth out bursts. " * 20)
         response = self.client.get(reverse("learning:detail", args=[article.pk]))
         self.assertContains(response, '<div class="ig-media is-article" id="write-up">')
-        self.assertContains(response, "<h3>Why queues</h3>", html=False)
+        self.assertContains(response, '<h3 id="why-queues">Why queues</h3>', html=False)
         self.assertNotContains(response, 'class="card write-up"')
         PostLike.objects.create(post=article, user=self.reader)
         self.client.force_login(self.reader)
@@ -358,3 +358,94 @@ class TimelineTests(TestCase):
             editor = self.client.get(reverse("learning:create"), {"kind": "video"})
             for control in ['data-setting="layout"', 'value="bottom-left" data-setting="position"', 'value="sunset" data-setting="background"', 'data-setting="captions"', 'data-recorder-action="chapter"', "recorder-scene.js"]:
                 self.assertContains(editor, control)
+class ArticleFormatTests(SimpleTestCase):
+    def test_new_blocks_render_safely(self):
+        html = render_article("A *quiet* ~~old~~ word and 2*3*4 stays.\n\n1. First\n2. Second\n\n> Just a quote\n\n> [!TIP]\n> Use **indexes**\n\n---\n\n~~~js\nconst a = '```';\n~~~")
+        self.assertIn("<em>quiet</em> <del>old</del>", html)
+        self.assertIn("2*3*4 stays", html)
+        self.assertIn("<ol><li>First</li><li>Second</li></ol>", html)
+        self.assertIn("<blockquote><p>Just a quote</p></blockquote>", html)
+        self.assertIn('<aside class="callout callout-tip"><b class="callout-title">Tip</b><p>Use <strong>indexes</strong></p></aside>', html)
+        self.assertIn("<hr>", html)
+        self.assertIn('<pre><code class="language-js">const a = &#x27;```&#x27;;</code></pre>', html)
+    def test_only_uploaded_images_are_shown_and_headings_get_unique_anchors(self):
+        from .formatting import article_outline
+        html = render_article("![Login page](/media/learning/images/abc123.png)\n\n![x](https://evil.example/track.png)\n\n![x](/media/learning/images/../secret.png)\n\n## Setup\n\n## Setup\n\n```\n## not a heading\n```")
+        self.assertIn('<figure><img src="/media/learning/images/abc123.png" alt="Login page" loading="lazy"><figcaption>Login page</figcaption></figure>', html)
+        self.assertNotIn('<img src="https://evil.example', html)
+        self.assertNotIn('src="/media/learning/images/../secret.png"', html)
+        self.assertIn('<h3 id="setup">Setup</h3>', html)
+        self.assertIn('<h3 id="setup-2">Setup</h3>', html)
+        self.assertEqual([item["anchor"] for item in article_outline("## Setup\n\n## Setup\n\n```\n## not a heading\n```")], ["setup", "setup-2"])
+class ArticleStudioTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        from apps.core.git_service import commit_file, initialize_repository
+        from apps.core.models import Repository
+        cache.clear()
+        self.storage = tempfile.TemporaryDirectory()
+        self.media = tempfile.mkdtemp()
+        self.override = override_settings(GIT_REPOSITORY_ROOT=self.storage.name, MEDIA_ROOT=self.media, ANTHROPIC_API_KEY="")
+        self.override.enable()
+        self.author = make_user("author@example.com", "Asha", "Rao")
+        self.project = Project.objects.create(owner=self.author, title="Ledger")
+        repository = Repository.objects.create(project=self.project, owner=self.author, slug="ledger")
+        initialize_repository(repository)
+        commit_file(repository, "ledger/post.py", "def post(entry):\n    return entry\n", self.author, "Add posting")
+        commit_file(repository, "logo.png", "\x00binary", self.author, "Add logo")
+        self.client.force_login(self.author)
+    def tearDown(self):
+        self.override.disable()
+        self.storage.cleanup()
+        shutil.rmtree(self.media, ignore_errors=True)
+    def test_preview_renders_like_the_published_post(self):
+        response = self.client.post(reverse("learning:studio_preview"), {"body": "## Plan\n<script>x</script> **go**"})
+        self.assertEqual(response.json()["html"], '<h3 id="plan">Plan</h3>\n<p>&lt;script&gt;x&lt;/script&gt; <strong>go</strong></p>')
+    def test_images_upload_as_markdown_and_other_files_are_refused(self):
+        import io
+        from PIL import Image
+        picture = io.BytesIO()
+        Image.new("RGB", (8, 8), "#2563eb").save(picture, "PNG")
+        response = self.client.post(reverse("learning:studio_image"), {"image": SimpleUploadedFile("my shot.png", picture.getvalue(), content_type="image/png"), "alt": "Login [page]"})
+        data = response.json()
+        self.assertRegex(data["url"], r"^/media/learning/images/[0-9a-f]{32}\.png$")
+        self.assertEqual(data["markdown"], f"![Login page]({data['url']})")
+        self.assertIn("<figure>", render_article(data["markdown"]))
+        refused = self.client.post(reverse("learning:studio_image"), {"image": SimpleUploadedFile("notes.png", b"not an image", content_type="image/png")})
+        self.assertEqual(refused.status_code, 400)
+        self.client.logout()
+        self.assertEqual(self.client.post(reverse("learning:studio_image")).status_code, 302)
+    def test_repository_files_can_be_listed_and_read_by_the_owner_only(self):
+        params = {"project": self.project.pk, "branch": "main"}
+        self.assertEqual(self.client.get(reverse("learning:studio_files"), params).json()["paths"], ["ledger/post.py", "logo.png"])
+        file = self.client.get(reverse("learning:studio_file"), {**params, "path": "ledger/post.py"}).json()
+        self.assertEqual((file["language"], file["content"]), ("py", "def post(entry):\n    return entry\n"))
+        self.assertEqual(self.client.get(reverse("learning:studio_file"), {**params, "path": "logo.png"}).status_code, 400)
+        self.assertEqual(self.client.get(reverse("learning:studio_file"), {**params, "path": "../secrets"}).status_code, 400)
+        self.assertEqual(self.client.get(reverse("learning:studio_file"), {**params, "path": "missing.py"}).status_code, 404)
+        self.assertEqual(self.client.get(reverse("learning:studio_files"), {**params, "branch": "nope"}).status_code, 400)
+        self.client.force_login(make_user("other@example.com", "Oth", "Er"))
+        self.assertEqual(self.client.get(reverse("learning:studio_files"), params).status_code, 404)
+    def test_ai_writing_help_needs_a_key_and_returns_the_rewrite(self):
+        from types import SimpleNamespace
+        from unittest import mock
+        url = reverse("learning:studio_assist")
+        self.assertEqual(self.client.post(url, {"action": "improve", "text": "the ledger is fast"}).status_code, 503)
+        self.assertEqual(self.client.post(url, {"action": "delete-everything", "text": "x"}).status_code, 400)
+        reply = SimpleNamespace(content=[SimpleNamespace(type="text", text="The ledger posts entries quickly.")])
+        with override_settings(ANTHROPIC_API_KEY="test-key"), mock.patch("anthropic.Anthropic") as client_class:
+            client_class.return_value.messages.create.return_value = reply
+            response = self.client.post(url, {"action": "improve", "text": "the ledger is fast", "title": "Ledger"})
+        self.assertEqual(response.json(), {"text": "The ledger posts entries quickly."})
+        prompt = client_class.return_value.messages.create.call_args.kwargs["messages"][0]["content"]
+        self.assertIn("<text>\nthe ledger is fast\n</text>", prompt)
+        self.assertIn("Article title: Ledger", prompt)
+    def test_editor_and_reading_tools_are_on_the_pages(self):
+        editor = self.client.get(reverse("learning:create"))
+        for control in ['data-format="voice"', 'data-template="tutorial"', 'data-callout="tip"', 'data-assist="explain"', 'data-editor-view="split"', 'id="repo-code-dialog"', "article-editor.js", 'data-ai="off"']:
+            self.assertContains(editor, control)
+        post = LearningPost.objects.create(author=self.author, title="Ledger notes", body="## Setup\nInstall it.\n\n## Usage\nRun it.")
+        page = self.client.get(reverse("learning:detail", args=[post.pk]))
+        self.assertContains(page, '<nav class="ig-toc" aria-label="On this page">')
+        self.assertContains(page, '<a href="#usage">Usage</a>')
+        self.assertContains(page, "data-listen")

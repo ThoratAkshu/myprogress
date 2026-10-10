@@ -59,3 +59,13 @@ class LearningPostForm(forms.ModelForm):
         if kind == "article" and len((cleaned.get("body") or "").strip()) < MIN_ARTICLE_LENGTH:
             self.add_error("body", f"Articles need at least {MIN_ARTICLE_LENGTH} characters so they help other developers.")
         return cleaned
+class ArticleImageForm(forms.Form):
+    """An image pasted, dropped, or uploaded into the article editor."""
+    image = forms.ImageField()
+    def clean_image(self):
+        image = self.cleaned_data["image"]
+        if image.size > MAX_THUMBNAIL_BYTES:
+            raise forms.ValidationError("Images must be 5 MB or smaller.")
+        if getattr(image, "image", None) is None or image.image.format not in {"PNG", "JPEG", "GIF", "WEBP"}:
+            raise forms.ValidationError("Upload a PNG, JPEG, GIF, or WebP image.")
+        return image

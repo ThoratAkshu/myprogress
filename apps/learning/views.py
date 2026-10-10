@@ -1,5 +1,9 @@
 import logging
+import re
 import subprocess
+import uuid
+from pathlib import PurePosixPath
+from django.conf import settings
 from apps.common.http import redirect_back
 from apps.common.ratelimit import rate_limit
 from django.contrib import messages
@@ -12,13 +16,17 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
-from apps.core.models import ContentView, LearningPost, PostComment, PostLike, Project
+from apps.core.git_service import clean_repo_path, object_type, read_blob
+from apps.core.models import ArticleImage, ContentView, LearningPost, PostComment, PostLike, Project
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
 from apps.notifications.services import notify
-from .forms import LearningPostForm
+from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
+from .formatting import article_outline, render_article
+from .forms import ArticleImageForm, LearningPostForm
 from .media import youtube_embed_url
-from .studio import StudioError, draft_post, project_branches
+from .studio import StudioError, branch_paths, draft_post, project_branches
 from .timeline import parse_captions, parse_chapters
+MAX_INSERT_BYTES = 300_000
 logger = logging.getLogger(__name__)
 def _display_name(user):
     return user.get_full_name() or getattr(getattr(user, "profile", None), "handle", None) or "A developer"
@@ -67,6 +75,7 @@ def post_detail_view(request, post_id):
         "reading_minutes": max(1, round(len(post.body.split()) / 200)),
         "chapters": parse_chapters(post.chapters),
         "transcript": parse_captions(post.captions),
+        "outline": article_outline(post.body) if not post.has_video else [],
     }
     return render(request, "learning/post_detail.html", context)
 @login_required(login_url="landing:home")
@@ -95,7 +104,7 @@ def _published(request, post):
 RECORDER_CORNERS = [("top-left", "Top left"), ("top-right", "Top right"), ("bottom-left", "Bottom left"), ("bottom-right", "Bottom right")]
 RECORDER_BACKGROUNDS = [("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("ocean", "Ocean", ("#1d4ed8", "#0ea5e9")), ("sunset", "Sunset", ("#f97316", "#db2777")), ("forest", "Forest", ("#065f46", "#0d9488")), ("graphite", "Graphite", ("#111827", "#374151"))]
 def _form_context(request, form, post=None):
-    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS}
+    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
 def captions_view(request, post_id):
     """The post's captions as a WebVTT file for the video player."""
     post = _visible_post(request, post_id)
@@ -143,6 +152,75 @@ def studio_draft_view(request):
         logger.exception("Could not read branch for project %s", getattr(project, "pk", None))
         return JsonResponse({"error": "Could not read that branch. Try again."}, status=500)
     return JsonResponse({**draft, "source": source, "notice": notice})
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("studio-preview", 300, 600)
+def studio_preview_view(request):
+    """The article rendered exactly as it will be published."""
+    return JsonResponse({"html": render_article(request.POST.get("body", "")[:100_000])})
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("article-image", 60, 3600)
+def studio_image_view(request):
+    form = ArticleImageForm(request.POST, request.FILES)
+    if not form.is_valid():
+        errors = form.errors.get("image") or ["Upload a PNG, JPEG, GIF, or WebP image."]
+        return JsonResponse({"error": errors[0]}, status=400)
+    upload = form.cleaned_data["image"]
+    upload.name = f"{uuid.uuid4().hex}.{upload.image.format.lower().replace('jpeg', 'jpg')}"
+    image = ArticleImage.objects.create(owner=request.user, image=upload)
+    alt = " ".join(re.sub(r"[\[\]]", " ", request.POST.get("alt", "")).split())[:100] or "Screenshot"
+    return JsonResponse({"url": image.image.url, "markdown": f"![{alt}]({image.image.url})"})
+def _studio_branch(request):
+    """The author's project repository and the requested branch, or a JSON error response."""
+    project = _owned_project(request, request.GET.get("project", ""))
+    try:
+        repository, branches = project_branches(project)
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        logger.exception("Could not list branches for project %s", project.pk)
+        return None, None, JsonResponse({"error": "Could not read this project's repository."}, status=500)
+    branch = request.GET.get("branch", "")
+    if not repository or branch not in {item["name"] for item in branches}:
+        return None, None, JsonResponse({"error": "Pick a project and a branch at the top of the page first."}, status=400)
+    return repository, branch, None
+@login_required(login_url="landing:home")
+def studio_files_view(request):
+    repository, branch, error = _studio_branch(request)
+    return error or JsonResponse({"paths": branch_paths(repository, branch)[:5000]})
+@login_required(login_url="landing:home")
+def studio_file_view(request):
+    repository, branch, error = _studio_branch(request)
+    if error:
+        return error
+    try:
+        path = clean_repo_path(request.GET.get("path", ""))
+    except ValueError:
+        return JsonResponse({"error": "That isn't a valid file path."}, status=400)
+    if not path or object_type(repository, branch, path) != "blob":
+        return JsonResponse({"error": "That file isn't on this branch."}, status=404)
+    blob = read_blob(repository, branch, path, limit=MAX_INSERT_BYTES)
+    if blob["truncated"]:
+        return JsonResponse({"error": "That file is too large to insert (over 300 KB)."}, status=400)
+    if blob["binary"]:
+        return JsonResponse({"error": "That file isn't text, so it can't be inserted as code."}, status=400)
+    return JsonResponse({"path": path, "language": PurePosixPath(path).suffix.lstrip(".").lower()[:20], "content": blob["data"].decode("utf-8", errors="replace")})
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("studio-assist", 40, 3600)
+def studio_assist_view(request):
+    action, text = request.POST.get("action", ""), request.POST.get("text", "").strip()
+    if action not in ASSIST_ACTIONS or not text:
+        return JsonResponse({"error": "Select some text for the AI to work on."}, status=400)
+    try:
+        result = assist(action, text, request.POST.get("title", ""))
+    except AssistUnavailable:
+        return JsonResponse({"error": "AI writing help is off on this server. Add an ANTHROPIC_API_KEY to its .env to turn it on."}, status=503)
+    except Exception:
+        logger.exception("AI writing help failed")
+        result = ""
+    if not result:
+        return JsonResponse({"error": "AI writing help isn't available right now. Try again in a minute."}, status=502)
+    return JsonResponse({"text": result})
 @login_required(login_url="landing:home")
 def post_edit_view(request, post_id):
     post = get_object_or_404(LearningPost, pk=post_id, author=request.user)

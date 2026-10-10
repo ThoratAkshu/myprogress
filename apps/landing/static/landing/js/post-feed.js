@@ -28,6 +28,63 @@
     video.play().catch(() => {});
   });
 
+  // Articles: "On this page" links scroll within the article, code blocks get a copy button, and Listen
+  // reads the article aloud.
+  function enhanceArticles(root) {
+    root.querySelectorAll(".post-body pre:not([data-copy-ready])").forEach(block => {
+      block.dataset.copyReady = "";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "code-copy";
+      button.textContent = "Copy";
+      button.setAttribute("aria-label", "Copy code");
+      block.append(button);
+    });
+    if ("speechSynthesis" in window) root.querySelectorAll("[data-listen]").forEach(button => { button.hidden = false; });
+  }
+  enhanceArticles(document);
+  document.addEventListener("click", async event => {
+    const copy = event.target.closest(".code-copy");
+    if (copy) {
+      try {
+        await navigator.clipboard.writeText(copy.parentElement.querySelector("code")?.textContent || "");
+        copy.textContent = "Copied";
+      } catch {
+        copy.textContent = "Select and copy";
+      }
+      setTimeout(() => { copy.textContent = "Copy"; }, 1600);
+      return;
+    }
+    const link = event.target.closest(".ig-toc a");
+    if (link) {
+      event.preventDefault();
+      link.closest(".ig-article")?.querySelector(`[id="${CSS.escape(link.hash.slice(1))}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const listen = event.target.closest("[data-listen]");
+    if (listen) {
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+        return;
+      }
+      const article = listen.closest(".ig-article");
+      const text = [...(article?.querySelectorAll("h1, .post-body > :not(pre)") || [])].map(element => element.textContent.trim()).filter(Boolean).join(". ");
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = document.documentElement.lang || "en";
+      const label = listen.querySelector("span");
+      const done = () => {
+        listen.setAttribute("aria-pressed", "false");
+        if (label) label.textContent = "Listen";
+      };
+      utterance.onend = done;
+      utterance.onerror = done;
+      listen.setAttribute("aria-pressed", "true");
+      if (label) label.textContent = "Stop";
+      speechSynthesis.speak(utterance);
+    }
+  });
+  window.addEventListener("pagehide", () => { if ("speechSynthesis" in window) speechSynthesis.cancel(); });
+
   let viewer = null;
   let openedFrom = null;
   let returnTo = location.pathname + location.search;
@@ -41,6 +98,7 @@
     viewer.addEventListener("click", event => { if (event.target === viewer) viewer.close(); });
     viewer.addEventListener("close", () => {
       viewer.querySelectorAll("video").forEach(video => video.pause());
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
       viewer.querySelector(".post-viewer-body").replaceChildren();
       if (history.state?.postViewer) history.back();
       openedFrom?.focus();
@@ -95,6 +153,7 @@
         form.append(next);
       });
       body.replaceChildren(document.importNode(post, true));
+      enhanceArticles(body);
       if (url.hash === "#comment-box") body.querySelector("#comment-box input")?.focus();
       else if (url.hash) body.querySelector(url.hash)?.scrollIntoView({ block: "nearest" });
     } catch {
