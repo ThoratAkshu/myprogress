@@ -138,7 +138,7 @@ class ReadingAndEngagementTests(TestCase):
         self.client.force_login(self.reader)
         like_url = reverse("learning:like", args=[self.post.pk])
         self.client.post(like_url)
-        self.assertContains(self.client.get(self.url), "♥ 1 like")
+        self.assertContains(self.client.get(self.url), "<b class=\"ig-likes\">1 like</b>", html=False)
         self.client.post(like_url)
         self.assertFalse(PostLike.objects.exists())
         self.assertEqual(Notification.objects.filter(recipient=self.author, kind="like").count(), 1)

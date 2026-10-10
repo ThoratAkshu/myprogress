@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -15,7 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.text import slugify
 from django.views.generic import TemplateView
 from apps.accounts.emails import send_verification_email, user_from_verification_token
@@ -143,6 +143,8 @@ def workspace_section_view(request, section):
         context["project_skills"] = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0].lower()))
         context["repositories"] = request.user.repositories.select_related("project")
         context["shared_repositories"] = request.user.repository_memberships.select_related("repository__owner__profile")
+        for project in projects:
+            project.milestones_done = sum(milestone.is_complete for milestone in project.milestones.all())
         context["new_git_token"] = request.session.pop("new_git_token", None)
     if section == "rankings":
         language = request.GET.get("language", "").strip()
@@ -161,7 +163,10 @@ def workspace_section_view(request, section):
             posts = posts.filter(is_public=True, author__in=request.user.following_relationships.values("following"))
         else:
             posts = posts.filter(is_public=True)
-        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_page": Paginator(posts.order_by("-published_at"), 12).get_page(request.GET.get("page"))})
+        creators = list(User.objects.filter(pk__in=request.user.following_relationships.values("following"), learning_posts__is_public=True).annotate(latest_post=Max("learning_posts__published_at")).select_related("profile").order_by("-latest_post")[:12])
+        for creator in creators:
+            creator.posted_recently = creator.latest_post >= timezone.now() - timedelta(days=7)
+        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_creators": creators, "learning_page": Paginator(posts.order_by("-published_at"), 12).get_page(request.GET.get("page"))})
     if section == "network":
         context["contact_requests"] = request.user.contact_requests.select_related("recruiter__profile")[:20]
     if section == "portfolio":
@@ -194,7 +199,7 @@ def update_project_view(request, project_id):
             URLValidator(schemes=["http", "https"])(live_url)
         except ValidationError:
             messages.error(request, "Enter a full live demo URL starting with https://.")
-            return redirect("landing:workspace_section", section="projects")
+            return redirect_back(request, "landing:workspace_section", section="projects")
     project.summary = request.POST.get("summary", "").strip()
     project.skills = ", ".join(dict.fromkeys(skill.strip() for skill in request.POST.get("skills", "").split(",") if skill.strip()))[:500]
     project.live_url = live_url[:200]
@@ -211,7 +216,7 @@ def update_project_view(request, project_id):
     project.save(update_fields=["summary", "skills", "live_url", "is_public", "status", "updated_at"])
     refresh_rank(request.user)
     messages.success(request, "Project shipped. Push code to its repository so it counts as verified." if project.status == "complete" and not project.has_verified_code else "Project updated.")
-    return redirect("landing:workspace_section", section="projects")
+    return redirect_back(request, "landing:workspace_section", section="projects")
 @login_required(login_url="landing:home")
 def learning_view(request, post_id):
     """Old share links: record the view and send readers to the post page (never off-site)."""
@@ -495,3 +500,25 @@ def search_view(request):
     following = set(request.user.following_relationships.values_list("following_id", flat=True)) if request.user.is_authenticated else set()
     context = {"section": "search", "search_query": query, "kind": kind, "types": SEARCH_TYPES, "counts": {"people": people.count(), "repositories": repositories.count(), "posts": posts.count()}, "people": people[:limit] if kind in {"all", "people"} else [], "repositories": repositories[:limit] if kind in {"all", "repositories"} else [], "posts": posts[:limit] if kind in {"all", "posts"} else [], "following": following}
     return render(request, "landing/search.html", context)
+def project_detail_view(request, project_id):
+    project = get_object_or_404(Project.objects.select_related("owner", "repository").prefetch_related("milestones"), pk=project_id)
+    is_owner = request.user == project.owner
+    if not project.is_public and not is_owner:
+        raise Http404
+    repository = getattr(project, "repository", None)
+    visible_repository = repository if repository and user_can_access(request.user, repository) else None
+    posts = project.learning_posts.all() if is_owner else project.learning_posts.filter(is_public=True)
+    milestones = list(project.milestones.all())
+    context = {
+        "section": "projects" if is_owner else "",
+        "project": project,
+        "owner_profile": Profile.objects.get_or_create(user=project.owner)[0],
+        "is_owner": is_owner,
+        "repository": visible_repository,
+        "repository_hidden": bool(repository and not visible_repository),
+        "languages": language_breakdown([visible_repository.languages]) if visible_repository else [],
+        "posts": posts.annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)),
+        "milestones": milestones,
+        "milestones_done": sum(milestone.is_complete for milestone in milestones),
+    }
+    return render(request, "landing/project_detail.html", context)

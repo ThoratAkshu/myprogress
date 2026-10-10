@@ -64,7 +64,7 @@ def talent_search_view(request):
         profile.contact_status = request_status.get(profile.user_id)
     query = request.GET.copy()
     query.pop("page", None)
-    context = {"verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
+    context = {"score_options": [("", "Any"), ("25", "25+"), ("50", "50+"), ("75", "75+")], "verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
     return render(request, "recruiting/search.html", context)
 @recruiter_required
 def shortlists_view(request):

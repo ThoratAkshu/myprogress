@@ -113,3 +113,27 @@ class SearchAndProfileTabTests(TestCase):
         posts = self.client.get(url, {"tab": "posts"})
         self.assertContains(posts, 'class="post-tile"', count=1)
         self.assertEqual(self.client.get(url, {"tab": "bogus"}).context["tab"], "overview")
+class ProjectPageTests(TestCase):
+    def setUp(self):
+        self.owner = make_user("owner@example.com", "Olivia", "Owner")
+        self.project = Project.objects.create(owner=self.owner, title="Ledger", summary="Double-entry ledger", skills="Go")
+        self.secret = Project.objects.create(owner=self.owner, title="Secret plan", is_public=False)
+    def test_public_projects_are_visible_and_private_ones_only_to_the_owner(self):
+        url = reverse("landing:project", args=[self.project.pk])
+        page = self.client.get(url)
+        self.assertContains(page, "Double-entry ledger")
+        self.assertNotContains(page, "Update project")
+        self.assertEqual(self.client.get(reverse("landing:project", args=[self.secret.pk])).status_code, 404)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("landing:project", args=[self.secret.pk])), "Update project")
+        self.assertContains(self.client.get(url), "Create repository")
+    def test_updating_from_the_project_page_returns_there(self):
+        self.client.force_login(self.owner)
+        url = reverse("landing:project", args=[self.project.pk])
+        response = self.client.post(reverse("landing:update_project", args=[self.project.pk]), {"summary": "Updated", "next": url})
+        self.assertRedirects(response, url)
+    def test_projects_list_links_rows_to_project_pages(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("landing:workspace_section", args=["projects"]))
+        self.assertContains(page, f'<a href="{reverse("landing:project", args=[self.project.pk])}">Ledger</a>', html=False)
+        self.assertContains(page, "data-filter-search")

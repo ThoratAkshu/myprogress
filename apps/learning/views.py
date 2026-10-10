@@ -3,7 +3,7 @@ from apps.common.ratelimit import rate_limit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import Count, F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -57,7 +57,9 @@ def post_detail_view(request, post_id):
         "liked": request.user.is_authenticated and post.likes.filter(user=request.user).exists(),
         "is_author": request.user == post.author,
         "embed_url": youtube_embed_url(post.video_url),
-        "more_posts": post.author.learning_posts.filter(is_public=True).exclude(pk=post.pk)[:3],
+        "more_posts": post.author.learning_posts.filter(is_public=True).exclude(pk=post.pk).annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))[:6],
+        "is_following": request.user.is_authenticated and post.author.follower_relationships.filter(follower=request.user).exists(),
+        "reading_minutes": max(1, round(len(post.body.split()) / 200)),
     }
     return render(request, "learning/post_detail.html", context)
 @login_required(login_url="landing:home")
