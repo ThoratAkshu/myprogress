@@ -159,7 +159,8 @@ class PushTrackingTests(LiveServerTestCase):
         initialize_repository(repository)
         _, raw_token = GitAccessToken.issue(user, "Push test")
         remote = self.live_server_url.replace("://", f"://{quote(user.username, safe='')}:{quote(raw_token, safe='')}@", 1) + reverse("landing:git_root", args=[user.pk, repository.slug])
-        environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        # No credential helper: the key is already in the URL, and a helper would save it to the developer's keychain.
+        environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": ""}
         def git(*args):
             result = subprocess.run([settings.GIT_EXECUTABLE, *args], cwd=checkout, capture_output=True, env=environment)
             self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))

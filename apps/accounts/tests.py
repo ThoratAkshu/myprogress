@@ -116,7 +116,8 @@ class RealGitWorkflowTests(LiveServerTestCase):
         initialize_repository(repository)
         _, raw_token = GitAccessToken.issue(user, "Integration test")
         authenticated_url = self.live_server_url.replace("://", f"://{quote(user.username, safe='')}:{quote(raw_token, safe='')}@", 1) + reverse("landing:git_root", args=[user.pk, repository.slug])
-        environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        # No credential helper: the key is already in the URL, and a helper would save it to the developer's keychain.
+        environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "credential.helper", "GIT_CONFIG_VALUE_0": ""}
         with tempfile.TemporaryDirectory() as checkout_root:
             checkout = Path(checkout_root) / "first-launch"
             subprocess.run([settings.GIT_EXECUTABLE, "clone", authenticated_url, str(checkout)], check=True, capture_output=True, env=environment)
