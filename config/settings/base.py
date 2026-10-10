@@ -1,6 +1,8 @@
 from pathlib import Path
 from decouple import config
 from datetime import timedelta
+def env_list(name, default=""):
+    return [item.strip() for item in config(name, default=default).split(",") if item.strip()]
 # -----------------------------------------------------------------------------
 # PATHS
 # -----------------------------------------------------------------------------
@@ -10,7 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # -----------------------------------------------------------------------------
 SECRET_KEY = config("SECRET_KEY")
 DEBUG = str(config("DEBUG", default="false")).strip().lower() in {"1", "true", "yes", "on", "debug"}
-ALLOWED_HOSTS = ["*"]
+# Comma-separated, e.g. "myprogress.dev,www.myprogress.dev". When empty and DEBUG is on, Django allows localhost only.
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS")
 # -----------------------------------------------------------------------------
 # APPLICATIONS
 # -----------------------------------------------------------------------------
@@ -135,17 +138,29 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = (
-    "whitenoise.storage.CompressedManifestStaticFilesStorage"
-)
+# STATICFILES_STORAGE was removed in Django 5.1; storages are configured here.
+STORAGES = {
+    "default": {"BACKEND": config("MEDIA_STORAGE_BACKEND", default="django.core.files.storage.FileSystemStorage")},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 # -----------------------------------------------------------------------------
 # MEDIA
 # -----------------------------------------------------------------------------
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-GIT_REPOSITORY_ROOT = BASE_DIR / "repositories"
+MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
+GIT_REPOSITORY_ROOT = Path(config("GIT_REPOSITORY_ROOT", default=str(BASE_DIR / "repositories")))
 GIT_EXECUTABLE = config("GIT_EXECUTABLE", default="git")
-DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
+# Git requests are streamed, so form posts no longer need a large in-memory limit.
+GIT_MAX_REQUEST_BYTES = config("GIT_MAX_REQUEST_BYTES", default=1024 * 1024 * 1024, cast=int)
+GIT_HTTP_TIMEOUT = config("GIT_HTTP_TIMEOUT", default=600, cast=int)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+# -----------------------------------------------------------------------------
+# CACHE (rate limits live here; use Redis when running more than one process)
+# -----------------------------------------------------------------------------
+REDIS_URL = config("REDIS_URL", default="")
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": REDIS_URL}} if REDIS_URL else {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+# Only enable behind a proxy you control that overwrites X-Forwarded-For.
+TRUST_X_FORWARDED_FOR = config("TRUST_X_FORWARDED_FOR", default=False, cast=bool)
 # -----------------------------------------------------------------------------
 # DEFAULT PRIMARY KEY
 # -----------------------------------------------------------------------------
@@ -196,15 +211,13 @@ SPECTACULAR_SETTINGS = {
 # -----------------------------------------------------------------------------
 # CORS
 # -----------------------------------------------------------------------------
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+# Only listed origins may make cross-origin requests; empty means none.
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = False
 # -----------------------------------------------------------------------------
 # CSRF
 # -----------------------------------------------------------------------------
-CSRF_TRUSTED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-]
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
 # -----------------------------------------------------------------------------
 # SECURITY
 # -----------------------------------------------------------------------------
@@ -221,7 +234,14 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # -----------------------------------------------------------------------------
 # EMAIL
 # -----------------------------------------------------------------------------
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="MyProgress <no-reply@localhost>")
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24
 # -----------------------------------------------------------------------------
 # LOGGING
 # -----------------------------------------------------------------------------

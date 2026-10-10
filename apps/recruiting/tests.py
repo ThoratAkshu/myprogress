@@ -7,7 +7,7 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent, Project, Repository
 from apps.core.services import refresh_rank
 from .models import ContactRequest, PortfolioView, Shortlist, ShortlistEntry
-from .views import DAILY_CONTACT_LIMIT
+from .views import DAILY_CONTACT_LIMIT, UNVERIFIED_DAILY_CONTACT_LIMIT
 def make_user(email, first_name, last_name, role="developer", **profile_fields):
     user = User.objects.create_user(username=email, email=email, password="StrongPass!482", first_name=first_name, last_name=last_name)
     Profile.objects.create(user=user, role=role, **profile_fields)
@@ -127,7 +127,23 @@ class ContactRequestTests(TestCase):
         self.client.force_login(self.recruiter)
         self.assertContains(self.client.get(reverse("recruiting:outreach")), "mailto:dev@example.com")
         self.assertContains(self.client.get(reverse("landing:public_profile", args=["dev-eloper"])), "mailto:dev@example.com")
+    def test_unverified_recruiters_get_a_small_daily_limit(self):
+        self.client.force_login(self.recruiter)
+        for index in range(UNVERIFIED_DAILY_CONTACT_LIMIT + 2):
+            make_user(f"lead{index}@example.com", "Lead", f"Dev{index}")
+            self.client.post(reverse("recruiting:contact", args=[f"lead-dev{index}"]), self.message)
+        self.assertEqual(ContactRequest.objects.count(), UNVERIFIED_DAILY_CONTACT_LIMIT)
+        self.assertContains(self.client.get(reverse("recruiting:search")), "You're an unverified recruiter")
+        freemail = make_user("hr@gmail.com", "Free", "Mail", role="recruiter")
+        Profile.objects.filter(user=freemail).update(email_verified_at=timezone.now())
+        Profile.objects.filter(user=self.recruiter).update(email_verified_at=timezone.now())
+        self.assertFalse(Profile.objects.get(user=freemail).is_verified_recruiter)
+        self.assertTrue(Profile.objects.get(user=self.recruiter).is_verified_recruiter)
+        ContactRequest.objects.create(recruiter=self.recruiter, developer=self.developer, **self.message)
+        self.client.force_login(self.developer)
+        self.assertContains(self.client.get(reverse("landing:workspace_section", args=["network"])), "✓ Verified · example.com")
     def test_duplicate_pending_requests_short_messages_and_daily_limit_are_blocked(self):
+        Profile.objects.filter(user=self.recruiter).update(email_verified_at=timezone.now())
         self.client.force_login(self.recruiter)
         self.client.post(self.url, {"role_title": "Role", "message": "too short"})
         self.assertFalse(ContactRequest.objects.exists())

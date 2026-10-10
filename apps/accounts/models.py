@@ -23,6 +23,7 @@ class Profile(models.Model):
     score = models.PositiveIntegerField(default=0)
     recruiter_visible = models.BooleanField(default=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} profile"
     def save(self, *args, **kwargs):
@@ -34,6 +35,14 @@ class Profile(models.Model):
     @property
     def skill_list(self):
         return [skill.strip() for skill in self.skills.split(",") if skill.strip()]
+    @property
+    def email_domain(self):
+        return self.user.email.rsplit("@", 1)[-1].lower() if "@" in self.user.email else ""
+    @property
+    def is_verified_recruiter(self):
+        """A recruiter who confirmed an email on a company domain (not a free mailbox provider)."""
+        return self.role in {"recruiter", "organization"} and self.email_verified_at is not None and bool(self.email_domain) and self.email_domain not in FREE_EMAIL_DOMAINS
+FREE_EMAIL_DOMAINS = {"gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "ymail.com", "outlook.com", "hotmail.com", "live.com", "msn.com", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com", "zoho.com", "yandex.com", "mail.com", "gmx.com", "rediffmail.com"}
 class Follow(models.Model):
     follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name="following_relationships")
     following = models.ForeignKey(User, on_delete=models.CASCADE, related_name="follower_relationships")

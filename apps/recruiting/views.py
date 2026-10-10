@@ -17,6 +17,10 @@ from apps.core.services import CODE_ACTIONS, CONTRIBUTION_ACTIONS, active_coding
 from .models import ContactRequest, Shortlist, ShortlistEntry
 recruiter_required = role_required("recruiter", "organization")
 DAILY_CONTACT_LIMIT = 20
+UNVERIFIED_DAILY_CONTACT_LIMIT = 3
+def daily_contact_limit(user):
+    profile = Profile.objects.filter(user=user).first()
+    return DAILY_CONTACT_LIMIT if profile and profile.is_verified_recruiter else UNVERIFIED_DAILY_CONTACT_LIMIT
 SORTS = {"score": "Highest score", "active": "Recently active", "new": "Newest members"}
 def _safe_next(request, fallback):
     next_url = request.POST.get("next", "")
@@ -60,7 +64,7 @@ def talent_search_view(request):
         profile.contact_status = request_status.get(profile.user_id)
     query = request.GET.copy()
     query.pop("page", None)
-    context = {"section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
+    context = {"verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
     return render(request, "recruiting/search.html", context)
 @recruiter_required
 def shortlists_view(request):
@@ -119,8 +123,9 @@ def contact_view(request, handle):
     if not role_title or len(message) < 20:
         messages.error(request, "Add the role title and a message of at least 20 characters.")
         return redirect(_safe_next(request, fallback))
-    if ContactRequest.objects.filter(recruiter=request.user, created_at__gte=timezone.now() - timedelta(days=1)).count() >= DAILY_CONTACT_LIMIT:
-        messages.error(request, f"You can send up to {DAILY_CONTACT_LIMIT} contact requests per day.")
+    limit = daily_contact_limit(request.user)
+    if ContactRequest.objects.filter(recruiter=request.user, created_at__gte=timezone.now() - timedelta(days=1)).count() >= limit:
+        messages.error(request, f"You can send up to {limit} contact requests per day." + ("" if limit == DAILY_CONTACT_LIMIT else f" Confirm a company email to raise this to {DAILY_CONTACT_LIMIT}."))
         return redirect(_safe_next(request, fallback))
     try:
         with transaction.atomic():
@@ -136,7 +141,7 @@ def contact_view(request, handle):
 def outreach_view(request):
     sent = request.user.sent_contact_requests.select_related("developer__profile")
     counts = dict(sent.values_list("status").annotate(total=Count("id")))
-    context = {"section": "outreach", "sent": sent, "counts": counts, "daily_limit": DAILY_CONTACT_LIMIT, "sent_today": sent.filter(created_at__gte=timezone.now() - timedelta(days=1)).count()}
+    context = {"section": "outreach", "sent": sent, "counts": counts, "daily_limit": daily_contact_limit(request.user), "full_limit": DAILY_CONTACT_LIMIT, "sent_today": sent.filter(created_at__gte=timezone.now() - timedelta(days=1)).count()}
     return render(request, "recruiting/outreach.html", context)
 @login_required(login_url="landing:home")
 @require_POST

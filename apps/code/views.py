@@ -1,3 +1,4 @@
+from apps.common.ratelimit import rate_limit
 from functools import wraps
 from pathlib import PurePosixPath
 from django.contrib import messages
@@ -86,6 +87,7 @@ def issue_list_view(request, repository, kind):
     return render(request, "code/issues.html", context)
 @login_required(login_url="landing:home")
 @repository_page()
+@rate_limit("issue", 10, 600)
 def issue_create_view(request, repository):
     title, body = request.POST.get("title", "").strip()[:200], request.POST.get("body", "").strip()[:20000]
     if request.method == "POST":
@@ -101,6 +103,7 @@ def issue_create_view(request, repository):
     return render(request, "code/issue_form.html", context)
 @login_required(login_url="landing:home")
 @repository_page(write=True)
+@rate_limit("pull-request", 10, 600)
 def pull_create_view(request, repository):
     context = repository_context(request, repository, "pulls")
     names = [branch["name"] for branch in context["branches"]]
@@ -147,6 +150,7 @@ def _issue_url(issue):
 @login_required(login_url="landing:home")
 @require_POST
 @repository_page()
+@rate_limit("issue-comment", 30, 600)
 def issue_comment_view(request, repository, number):
     issue = get_object_or_404(Issue, repository=repository, number=number)
     body = request.POST.get("body", "").strip()[:5000]

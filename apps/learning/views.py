@@ -1,3 +1,4 @@
+from apps.common.ratelimit import rate_limit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
@@ -59,6 +60,7 @@ def post_detail_view(request, post_id):
     }
     return render(request, "learning/post_detail.html", context)
 @login_required(login_url="landing:home")
+@rate_limit("publish", 10, 3600)
 def post_create_view(request):
     initial = {"kind": request.GET.get("kind") if request.GET.get("kind") in {"article", "video"} else "article", "is_public": True}
     project_id = request.GET.get("project", "")
@@ -100,6 +102,7 @@ def post_delete_view(request, post_id):
     return redirect(f'{reverse("landing:workspace_section", args=["learning"])}?tab=mine')
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("like", 120, 600)
 def like_view(request, post_id):
     post = _visible_post(request, post_id)
     like, created = PostLike.objects.get_or_create(post=post, user=request.user)
@@ -110,6 +113,7 @@ def like_view(request, post_id):
     return redirect(f'{reverse("learning:detail", args=[post.pk])}#engagement')
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("post-comment", 20, 600)
 def comment_view(request, post_id):
     post = _visible_post(request, post_id)
     body = request.POST.get("body", "").strip()

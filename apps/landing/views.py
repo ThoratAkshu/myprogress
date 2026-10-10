@@ -15,9 +15,10 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.text import slugify
 from django.views.generic import TemplateView
+from apps.accounts.emails import send_verification_email, user_from_verification_token
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository, RepositoryCollaborator
@@ -28,11 +29,17 @@ from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioVie
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import IntegrityError
-from apps.core.git_service import authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
+from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
+from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
 from urllib.parse import urlencode
 import logging
+import shutil
+from django.conf import settings
+from django.db import connection
 logger = logging.getLogger(__name__)
+GIT_AUTH_FAILURE_LIMIT, GIT_AUTH_FAILURE_WINDOW = 30, 300
+LOGIN_FAILURES_PER_EMAIL, LOGIN_FAILURES_PER_IP, LOGIN_FAILURE_WINDOW = 10, 30, 900
 @method_decorator(never_cache, name="dispatch")
 class LandingPageView(TemplateView):
     template_name = "landing/index.html"
@@ -41,6 +48,7 @@ class LandingPageView(TemplateView):
             return redirect("landing:dashboard")
         return super().dispatch(request, *args, **kwargs)
 @never_cache
+@rate_limit("register", 10, 3600, per="ip")
 def register_view(request):
     if request.user.is_authenticated:
         return redirect("landing:dashboard")
@@ -51,6 +59,8 @@ def register_view(request):
             Profile.objects.create(user=user, role=form.cleaned_data["role"])
         login(request, user)
         request.session.cycle_key()
+        send_verification_email(request, user)
+        messages.success(request, f"Welcome! We sent a confirmation link to {user.email}.")
         return redirect("landing:dashboard")
     if request.method == "POST":
         for errors in form.errors.values():
@@ -60,7 +70,15 @@ def register_view(request):
 def login_view(request):
     if request.method != "POST":
         return redirect("landing:home")
+    email = request.POST.get("email", "").strip().lower()[:254]
+    failure_keys = [(f"login-fail:ip:{client_ip(request)}", LOGIN_FAILURES_PER_IP)] + ([(f"login-fail:email:{email}", LOGIN_FAILURES_PER_EMAIL)] if email else [])
+    if any(is_limited(key, limit, LOGIN_FAILURE_WINDOW) for key, limit in failure_keys):
+        messages.error(request, "Too many failed sign-in attempts. Wait 15 minutes or reset your password.")
+        return redirect("landing:home")
     form = EmailLoginForm(request, request.POST)
+    if not form.is_valid():
+        for key, _ in failure_keys:
+            record_hit(key, LOGIN_FAILURE_WINDOW)
     if form.is_valid():
         login(request, form.user)
         record_activity(form.user, "login", "signed_in", 1)
@@ -149,6 +167,7 @@ def workspace_section_view(request, section):
     return render(request, "landing/workspace_section.html", context)
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("create-project", 30, 3600)
 def create_project_view(request):
     title = request.POST.get("title", "").strip()
     if not title:
@@ -208,6 +227,7 @@ def complete_loop_view(request, step):
     return redirect("landing:dashboard")
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("create-repository", 20, 3600)
 def create_repository_view(request, project_id):
     project = Project.objects.filter(pk=project_id, owner=request.user).first()
     if not project or hasattr(project, "repository"):
@@ -302,6 +322,7 @@ def repository_view(request, repository_id):
     return render(request, "landing/repository.html", context)
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("git-token", 10, 3600)
 def issue_git_token_view(request):
     scope = request.POST.get("scope") if request.POST.get("scope") in {"read", "write"} else "write"
     token, raw = GitAccessToken.issue(request.user, request.POST.get("name", "Local development")[:80], scope)
@@ -317,7 +338,12 @@ def git_http_view(request, owner_id, slug, service_path=""):
     if not repository:
         return HttpResponse(status=404)
     write = "git-receive-pack" in service_path or request.GET.get("service") == "git-receive-pack"
+    failure_key = f"git-auth-fail:{client_ip(request)}"
+    if is_limited(failure_key, GIT_AUTH_FAILURE_LIMIT, GIT_AUTH_FAILURE_WINDOW):
+        return too_many_requests(GIT_AUTH_FAILURE_WINDOW, "Too many failed Git sign-ins from this address. Wait a few minutes and try again.")
     token = authenticate_git_request(request)
+    if token is None and request.headers.get("Authorization"):
+        record_hit(failure_key, GIT_AUTH_FAILURE_WINDOW)
     git_user = token.user if token else None
     if write and (not token or token.scope != "write"):
         response = HttpResponse("MyProgress Credentials required: use your MyProgress account email and write key.", status=401)
@@ -336,13 +362,15 @@ def git_http_view(request, owner_id, slug, service_path=""):
             previous_heads = branch_heads(repository)
         except Exception:
             logger.exception("Could not snapshot branches before push to repository %s", repository.pk)
+    on_success = (lambda: _record_push(repository, git_user, previous_heads)) if previous_heads is not None else None
     try:
-        status, headers, body = smart_http(repository, request, service_path)
+        status, headers, body = smart_http(repository, request, service_path, on_success=on_success, stream=request.method == "POST")
+    except GitRequestTooLarge:
+        return HttpResponse("This push is larger than the server allows. Split it into smaller pushes.", status=413, content_type="text/plain")
     except Exception:
+        logger.exception("Git service failed for repository %s", repository.pk)
         return HttpResponse("Git service unavailable", status=500)
-    if previous_heads is not None and status == 200:
-        _record_push(repository, git_user, previous_heads)
-    response = HttpResponse(body, status=status)
+    response = StreamingHttpResponse(body, status=status) if request.method == "POST" else HttpResponse(body, status=status)
     for key in ["Content-Type", "Cache-Control", "Expires", "Pragma"]:
         if key in headers:
             response[key] = headers[key]
@@ -383,6 +411,7 @@ def public_profile_view(request, handle):
     return render(request, "landing/profile.html", context)
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("profile", 30, 600)
 def update_profile_view(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
     form = ProfileForm(request.POST, instance=profile)
@@ -397,6 +426,7 @@ def update_profile_view(request):
     return redirect("landing:workspace_section", section="portfolio")
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("follow", 60, 600)
 def follow_view(request, handle):
     profile = get_object_or_404(Profile.objects.select_related("user"), handle=handle)
     if profile.user != request.user:
@@ -408,3 +438,38 @@ def follow_view(request, handle):
             follow.delete()
         refresh_rank(profile.user)
     return redirect("landing:public_profile", handle=profile.handle)
+def verify_email_view(request, token):
+    user = user_from_verification_token(token)
+    if not user:
+        messages.error(request, "That confirmation link is invalid or has expired. Request a new one from your dashboard.")
+        return redirect("landing:dashboard" if request.user.is_authenticated else "landing:home")
+    profile, _ = Profile.objects.get_or_create(user=user)
+    if not profile.email_verified_at:
+        profile.email_verified_at = timezone.now()
+        profile.save(update_fields=["email_verified_at"])
+    messages.success(request, "Email confirmed." + (" You're now a verified recruiter." if profile.is_verified_recruiter else ""))
+    return redirect("landing:dashboard" if request.user.is_authenticated else "landing:home")
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("verify-email", 3, 3600)
+def resend_verification_view(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    if profile.email_verified_at:
+        messages.success(request, "Your email is already confirmed.")
+    elif send_verification_email(request, request.user):
+        messages.success(request, f"We sent a new confirmation link to {request.user.email}.")
+    else:
+        messages.error(request, "We couldn't send the email right now. Try again later.")
+    return redirect(request.META.get("HTTP_REFERER") if url_has_allowed_host_and_scheme(request.META.get("HTTP_REFERER", ""), allowed_hosts={request.get_host()}, require_https=request.is_secure()) else "landing:dashboard")
+def health_view(request):
+    """Liveness/readiness probe for load balancers: database and git must both work."""
+    checks = {}
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        checks["database"] = "ok"
+    except Exception:
+        checks["database"] = "error"
+    checks["git"] = "ok" if shutil.which(settings.GIT_EXECUTABLE) else "error"
+    healthy = all(value == "ok" for value in checks.values())
+    return JsonResponse({"status": "ok" if healthy else "error", **checks}, status=200 if healthy else 503)

@@ -2,12 +2,16 @@ import base64
 import os
 import re
 import subprocess
+import logging
 import tempfile
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 from django.conf import settings
 from django.utils import timezone
 from django.utils.text import slugify
 from .models import GitAccessToken, Repository
+logger = logging.getLogger(__name__)
 SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,98}$")
 def repository_path(repository):
     root = Path(settings.GIT_REPOSITORY_ROOT).resolve()
@@ -160,24 +164,137 @@ def authenticate_git_request(request):
         return token
     except (ValueError, UnicodeDecodeError):
         return None
-def smart_http(repository, request, service_path):
+CHUNK_SIZE = 64 * 1024
+class GitRequestTooLarge(Exception):
+    pass
+def _read_chunked(stream):
+    """Decode a chunked request body for servers (like runserver) that pass it through undecoded."""
+    while True:
+        size = int(stream.readline(1024).split(b";", 1)[0].strip() or b"0", 16)
+        if size == 0:
+            while stream.readline(1024) not in (b"\r\n", b"\n", b""):
+                pass
+            return
+        remaining = size
+        while remaining:
+            chunk = stream.read(min(remaining, CHUNK_SIZE))
+            if not chunk:
+                raise ValueError("Incomplete chunked request body")
+            remaining -= len(chunk)
+            yield chunk
+        stream.readline(1024)
+def _request_body(request):
+    """Return (chunks, length) without loading the body into memory.
+
+    Git sends large pushes with chunked transfer encoding and no Content-Length.
+    Those are spooled to a temporary file so git http-backend always receives a
+    fixed-length stream and never has to buffer the push itself.
+    """
+    limit = settings.GIT_MAX_REQUEST_BYTES
+    if request.META.get("CONTENT_LENGTH"):
+        length = int(request.META["CONTENT_LENGTH"])
+        if length > limit:
+            raise GitRequestTooLarge()
+        return iter(lambda: request.read(CHUNK_SIZE), b""), length
+    if "chunked" not in request.META.get("HTTP_TRANSFER_ENCODING", "").lower():
+        return iter(()), 0
+    stream = request.META["wsgi.input"]
+    if request.META.get("wsgi.input_terminated"):
+        chunks = iter(lambda: stream.read(CHUNK_SIZE), b"")
+    else:
+        # Django's development server wraps the socket in LimitedStream(limit=Content-Length), which is
+        # zero for chunked requests, so read the socket underneath and decode the chunks here.
+        raw = SimpleNamespace(read=getattr(stream, "_read", stream.read), readline=getattr(stream, "_readline", stream.readline))
+        chunks = _read_chunked(raw)
+    spool = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
+    for chunk in chunks:
+        spool.write(chunk)
+        if spool.tell() > limit:
+            spool.close()
+            raise GitRequestTooLarge()
+    length = spool.tell()
+    spool.seek(0)
+    def drain():
+        with spool:
+            yield from iter(lambda: spool.read(CHUNK_SIZE), b"")
+    return drain(), length
+class GitBackendStream:
+    """Streams git http-backend output to the client and cleans up the process however the response ends."""
+    def __init__(self, process, first_chunk, stderr, timer, on_success):
+        self.process, self.pending, self.stderr, self.timer, self.on_success = process, first_chunk, stderr, timer, on_success
+        self.finished = False
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self.pending:
+            chunk, self.pending = self.pending, b""
+            return chunk
+        chunk = self.process.stdout.read1(CHUNK_SIZE) if not self.finished else b""
+        if chunk:
+            return chunk
+        if not self.finished:
+            self.finished = True
+            if self.process.wait(timeout=30) == 0 and self.on_success:
+                self.on_success()
+            elif self.process.returncode:
+                self.stderr.seek(0)
+                logger.warning("git http-backend exited %s: %s", self.process.returncode, self.stderr.read(2000).decode(errors="replace"))
+        self.close()
+        raise StopIteration
+    def close(self):
+        self.timer.cancel()
+        if self.process.poll() is None:
+            self.process.kill()
+            self.process.wait()
+        for handle in (self.process.stdout, self.process.stdin, self.stderr):
+            try:
+                handle.close()
+            except OSError:
+                pass
+def smart_http(repository, request, service_path, on_success=None, stream=True):
+    """Run git http-backend as a CGI process, streaming the request in and (when stream=True) the response out."""
     path = repository_path(repository)
+    body, length = _request_body(request)
     env = os.environ.copy()
-    env.update({"GIT_PROJECT_ROOT": str(path.parent), "GIT_HTTP_EXPORT_ALL": "1", "PATH_INFO": f"/{path.name}/{service_path}", "REQUEST_METHOD": request.method, "QUERY_STRING": request.META.get("QUERY_STRING", ""), "CONTENT_TYPE": request.content_type or "", "CONTENT_LENGTH": str(len(request.body)), "REMOTE_USER": str(request.user.pk) if request.user.is_authenticated else ""})
-    process = subprocess.run([settings.GIT_EXECUTABLE, "http-backend"], input=request.body, capture_output=True, env=env, timeout=120)
-    if process.returncode:
-        raise RuntimeError(process.stderr.decode(errors="replace"))
-    separator = b"\r\n\r\n" if b"\r\n\r\n" in process.stdout else b"\n\n"
-    header_blob, body = process.stdout.split(separator, 1)
-    headers = {}
-    status = 200
+    env.update({"GIT_PROJECT_ROOT": str(path.parent), "GIT_HTTP_EXPORT_ALL": "1", "PATH_INFO": f"/{path.name}/{service_path}", "REQUEST_METHOD": request.method, "QUERY_STRING": request.META.get("QUERY_STRING", ""), "CONTENT_TYPE": request.META.get("CONTENT_TYPE", ""), "CONTENT_LENGTH": str(length), "REMOTE_USER": str(request.user.pk) if request.user.is_authenticated else "", "HTTP_CONTENT_ENCODING": request.META.get("HTTP_CONTENT_ENCODING", ""), "HTTP_GIT_PROTOCOL": request.META.get("HTTP_GIT_PROTOCOL", "")})
+    stderr = tempfile.TemporaryFile()
+    process = subprocess.Popen([settings.GIT_EXECUTABLE, "http-backend"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, env=env)
+    timer = threading.Timer(settings.GIT_HTTP_TIMEOUT, process.kill)
+    timer.daemon = True
+    timer.start()
+    def feed():
+        try:
+            for chunk in body:
+                process.stdin.write(chunk)
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+    threading.Thread(target=feed, daemon=True).start()
+    buffer = b""
+    while b"\r\n\r\n" not in buffer and b"\n\n" not in buffer:
+        chunk = process.stdout.read1(CHUNK_SIZE)
+        if not chunk:
+            break
+        buffer += chunk
+    separator = b"\r\n\r\n" if b"\r\n\r\n" in buffer else b"\n\n"
+    if separator not in buffer:
+        stream = GitBackendStream(process, b"", stderr, timer, None)
+        stream.close()
+        raise RuntimeError("git http-backend returned no headers")
+    header_blob, first_chunk = buffer.split(separator, 1)
+    headers, status = {}, 200
     for line in header_blob.decode("latin1").splitlines():
         key, value = line.split(":", 1)
         if key.lower() == "status":
             status = int(value.strip().split()[0])
         else:
             headers[key.strip()] = value.strip()
-    return status, headers, body
+    body = GitBackendStream(process, first_chunk, stderr, timer, on_success if status == 200 else None)
+    return status, headers, body if stream else b"".join(body)
 COMMIT_SHA = re.compile(r"^[0-9a-f]{7,40}$")
 MAX_VIEW_BYTES = 1_000_000
 MAX_RAW_BYTES = 25 * 1024 * 1024
