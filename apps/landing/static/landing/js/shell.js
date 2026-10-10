@@ -1,5 +1,6 @@
 document.addEventListener('click',event=>{document.querySelectorAll('details.app-menu[open]').forEach(menu=>{if(!menu.contains(event.target))menu.removeAttribute('open')})});
 document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelectorAll('details.app-menu[open]').forEach(menu=>{menu.removeAttribute('open');menu.querySelector('summary')?.focus()})});
+document.querySelectorAll('[data-dismiss-banner]').forEach(form=>form.addEventListener('submit',event=>{event.preventDefault();form.closest('[data-banner]')?.remove();fetch(form.action,{method:'POST',body:new FormData(form),headers:{'X-Requested-With':'XMLHttpRequest'}}).catch(()=>{})}));
 if(location.hash==='#new-project')document.querySelector('.project-dialog')?.showModal();
 document.querySelectorAll('.tabs a.active').forEach(tab=>{const strip=tab.parentElement;if(strip.scrollWidth>strip.clientWidth)strip.scrollLeft=tab.offsetLeft-(strip.clientWidth-tab.offsetWidth)/2});
 document.addEventListener('click',async event=>{const button=event.target.closest('[data-copy-text],[data-copy-link]');if(!button)return;try{await navigator.clipboard.writeText(button.dataset.copyText||location.href)}catch(error){return}const original=button.innerHTML;button.textContent='Copied ✓';setTimeout(()=>{button.innerHTML=original},1600)});

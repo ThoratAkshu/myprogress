@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 from apps.common.ratelimit import rate_limit
-from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, health_view, search_view, project_detail_view
+from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, dismiss_verification_banner_view, health_view, search_view, project_detail_view
 app_name = "landing"
 urlpatterns = [
     path("", LandingPageView.as_view(), name="home"),
@@ -24,6 +24,7 @@ urlpatterns = [
     path("u/<slug:handle>/follow/", follow_view, name="follow"),
     path("account/verify/<str:token>/", verify_email_view, name="verify_email"),
     path("account/verify-resend/", resend_verification_view, name="resend_verification"),
+    path("account/verify-banner/dismiss/", dismiss_verification_banner_view, name="dismiss_verify_banner"),
     path("account/password-reset/", rate_limit("password-reset", 5, 3600, per="ip")(auth_views.PasswordResetView.as_view(template_name="landing/password_reset_form.html", email_template_name="landing/emails/password_reset.txt", subject_template_name="landing/emails/password_reset_subject.txt", success_url=reverse_lazy("landing:password_reset_done"))), name="password_reset"),
     path("account/password-reset/sent/", auth_views.PasswordResetDoneView.as_view(template_name="landing/password_reset_done.html"), name="password_reset_done"),
     path("account/reset/<uidb64>/<token>/", auth_views.PasswordResetConfirmView.as_view(template_name="landing/password_reset_confirm.html", success_url=reverse_lazy("landing:password_reset_complete")), name="password_reset_confirm"),

@@ -122,6 +122,17 @@ class EmailVerificationTests(TestCase):
         statuses = [self.client.post(reverse("landing:resend_verification")).status_code for _ in range(4)]
         self.assertEqual(statuses, [302, 302, 302, 429])
         self.assertEqual(len(mail.outbox), 3)
+    def test_reminder_banner_can_be_closed_until_the_next_sign_in(self):
+        user = make_user("dev@example.com")
+        self.client.force_login(user)
+        dashboard = reverse("landing:dashboard")
+        self.assertContains(self.client.get(dashboard), "Close this reminder")
+        response = self.client.post(reverse("landing:dismiss_verify_banner"), headers={"X-Requested-With": "XMLHttpRequest"})
+        self.assertEqual(response.status_code, 204)
+        self.assertNotContains(self.client.get(dashboard), "Confirm your email")
+        self.client.logout()
+        self.client.force_login(user)
+        self.assertContains(self.client.get(dashboard), "Confirm your email")
 class PasswordResetTests(TestCase):
     def setUp(self):
         cache.clear()

@@ -476,6 +476,14 @@ def resend_verification_view(request):
     else:
         messages.error(request, "We couldn't send the email right now. Try again later.")
     return redirect(request.META.get("HTTP_REFERER") if url_has_allowed_host_and_scheme(request.META.get("HTTP_REFERER", ""), allowed_hosts={request.get_host()}, require_https=request.is_secure()) else "landing:dashboard")
+@login_required(login_url="landing:home")
+@require_POST
+def dismiss_verification_banner_view(request):
+    """Hide the confirm-your-email banner until the next sign-in."""
+    request.session["verify_banner_hidden"] = True
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return HttpResponse(status=204)
+    return redirect(request.META.get("HTTP_REFERER") if url_has_allowed_host_and_scheme(request.META.get("HTTP_REFERER", ""), allowed_hosts={request.get_host()}, require_https=request.is_secure()) else "landing:dashboard")
 def health_view(request):
     """Liveness/readiness probe for load balancers: database and git must both work."""
     checks = {}

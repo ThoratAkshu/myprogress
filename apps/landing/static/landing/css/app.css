@@ -565,3 +565,8 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 .composer-actions a.active{background:var(--violet-soft);color:var(--violet-dark);box-shadow:inset 0 -2px 0 var(--violet)}
 .composer-actions a.active .icon{color:var(--violet)!important}
 .feed-label a{color:var(--violet);font-weight:700}
+/* Close button on the confirm-your-email banner */
+.app-banner{position:relative;padding-right:52px}
+.app-banner .app-banner-close{position:absolute;top:50%;right:10px;transform:translateY(-50%)}
+.app-banner .app-banner-close button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit}
+.app-banner .app-banner-close button:hover{background:rgba(0,0,0,.07)}
