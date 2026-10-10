@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.paginator import Paginator
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -21,6 +21,8 @@ from django.views.generic import TemplateView
 from apps.accounts.emails import send_verification_email, user_from_verification_token
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
+from apps.common.http import redirect_back
+from apps.core.feed import build_feed, people_you_may_know, trending_posts
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
 from apps.learning.views import record_post_view
@@ -100,7 +102,9 @@ def logout_view(request):
 def dashboard_view(request):
     if Profile.objects.filter(user=request.user, role__in=RECRUITER_ROLES).exists():
         return redirect("recruiting:search")
-    return render(request, "landing/dashboard.html", _workspace_context(request))
+    context = _workspace_context(request)
+    context.update({"feed": build_feed(request.user), "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
+    return render(request, "landing/dashboard.html", context)
 
 @login_required(login_url="landing:home")
 def account_identity_view(request):
@@ -390,7 +394,7 @@ def public_profile_view(request, handle):
     owner = profile.user
     profile = refresh_rank(owner)
     repositories = owner.repositories.all()
-    public_repositories = repositories.filter(visibility="public").select_related("project")
+    public_repositories = list(repositories.filter(visibility="public").select_related("project").order_by("-updated_at"))
     projects = list(owner.projects.filter(is_public=True).select_related("repository").prefetch_related("milestones"))
     explainers = dict(owner.learning_posts.filter(is_public=True, project__isnull=False).order_by("published_at").values_list("project_id", "pk"))
     for project in projects:
@@ -403,7 +407,7 @@ def public_profile_view(request, handle):
         except IntegrityError:
             pass
     can_recruit = bool(viewer_profile and viewer_profile.role in RECRUITER_ROLES and profile.role == "developer" and profile.recruiter_visible and request.user != owner)
-    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True)[:6], "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True).annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)), "tab": request.GET.get("tab") if request.GET.get("tab") in {"repositories", "projects", "posts"} else "overview", "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
     if can_recruit:
         context["viewer_shortlists"] = request.user.shortlists.all()
         context["is_shortlisted"] = ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=owner).exists()
@@ -437,7 +441,7 @@ def follow_view(request, handle):
         else:
             follow.delete()
         refresh_rank(profile.user)
-    return redirect("landing:public_profile", handle=profile.handle)
+    return redirect_back(request, "landing:public_profile", handle=profile.handle)
 def verify_email_view(request, token):
     user = user_from_verification_token(token)
     if not user:
@@ -473,3 +477,21 @@ def health_view(request):
     checks["git"] = "ok" if shutil.which(settings.GIT_EXECUTABLE) else "error"
     healthy = all(value == "ok" for value in checks.values())
     return JsonResponse({"status": "ok" if healthy else "error", **checks}, status=200 if healthy else 503)
+SEARCH_TYPES = {"people": "People", "repositories": "Repositories", "posts": "Posts"}
+def search_view(request):
+    query = request.GET.get("q", "").strip()[:100]
+    kind = request.GET.get("type") if request.GET.get("type") in SEARCH_TYPES else "all"
+    people, repositories, posts = Profile.objects.none(), Repository.objects.none(), LearningPost.objects.none()
+    if query:
+        people = Profile.objects.select_related("user")
+        repositories = Repository.objects.filter(visibility="public").select_related("owner__profile", "project")
+        posts = LearningPost.objects.filter(is_public=True).select_related("author__profile", "project")
+        for term in query.split()[:5]:
+            people = people.filter(Q(user__first_name__icontains=term) | Q(user__last_name__icontains=term) | Q(handle__icontains=term) | Q(headline__icontains=term) | Q(skills__icontains=term) | Q(location__icontains=term))
+            repositories = repositories.filter(Q(slug__icontains=term) | Q(project__title__icontains=term) | Q(project__summary__icontains=term) | Q(owner__profile__handle__icontains=term))
+            posts = posts.filter(Q(title__icontains=term) | Q(summary__icontains=term) | Q(body__icontains=term))
+        people, repositories, posts = people.order_by("-score", "handle"), repositories.order_by("-updated_at"), posts.order_by("-published_at")
+    limit = 20 if kind != "all" else 5
+    following = set(request.user.following_relationships.values_list("following_id", flat=True)) if request.user.is_authenticated else set()
+    context = {"section": "search", "search_query": query, "kind": kind, "types": SEARCH_TYPES, "counts": {"people": people.count(), "repositories": repositories.count(), "posts": posts.count()}, "people": people[:limit] if kind in {"all", "people"} else [], "repositories": repositories[:limit] if kind in {"all", "repositories"} else [], "posts": posts[:limit] if kind in {"all", "posts"} else [], "following": following}
+    return render(request, "landing/search.html", context)

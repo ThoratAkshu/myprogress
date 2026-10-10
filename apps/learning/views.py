@@ -1,3 +1,4 @@
+from apps.common.http import redirect_back
 from apps.common.ratelimit import rate_limit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -110,7 +111,7 @@ def like_view(request, post_id):
         notify(post.author, request.user, "like", f"{_display_name(request.user)} liked “{post.title}”", reverse("learning:detail", args=[post.pk]))
     else:
         like.delete()
-    return redirect(f'{reverse("learning:detail", args=[post.pk])}#engagement')
+    return redirect_back(request, f'{reverse("learning:detail", args=[post.pk])}#engagement')
 @login_required(login_url="landing:home")
 @require_POST
 @rate_limit("post-comment", 20, 600)

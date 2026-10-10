@@ -1,0 +1,237 @@
+/* Generated: raises text below 12px in older stylesheets to readable sizes inside the app shell.
+   Regenerate after editing those stylesheets; delete rules as pages move to app.css components. */
+body.app .transaction-list small{font-size:11.5px}
+body.app .latest-commit code,body.app .latest-commit small{font-size:12.5px}
+body.app .code-viewer>header small{font-size:12.5px}
+body.app .diff-file>header small{font-size:12.5px}
+body.app .diff-status{font-size:12px}
+body.app .commit-meta code{font-size:12.5px}
+body.app .issue-tabs b{font-size:12.5px}
+body.app .collaborator-row small{font-size:12.5px}
+body.app .desktop-setup p{font-size:11px}
+body.app .desktop-setup>header button{font-size:11px}
+body.app .os-tabs button{font-size:11px}
+body.app .os-guide li>span{font-size:11px}
+body.app .os-guide b,body.app .os-guide a{font-size:11.5px}
+body.app .verify-install b,body.app .optional-editor b{font-size:11.5px}
+body.app .verify-install small{font-size:11px}
+body.app .verify-install code{font-size:11.5px}
+body.app .verify-install button{font-size:11px}
+body.app .optional-editor>span{font-size:11px}
+body.app .optional-editor a{font-size:11px}
+body.app .desktop-setup footer{font-size:11px}
+body.app .git-hub small{font-size:11px}
+body.app .git-hub p{font-size:11.5px}
+body.app .token-reveal p{font-size:11px}
+body.app .token-reveal code{font-size:11.5px}
+body.app .repository-strip small{font-size:11px}
+body.app .repository-strip i{font-size:11px}
+body.app .repo-inline-button{font-size:11.5px}
+body.app .post-project small{font-size:12px}
+body.app .author-tag{font-size:12px}
+body.app .post-form .helptext,body.app .field-note{font-size:12.5px}
+body.app .format-help code{font-size:12.5px}
+body.app .post-card-media span{font-size:12px}
+body.app .post-card-project{font-size:12.5px}
+body.app .post-card-stats{font-size:12.5px}
+body.app .notification-text small{font-size:12.5px}
+body.app .shared-label{font-size:12px}
+body.app .verify-nudge button{font-size:12.5px}
+body.app .recruiter-badge{font-size:12px}
+body.app .healthy-badge{font-size:11px}
+body.app .loop-cards small{font-size:11px}
+body.app .loop-cards p{font-size:12px}
+body.app .text-action{font-size:12px}
+body.app .loop-footer{font-size:11.5px}
+body.app .balance-label{font-size:11px}
+body.app .earning-mini-stats small{font-size:11px}
+body.app .earning-spotlight>a{font-size:11.5px}
+body.app .streak-spotlight header{font-size:11px}
+body.app .streak-title div b{font-size:12px}
+body.app .streak-title div small{font-size:11px}
+body.app .real-week span{font-size:11px}
+body.app .real-week i{font-size:11px}
+body.app .streak-spotlight>p{font-size:11px}
+body.app .hero-earning header{font-size:11px}
+body.app .hero-earning>small{font-size:11px}
+body.app .hero-earning footer{font-size:11px}
+body.app .hero-earning>a{font-size:11.5px}
+body.app .streak-summary small{font-size:11px}
+body.app .streak-summary p{font-size:11px}
+body.app .streak-day>span{font-size:11px}
+body.app .streak-day>i{font-size:11px}
+body.app .streak-day>b{font-size:11px}
+body.app .streak-result>small{font-size:11px}
+body.app .heatmap-months{font-size:12px}
+body.app .heatmap-legend{font-size:12px}
+body.app .status-tag{font-size:12px}
+body.app .profile-progress{font-size:12.5px}
+body.app .post-kind{font-size:12px}
+body.app .repo-row small{font-size:12.5px}
+body.app .app-dialog p{font-size:12.5px}
+body.app .top-profile-menu header b{font-size:12.5px}
+body.app .top-profile-menu header small{font-size:11px}
+body.app .profile-account>span{font-size:11px}
+body.app .profile-account code{font-size:11.5px}
+body.app .profile-account button{font-size:11px}
+body.app .top-profile-menu nav a{font-size:11.5px}
+body.app .top-profile-menu footer span,body.app .top-profile-menu footer small{font-size:11px}
+body.app .readiness-panel h3{font-size:12px}
+body.app .readiness-panel p{font-size:11px}
+body.app .terminal-options b{font-size:11px}
+body.app .terminal-options small{font-size:11px}
+body.app .success-example{font-size:11px}
+body.app .fix-note{font-size:11px}
+body.app .credential-field>span{font-size:11px}
+body.app .credential-field b{font-size:11px}
+body.app .credential-field small{font-size:11px}
+body.app .credential-warning{font-size:11px}
+body.app .ready-sequence{font-size:11px}
+body.app .beginner-guide-summary p{font-size:11.5px}
+body.app .beginner-guide-summary button{font-size:11.5px}
+body.app .journey-step:not(:last-child):after{font-size:11px}
+body.app .journey-step>span{font-size:11px}
+body.app .journey-step h3{font-size:12.5px}
+body.app .journey-step p{font-size:11px}
+body.app .journey-step a,body.app .journey-step button{font-size:11px}
+body.app .git-explainer b{font-size:11.5px}
+body.app .git-explainer small{font-size:11px}
+body.app .git-explainer code{font-size:11px}
+body.app .git-explainer button{font-size:11px}
+body.app .not-required{font-size:11px}
+body.app .projects-heading-actions>span{font-size:12px}
+body.app .project-search input{font-size:12.5px}
+body.app .project-selects label>span{font-size:11px}
+body.app .project-selects select{font-size:12px}
+body.app .project-filter-tabs button{font-size:12px}
+body.app .project-filter-tabs b{font-size:11px}
+body.app .project-results-meta{font-size:12px}
+body.app .project-number{font-size:11px}
+body.app .project-title-row small{font-size:11px}
+body.app .project-progress-ring b{font-size:12px}
+body.app .project-progress-ring b:after{font-size:11px}
+body.app .project-card-body>p{font-size:12px}
+body.app .project-stack b{font-size:11px}
+body.app .project-evidence b{font-size:12.5px}
+body.app .project-evidence small{font-size:11px}
+body.app .project-primary-link{font-size:12px}
+body.app .project-showcase>footer>small{font-size:11px}
+body.app .project-no-results p{font-size:12.5px}
+body.app .talent-filters label,body.app .candidate-form label{font-size:12.5px}
+body.app .talent-card header small{font-size:12.5px}
+body.app .talent-score small{font-size:11.5px}
+body.app .talent-facts{font-size:12px}
+body.app .shortlist-link i{font-size:12.5px}
+body.app .pipeline span{font-size:12.5px}
+body.app .request-status{font-size:12.5px}
+body.app .score-component small{font-size:12.5px}
+body.app .leaderboard small{font-size:12.5px}
+body.app .leaderboard .lang{font-size:12.5px}
+body.app .view-stats small{font-size:12.5px}
+body.app .verified-badge{font-size:12px}
+body.app .repo-kicker{font-size:11px}
+body.app .repo-token-reveal p{font-size:11.5px}
+body.app .repo-token-reveal code{font-size:11.5px}
+body.app .repo-token-reveal button,body.app .launch-prerequisite button{font-size:11.5px}
+body.app .first-launch header p{font-size:12px}
+body.app .launch-time{font-size:11px}
+body.app .path-switch button>span{font-size:11px}
+body.app .path-switch b{font-size:12.5px}
+body.app .path-switch small{font-size:11px}
+body.app .launch-prerequisite b{font-size:12px}
+body.app .launch-prerequisite small{font-size:11px}
+body.app .ready-pill{font-size:11px}
+body.app .launch-steps li>span{font-size:11.5px}
+body.app .launch-steps b{font-size:12px}
+body.app .launch-steps p{font-size:11px}
+body.app .command-recipe header{font-size:11px}
+body.app .command-recipe button{font-size:11px}
+body.app .command-recipe pre{font-size:12px}
+body.app .launch-help{font-size:11px}
+body.app .launch-help button{font-size:11px}
+body.app .launch-map li i{font-size:11px}
+body.app .launch-map b{font-size:11.5px}
+body.app .launch-map small{font-size:11px}
+body.app .repo-file-search input{font-size:12px}
+body.app .file-list>header{font-size:11px}
+body.app .file-list b{font-size:12px}
+body.app .file-list small,body.app .file-list code{font-size:11px}
+body.app .add-file-panel textarea{font-size:12px}
+body.app .repo-tab-view>header p{font-size:11.5px}
+body.app .repo-tab-view>header>b{font-size:12px}
+body.app .tab-empty{font-size:12px}
+body.app .inline-create label{font-size:11.5px}
+body.app .inline-create input,body.app .inline-create select,body.app .settings-view select{font-size:12px}
+body.app .commit-list b{font-size:12px}
+body.app .commit-list small{font-size:11px}
+body.app .commit-list code{font-size:11px}
+body.app .contributor-list b{font-size:12px}
+body.app .contributor-list small{font-size:11px}
+body.app .contributor-list strong{font-size:11px}
+body.app .settings-view label{font-size:12px}
+body.app .repo-title p{font-size:12.5px}
+body.app .visibility-pill{font-size:11.5px}
+body.app .repo-tabs a{font-size:12.5px}
+body.app .clone-panel small{font-size:11px}
+body.app .clone-panel code{font-size:12px}
+body.app .branch-toolbar button{font-size:12px}
+body.app .branch-toolbar>span{font-size:11.5px}
+body.app .branch-list p,body.app .branch-list small{font-size:11.5px}
+body.app .branch-list code{font-size:11.5px}
+body.app .empty-repository p,body.app .empty-repository small{font-size:12px}
+body.app .empty-repository pre{font-size:12px}
+body.app .repo-side-card dl div{font-size:11.5px}
+body.app .security-card p{font-size:11.5px}
+body.app .streak-summary small{font-size:11px}
+body.app .streak-summary p{font-size:11px}
+body.app .streak-day>span{font-size:11px}
+body.app .streak-day>i{font-size:11px}
+body.app .streak-day>b{font-size:11px}
+body.app .streak-result>small{font-size:11px}
+body.app .brand small{font-size:11.5px}
+body.app .eyebrow,body.app .kicker,body.app .mini-label{font-size:12.5px}
+body.app .avatar-stack b{font-size:12px}
+body.app .chips b{font-size:12px}
+body.app .step{font-size:12px}
+body.app .quick-stats small{font-size:12px}
+body.app .auth-card:before{font-size:11.5px}
+body.app .profile-skills span{font-size:12px}
+body.app .brand small{font-size:11px}
+body.app .action-grid small{font-size:12.5px}
+body.app .workspace-search kbd{font-size:11.5px}
+body.app .workspace-sidebar nav>span{font-size:11.5px}
+body.app .workspace-sidebar nav a i{font-size:11.5px}
+body.app .sidebar-profile small{font-size:11.5px}
+body.app .workspace-stats small{font-size:12px}
+body.app .workspace-stats p{font-size:11.5px}
+body.app .card-heading p{font-size:12.5px}
+body.app .card-heading>a,body.app .earning-panel>a,body.app .ranking-panel>a{font-size:12.5px}
+body.app .health-ring small{font-size:11px}
+body.app .health-content p{font-size:12.5px}
+body.app .health-checks span{font-size:11px}
+body.app .portfolio-footer small{font-size:11px}
+body.app .next-step p{font-size:12.5px}
+body.app .status{font-size:11px}
+body.app .workspace-projects p{font-size:12px}
+body.app .project-progress b{font-size:11.5px}
+body.app .workspace-projects footer small{font-size:11px}
+body.app .workspace-projects footer a{font-size:11.5px}
+body.app .friendly-empty p{font-size:12.5px}
+body.app .video-thumb small{font-size:11px}
+body.app .video-info p{font-size:11.5px}
+body.app .earning-panel>p{font-size:12.5px}
+body.app .earning-split small{font-size:11.5px}
+body.app .rank-hero span{font-size:11.5px}
+body.app .rank-bars label{font-size:11.5px}
+body.app .workspace-footer{font-size:12px}
+body.app .project-dialog p{font-size:12.5px}
+body.app .visibility-badge{font-size:11.5px}
+body.app .portfolio-numbers small{font-size:11.5px}
+body.app .readiness-card li{font-size:12.5px}
+body.app .filter-row button,body.app .learning-tabs button{font-size:12.5px}
+body.app .live-label{font-size:11px}
+body.app .weekly-pulse header{font-size:11px}
+body.app .pulse-score>span{font-size:12px}
+body.app .pulse-days i{font-size:11px}
+body.app .weekly-pulse>p{font-size:11.5px}
+@media(max-width:800px){body.app .workspace-sidebar nav a{font-size:11px}}

@@ -36,6 +36,7 @@ def repository_context(request, repository, active_tab, branches=None):
         "clone_url": request.build_absolute_uri(reverse("landing:git_root", kwargs={"owner_id": repository.owner_id, "slug": repository.slug})),
         "open_issue_count": counts.get("issue", 0),
         "open_pull_count": counts.get("pull", 0),
+        "section": "code",
     }
 def breadcrumbs(path):
     parts = path.split("/") if path else []

@@ -7,7 +7,7 @@ def workspace_navigation(request):
         return {}
     @lru_cache(maxsize=None)
     def nav_profile():
-        return Profile.objects.filter(user=user).first()
+        return Profile.objects.get_or_create(user=user)[0]
     return {
         "nav_profile": nav_profile,
         "nav_is_recruiter": lambda: bool(nav_profile() and nav_profile().role in RECRUITER_ROLES),

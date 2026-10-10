@@ -119,7 +119,7 @@ class ContactRequestTests(TestCase):
         self.assertContains(network, "Backend Engineer")
         self.assertContains(network, "Talent at Acme")
         self.assertNotContains(network, "hr@example.com")
-        self.assertContains(self.client.get(reverse("landing:dashboard")), 'class="nav-alert">1<')
+        self.assertContains(self.client.get(reverse("landing:dashboard")), 'class="nav-badge" aria-label="1 pending"')
         self.client.post(reverse("recruiting:respond_contact", args=[contact.pk]), {"action": "accept"})
         contact.refresh_from_db()
         self.assertEqual(contact.status, "accepted")

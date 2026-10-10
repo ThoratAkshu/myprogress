@@ -15,3 +15,12 @@ If a MyProgress distribution, container image, virtual machine, or installer inc
 Git is a trademark of Software Freedom Conservancy. MyProgress is an independent product and is not affiliated with, sponsored by, or endorsed by the Git Project or Software Freedom Conservancy.
 
 Standard commands shown in the MyProgress interface, including `git init`, `git clone`, `git add`, `git commit`, `git branch`, and `git push`, describe interoperability with the Git command-line tool.
+
+## Feather icons
+
+Interface icons in `apps/common/templatetags/ui.py` use path data from Feather.
+
+- Project: Feather
+- Website: https://feathericons.com/
+- License: MIT License, Copyright (c) 2013-2017 Cole Bemis
+- License text: https://github.com/feathericons/feather/blob/main/LICENSE
