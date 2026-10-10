@@ -22,8 +22,8 @@ from apps.accounts.emails import send_verification_email, user_from_verification
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
 from apps.common.http import redirect_back
-from apps.core.feed import build_feed, people_you_may_know, trending_posts
-from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, Project, ProjectMilestone, Repository, RepositoryCollaborator
+from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
+from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
 from apps.learning.views import record_post_view
 from apps.notifications.services import notify
@@ -103,7 +103,8 @@ def dashboard_view(request):
     if Profile.objects.filter(user=request.user, role__in=RECRUITER_ROLES).exists():
         return redirect("recruiting:search")
     context = _workspace_context(request)
-    context.update({"feed": build_feed(request.user), "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
+    show = request.GET.get("show") if request.GET.get("show") in FEED_FILTERS else ""
+    context.update({"feed": build_feed(request.user, show=show), "feed_show": show, "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
     return render(request, "landing/dashboard.html", context)
 
 @login_required(login_url="landing:home")
@@ -166,7 +167,8 @@ def workspace_section_view(request, section):
         creators = list(User.objects.filter(pk__in=request.user.following_relationships.values("following"), learning_posts__is_public=True).annotate(latest_post=Max("learning_posts__published_at")).select_related("profile").order_by("-latest_post")[:12])
         for creator in creators:
             creator.posted_recently = creator.latest_post >= timezone.now() - timedelta(days=7)
-        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_creators": creators, "learning_page": Paginator(posts.order_by("-published_at"), 12).get_page(request.GET.get("page"))})
+        page = Paginator(posts.order_by("-published_at"), 10).get_page(request.GET.get("page"))
+        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_creators": creators, "learning_page": page, "liked_ids": set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))})
     if section == "network":
         context["contact_requests"] = request.user.contact_requests.select_related("recruiter__profile")[:20]
     if section == "portfolio":
@@ -412,7 +414,9 @@ def public_profile_view(request, handle):
         except IntegrityError:
             pass
     can_recruit = bool(viewer_profile and viewer_profile.role in RECRUITER_ROLES and profile.role == "developer" and profile.recruiter_visible and request.user != owner)
-    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True).annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)), "tab": request.GET.get("tab") if request.GET.get("tab") in {"repositories", "projects", "posts"} else "overview", "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    context = {"profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True).select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)), "tab": request.GET.get("tab") if request.GET.get("tab") in {"repositories", "projects", "posts"} else "overview", "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
+    if context["tab"] == "posts" and request.user.is_authenticated:
+        context["liked_ids"] = set(PostLike.objects.filter(user=request.user, post__author=owner).values_list("post_id", flat=True))
     if can_recruit:
         context["viewer_shortlists"] = request.user.shortlists.all()
         context["is_shortlisted"] = ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=owner).exists()

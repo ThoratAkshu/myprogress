@@ -506,3 +506,62 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 .week-dots li.active i{background:var(--accent)}
 /* Colorful initials, one stable color per person */
 .avatar.av-0{background:#dbeafe;color:#1d4ed8}.avatar.av-1{background:#dcfce7;color:#15803d}.avatar.av-2{background:#fef3c7;color:#b45309}.avatar.av-3{background:#fce7f3;color:#be185d}.avatar.av-4{background:#ede9fe;color:#6d28d9}.avatar.av-5{background:#cffafe;color:#0e7490}.avatar.av-6{background:#ffedd5;color:#c2410c}.avatar.av-7{background:#e0e7ff;color:#4338ca}
+/* Vertical post feed (Learn and profile Posts) */
+.post-feed{display:grid;gap:16px;width:100%;max-width:600px;margin:0 auto}
+.post-card{padding:0 0 14px;overflow:hidden}
+.post-card-head{display:flex;align-items:center;gap:10px;padding:12px 10px 12px 14px}
+.post-card-head>div{flex:1;min-width:0}
+.post-card-head small{display:block;overflow:hidden;color:var(--muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.post-card-author{color:var(--ink);font-weight:700;text-decoration:none}
+.post-card-author:hover{text-decoration:underline}
+.post-card-expand{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;color:var(--muted)}
+.post-card-expand:hover{background:var(--canvas);color:var(--ink)}
+.post-card-media{background:#0f1822}
+.post-card-media video{display:block;width:100%;max-height:72vh;aspect-ratio:16/9;background:#000}
+.post-card-cover{position:relative;display:grid;place-items:center;align-content:center;gap:10px;aspect-ratio:16/10;padding:28px;overflow:hidden;color:#fff;text-align:center;text-decoration:none}
+.post-card-cover>*{position:relative;z-index:1}
+.post-card-cover b{max-width:440px;font:800 22px/1.25 Manrope,"DM Sans",sans-serif}
+.post-card-cover small{opacity:.85;font-size:13px}
+.post-card-cover>img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover}
+.post-card-cover:has(>img)::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.05),rgba(0,0,0,.55))}
+.post-card-cover:has(>img)>:not(img){z-index:2}
+.post-card-cover.has-image{display:block;aspect-ratio:auto;padding:0}
+.post-card-cover.has-image::after{display:none}
+.post-card-cover.has-image>img{position:static;display:block;max-height:72vh}
+.post-card-play{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.45)}
+.post-card-actions{display:flex;align-items:center;gap:2px;padding:6px 8px 0}
+.post-card-actions form{margin:0}
+.post-card-actions .ig-views{margin-left:6px}
+.post-card-open{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:6px 10px;border-radius:8px;color:var(--violet);font-size:13px;font-weight:700;text-decoration:none}
+.post-card-open:hover{background:var(--violet-soft)}
+.post-card-likes{margin:2px 14px 4px;font-size:14px;font-weight:700}
+.post-card-text{position:relative;max-height:4.65em;margin:0 14px;overflow:hidden;font-size:14px;line-height:1.55}
+.post-card-text[data-open]{max-height:none}
+.post-card-text[data-clamped]:not([data-open])::after{content:"";position:absolute;right:0;bottom:0;left:0;height:1.6em;background:linear-gradient(transparent,var(--surface))}
+.post-card-text p{margin:0 0 6px}
+.post-card-text .post-body{margin-top:8px;font-size:15px}
+.post-card-more{margin:2px 14px 0;padding:0;border:0;background:none;color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.post-card-more:hover{color:var(--ink)}
+.post-card-comments{display:block;margin:6px 14px 0;color:var(--muted);font-size:14px;text-decoration:none}
+/* Expanded post: video or article on the left, details on the right */
+.post-viewer{width:min(1180px,calc(100vw - 32px));max-width:none;max-height:calc(100vh - 32px);padding:0;border:0;border-radius:12px;background:var(--surface);overflow:hidden}
+.post-viewer[open]{display:flex;flex-direction:column}
+.post-viewer::backdrop{background:rgba(0,0,0,.72)}
+.post-viewer-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 14px;border-bottom:1px solid var(--line)}
+.post-viewer-full{color:var(--violet);font-size:13px;font-weight:700}
+.post-viewer-close{width:36px;height:36px;border:0;border-radius:8px;background:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer}
+.post-viewer-close:hover{background:var(--canvas);color:var(--ink)}
+.post-viewer-body{flex:1;min-height:0;overflow:auto}
+.post-viewer .ig-post{height:min(82vh,820px);margin:0;border:0;border-radius:0;box-shadow:none}
+.post-viewer-loading{padding:56px 24px;color:var(--muted);text-align:center}
+.ig-media.is-article{display:block;min-height:0;overflow-y:auto;aspect-ratio:auto;background:var(--surface)}
+.ig-article{max-width:700px;margin:0 auto;padding:28px 32px 40px}
+.ig-article-cover{display:block;width:100%;max-height:280px;margin-bottom:18px;border-radius:10px;object-fit:cover}
+.ig-article h1{margin:0 0 4px}
+.ig-article-meta{margin:0 0 18px;color:var(--muted);font-size:13px}
+@media(max-width:1000px){.post-viewer .ig-post{height:auto}.ig-media.is-article{max-height:none}}
+@media(max-width:640px){.post-viewer{width:100vw;max-height:100vh;height:100%;border-radius:0}.ig-article{padding:20px 16px}.post-card-cover b{font-size:19px}}
+/* Home feed filters (Videos, Articles, Projects) */
+.composer-actions a.active{background:var(--violet-soft);color:var(--violet-dark);box-shadow:inset 0 -2px 0 var(--violet)}
+.composer-actions a.active .icon{color:var(--violet)!important}
+.feed-label a{color:var(--violet);font-weight:700}

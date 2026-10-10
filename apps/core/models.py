@@ -1,3 +1,4 @@
+from django.urls import reverse
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -62,6 +63,14 @@ class LearningPost(models.Model):
         ordering = ["-published_at"]
     def __str__(self):
         return self.title
+    def get_absolute_url(self):
+        return reverse("learning:detail", args=[self.pk])
+    @property
+    def has_video(self):
+        return bool(self.video_file or self.video_url)
+    @property
+    def reading_minutes(self):
+        return max(1, round(len(self.body.split()) / 200))
 class PostLike(models.Model):
     post = models.ForeignKey(LearningPost, on_delete=models.CASCADE, related_name="likes")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_likes")

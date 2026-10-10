@@ -6,12 +6,18 @@ from .git_service import user_can_access
 from .models import ActivityEvent, LearningPost, PostLike, Project, Repository
 from .services import visible_developers
 FEED_ACTIONS = {"published_learning", "created_project", "created_repository", "pushed_commits", "merged_pull_request"}
-def _events(user_ids, limit):
-    events = ActivityEvent.objects.filter(action__in=FEED_ACTIONS).select_related("user__profile").order_by("-created_at")
+# What the home feed can be narrowed to: (event actions, post kinds).
+FEED_FILTERS = {
+    "videos": ({"published_learning"}, {"video"}),
+    "articles": ({"published_learning"}, {"article", "document"}),
+    "projects": (FEED_ACTIONS - {"published_learning"}, None),
+}
+def _events(user_ids, limit, actions=FEED_ACTIONS):
+    events = ActivityEvent.objects.filter(action__in=actions).select_related("user__profile").order_by("-created_at")
     if user_ids is not None:
         events = events.filter(user_id__in=user_ids)
     return list(events[:limit])
-def _hydrate(viewer, events, limit):
+def _hydrate(viewer, events, limit, post_kinds=None):
     """Turn activity events into feed items, dropping anything the viewer may not see."""
     wanted = {"post": set(), "project": set(), "repository": set()}
     for event in events:
@@ -22,7 +28,10 @@ def _hydrate(viewer, events, limit):
             wanted["project"].add(metadata.get("project_id"))
         else:
             wanted["repository"].add(metadata.get("repository_id"))
-    posts = {post.pk: post for post in LearningPost.objects.filter(pk__in=wanted["post"], is_public=True).select_related("project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))}
+    posts = LearningPost.objects.filter(pk__in=wanted["post"], is_public=True)
+    if post_kinds:
+        posts = posts.filter(kind__in=post_kinds)
+    posts = {post.pk: post for post in posts.select_related("project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))}
     projects = {project.pk: project for project in Project.objects.filter(pk__in=wanted["project"], is_public=True)}
     repositories = {repository.pk: repository for repository in Repository.objects.filter(pk__in=wanted["repository"]).select_related("project", "owner__profile") if user_can_access(viewer, repository)}
     liked = set(PostLike.objects.filter(user=viewer, post_id__in=posts).values_list("post_id", flat=True)) if viewer.is_authenticated else set()
@@ -58,17 +67,19 @@ def _hydrate(viewer, events, limit):
         if len(items) >= limit:
             break
     return items
-def build_feed(viewer, limit=25):
+def build_feed(viewer, limit=25, show=None):
     """Activity from people the viewer follows plus their own, newest first.
 
     When the network is too quiet, public activity from everyone fills in so a
-    new member never lands on an empty home page.
+    new member never lands on an empty home page. `show` narrows it to one of FEED_FILTERS.
     """
+    actions, post_kinds = FEED_FILTERS.get(show, (FEED_ACTIONS, None))
+    scan = limit * (8 if post_kinds else 4)
     following = list(viewer.following_relationships.values_list("following_id", flat=True))
-    items = _hydrate(viewer, _events(following + [viewer.pk], limit * 4), limit)
+    items = _hydrate(viewer, _events(following + [viewer.pk], scan, actions), limit, post_kinds)
     if len(items) < 3:
         seen = {item["key"] for item in items}
-        items += [{**item, "suggested": True} for item in _hydrate(viewer, _events(None, limit * 4), limit) if item["key"] not in seen]
+        items += [{**item, "suggested": True} for item in _hydrate(viewer, _events(None, scan, actions), limit, post_kinds) if item["key"] not in seen]
     return items[:limit]
 def people_you_may_know(viewer, limit=5):
     """Developers the viewer doesn't follow yet, preferring shared languages and skills."""

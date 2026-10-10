@@ -68,6 +68,26 @@ class FeedTests(TestCase):
         self.assertContains(response, "Pushed 5 commits to")
         for hidden in ["classified", "Unfinished draft"]:
             self.assertNotContains(response, hidden)
+    def test_composer_buttons_filter_the_feed_to_videos_articles_or_projects(self):
+        video = LearningPost.objects.create(author=self.friend, title="Ledger video walkthrough", kind="video", video_url="https://youtu.be/dQw4w9WgXcQ")
+        article = LearningPost.objects.create(author=self.friend, title="Ledger article", body="x")
+        project = Project.objects.create(owner=self.friend, title="Ledger project")
+        self.event(self.friend, "published_learning", post_id=video.pk)
+        self.event(self.friend, "published_learning", post_id=article.pk)
+        self.event(self.friend, "created_project", project_id=project.pk)
+        def shown(show):
+            response = self.client.get(reverse("landing:dashboard"), {"show": show})
+            return response, [item.get("post", item.get("project")) for item in response.context["feed"]]
+        response, items = shown("videos")
+        self.assertEqual(items, [video])
+        self.assertContains(response, 'class="active" href="/dashboard/" aria-current="true"')
+        self.assertContains(response, "Showing only videos")
+        self.assertEqual(shown("articles")[1], [article])
+        self.assertEqual(shown("projects")[1], [project])
+        response, items = shown("bogus")
+        self.assertEqual(len(items), 3)
+        self.assertNotContains(response, "Showing only")
+        self.assertContains(response, 'href="?show=videos"')
     def test_quiet_feeds_fall_back_to_suggested_public_activity(self):
         Follow.objects.all().delete()
         self.event(self.stranger, "created_project", project_id=Project.objects.create(owner=self.stranger, title="Public thing").pk)
@@ -111,7 +131,8 @@ class SearchAndProfileTabTests(TestCase):
         self.assertContains(repositories, 'class="repo-list-name"', count=1)
         self.assertContains(repositories, "#3572A5")
         posts = self.client.get(url, {"tab": "posts"})
-        self.assertContains(posts, 'class="post-tile"', count=1)
+        self.assertContains(posts, 'class="card post-card"', count=1)
+        self.assertContains(posts, "data-expand-post")
         self.assertEqual(self.client.get(url, {"tab": "bogus"}).context["tab"], "overview")
 class ProjectPageTests(TestCase):
     def setUp(self):

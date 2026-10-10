@@ -75,19 +75,6 @@ a.icon-button{display:grid;place-items:center;color:var(--ink);text-decoration:n
 .danger-zone small{font-size:12px;color:var(--muted)}
 .learning-tabs a{display:inline-block;border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 11px;color:var(--muted);font-size:12px}
 .post-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:16px}
-.post-card{display:flex;flex-direction:column;overflow:hidden;min-width:0}
-.post-card-media{position:relative;display:block;aspect-ratio:16/9;background:linear-gradient(130deg,#243a50,var(--violet))}
-.post-card-media img{width:100%;height:100%;object-fit:cover}
-.post-card-media span{position:absolute;left:10px;top:10px;padding:3px 8px;border-radius:99px;background:#ffffffe6;color:var(--ink);font-size:10px;font-weight:800;letter-spacing:.6px}
-.post-card-media b{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:28px}
-.post-card-body{display:grid;gap:6px;padding:14px 16px 16px}
-.post-card-body h3{margin:0;font-size:15px;line-height:1.35}
-.post-card-body h3 a{color:var(--ink)}
-.post-card-body p{margin:0;font-size:12px;color:var(--muted)}
-.post-card-project{font-size:11px;font-weight:700;color:var(--violet)}
-.post-card-stats{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:#536078}
-.post-card-owner{display:flex;gap:10px;align-items:center;font-size:12px}
-.post-card-owner a{color:var(--violet);font-weight:700}
 .notification-list{padding:6px 0}
 .notification-row{display:flex;align-items:center;gap:14px;padding:14px 20px;border-top:1px solid var(--line);color:var(--ink)}
 .notification-row:first-child{border-top:0}

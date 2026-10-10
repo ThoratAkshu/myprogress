@@ -15,7 +15,7 @@
 
 {% elif tab == "projects" %}<section class="card list-card">{% for project in projects %}{% include "landing/partials/profile_project.html" %}{% empty %}<div class="empty-state">{% icon "box" 32 %}<h2>No public projects yet</h2><p>Projects appear here once they are created and marked public.</p></div>{% endfor %}</section>
 
-{% elif tab == "posts" %}{% if posts %}<section class="post-tiles">{% for post in posts %}{% include "landing/partials/post_tile.html" %}{% endfor %}</section>{% else %}<section class="card empty-state">{% icon "grid" 32 %}<h2>No posts yet</h2><p>Videos and write-ups about how projects were built will appear here.</p></section>{% endif %}
+{% elif tab == "posts" %}{% if posts %}<section class="post-feed" aria-label="Posts">{% for post in posts %}{% include "landing/partials/post_card.html" %}{% endfor %}</section>{% else %}<section class="card empty-state">{% icon "grid" 32 %}<h2>No posts yet</h2><p>Videos and write-ups about how projects were built will appear here.</p></section>{% endif %}
 
 {% else %}<section class="card stat-strip"><div><b>{% if profile.rank and profile.score %}#{{ profile.rank }}{% else %}—{% endif %}</b><small>Global rank</small></div><div><b>{{ profile.score }}</b><small>Progress score</small></div><div><b>{{ completed_count }}</b><small>Shipped projects</small></div><div><b>{{ calendar.active_days }}</b><small>Active days this year</small></div></section>
 {% if profile.bio %}<section class="card"><header class="card-head"><h2>About</h2></header><p class="prose">{{ profile.bio|linebreaksbr }}</p></section>{% endif %}
