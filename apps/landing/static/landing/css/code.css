@@ -32,7 +32,7 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .code-viewer>header small{margin-left:10px;font-size:11px;color:var(--muted)}
 .viewer-actions{display:flex;gap:6px}
 .viewer-actions a{padding:5px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:12px;font-weight:700;color:#4a566d}
-.viewer-actions a.active{background:#f0effe;border-color:#d6d1fa;color:var(--violet)}
+.viewer-actions a.active{background:#e8f1fb;border-color:#b6d4f2;color:var(--violet)}
 .diff-scroll{overflow-x:auto}
 .code-table,.diff-table{width:100%;border-collapse:collapse;font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
 .code-table td,.diff-table td{padding:0 12px;vertical-align:top}
@@ -43,7 +43,7 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .diff-table .mark{display:inline-block;width:14px;color:#9aa3b2;user-select:none}
 .diff-add td{background:#e9f8ef}.diff-add .num{background:#d8f2e2}
 .diff-del td{background:#fdecec}.diff-del .num{background:#f9dcdc}
-.diff-hunk td{padding:4px 12px;background:#f0effe;color:#5147c8}
+.diff-hunk td{padding:4px 12px;background:#e8f1fb;color:#004182}
 .diff-summary{display:flex;align-items:center;gap:10px;margin:16px 0 10px;font-size:13px}
 .diff-add{color:#1a8a5a;font-weight:700}
 .diff-del{color:#c9433a;font-weight:700}
@@ -54,7 +54,7 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .diff-status{flex:none;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;background:#eef1f6;color:#536078}
 .diff-status.status-added{background:#e4f7ef;color:#16805f}
 .diff-status.status-deleted{background:#fdeeed;color:#b4443a}
-.diff-status.status-renamed{background:#e8f6fb;color:#1f7f97}
+.diff-status.status-renamed{background:#e8f2fb;color:#1f5b97}
 .diff-note{padding:14px;margin:0;font-size:13px;color:var(--muted)}
 .commit-header{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 20px}
 .commit-header h2{font-size:20px;margin:6px 0}
@@ -68,13 +68,13 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .issue-toolbar .button{padding:9px 14px;font-size:13px}
 .issue-states{display:flex;gap:6px}
 .issue-states a{padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;font-weight:700;color:var(--muted)}
-.issue-states a.active{background:#f0effe;border-color:#d6d1fa;color:var(--violet)}
+.issue-states a.active{background:#e8f1fb;border-color:#b6d4f2;color:var(--violet)}
 .issue-list{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .issue-row{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-top:1px solid var(--line);color:var(--ink)}
 .issue-row:first-child{border-top:0}
 .issue-row:hover{background:#fafbfc}
 .issue-icon{flex:none;font-size:15px;line-height:1.3}
-.state-open{color:#1a8a5a}.state-closed{color:#7b56d9}.state-merged{color:#7b56d9}
+.state-open{color:#1a8a5a}.state-closed{color:#004182}.state-merged{color:#004182}
 .issue-main{flex:1;min-width:0}
 .issue-main b{display:block;font-size:14px}
 .issue-main small{font-size:12px;color:var(--muted)}
@@ -82,13 +82,13 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .issue-header h2{font-size:24px;margin:0 0 8px}
 .issue-header h2 span{color:var(--muted);font-weight:500}
 .issue-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:13px;color:#4a566d;padding-bottom:14px;border-bottom:1px solid var(--line)}
-.issue-meta code{padding:1px 6px;border-radius:5px;background:#f0effe;color:var(--violet);font-size:12px}
+.issue-meta code{padding:1px 6px;border-radius:5px;background:#e8f1fb;color:var(--violet);font-size:12px}
 .state-pill{padding:5px 11px;border-radius:99px;color:#fff!important;font-weight:700;font-size:12px}
-.state-pill.state-open{background:#1a8a5a}.state-pill.state-closed,.state-pill.state-merged{background:#7b56d9}
+.state-pill.state-open{background:#1a8a5a}.state-pill.state-closed,.state-pill.state-merged{background:#004182}
 .issue-tabs{display:flex;gap:20px;margin:14px 0;border-bottom:1px solid var(--line)}
 .issue-tabs a{padding:8px 2px;font-size:13px;color:var(--muted)}
 .issue-tabs a.active{color:var(--ink);font-weight:800;border-bottom:2px solid var(--violet)}
-.issue-tabs b{padding:1px 6px;border-radius:99px;background:#e8eaf0;font-size:11px}
+.issue-tabs b{padding:1px 6px;border-radius:99px;background:#e8ecf0;font-size:11px}
 .timeline{display:grid;gap:14px;max-width:860px;margin-top:16px}
 .timeline-item{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .timeline-item>header{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);background:#fafbfc;font-size:13px}

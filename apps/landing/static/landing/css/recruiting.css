@@ -16,7 +16,7 @@
 .talent-card h3,.candidate-row h3,.outreach-row h3{margin:0;font-size:15px;color:var(--ink)}
 .talent-card p,.candidate-row p{margin:3px 0;font-size:12px;color:#4a566d}
 .talent-card header small{font-size:11px;color:var(--muted)}
-.talent-score{flex:none;display:grid;justify-items:center;padding:6px 10px;border-radius:10px;background:#f0effe;color:var(--violet)}
+.talent-score{flex:none;display:grid;justify-items:center;padding:6px 10px;border-radius:10px;background:#e8f1fb;color:var(--violet)}
 .talent-score b{font:800 18px Manrope;line-height:1.1}
 .talent-score small{font-size:9px;text-transform:uppercase;letter-spacing:.8px}
 .talent-languages{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;font-weight:600}
@@ -36,8 +36,8 @@
 .shortlist-index{padding:18px;display:grid;gap:4px}
 .shortlist-index h2{font-size:15px;margin-bottom:8px}
 .shortlist-link{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-radius:8px;font-size:13px;color:var(--ink)}
-.shortlist-link:hover{background:#f6f7fb}
-.shortlist-link.active{background:#f0effe;color:var(--violet)}
+.shortlist-link:hover{background:#f6f8fb}
+.shortlist-link.active{background:#e8f1fb;color:var(--violet)}
 .shortlist-link i{font-style:normal;font-size:11px;color:var(--muted)}
 .shortlist-create{display:grid;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .shortlist-body{display:grid;gap:12px;min-width:0}
@@ -47,7 +47,7 @@
 .pipeline{display:flex;flex-wrap:wrap;gap:8px;width:100%}
 .pipeline span{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:99px;background:#f2f4f8;font-size:11px;color:#536078}
 .pipeline b{font:800 13px Manrope;color:var(--ink)}
-.stage-interviewing,.stage-offer{background:#e8f6fb!important}
+.stage-interviewing,.stage-offer{background:#e8f2fb!important}
 .stage-hired{background:#e4f7ef!important}
 .candidate-row{padding:16px;display:grid;gap:12px}
 .candidate-form{display:grid;grid-template-columns:170px minmax(0,1fr) auto;gap:12px;align-items:end;margin:0}
@@ -77,7 +77,7 @@
 .leaderboard-filter select{padding:8px 10px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-size:13px}
 .leaderboard{list-style:none;margin:14px 0 0;padding:0}
 .leaderboard li{display:grid;grid-template-columns:44px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:11px 4px;border-top:1px solid var(--line);font-size:13px}
-.leaderboard li.me{background:#f8f7ff}
+.leaderboard li.me{background:#f3f8fd}
 .leaderboard .position{font:800 15px Manrope;color:var(--muted)}
 .leaderboard li:nth-child(-n+3) .position{color:var(--violet)}
 .leaderboard a{color:var(--ink)}

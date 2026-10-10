@@ -66,3 +66,7 @@ def initials(user):
         return letters
     profile = getattr(user, "profile", None)
     return (getattr(profile, "handle", "") or "?")[:2].upper()
+@register.filter
+def tone(obj):
+    """Stable muted background tone (tone-0..tone-5) for items without an image."""
+    return f"tone-{(getattr(obj, 'pk', 0) or 0) % 6}"
