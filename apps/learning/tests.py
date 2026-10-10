@@ -67,6 +67,28 @@ class PublishingTests(TestCase):
     def tearDown(self):
         self.override.disable()
         shutil.rmtree(self.media, ignore_errors=True)
+    def test_browser_recording_and_captured_thumbnail_publish_as_a_video_post(self):
+        import io
+        from PIL import Image
+        page = self.client.get(reverse("learning:create"), {"kind": "video"})
+        self.assertContains(page, 'data-record-mode="screen-camera"')
+        self.assertContains(page, 'id="recorder-dialog"')
+        frame = io.BytesIO()
+        Image.new("RGB", (64, 36), "#0f172a").save(frame, "JPEG")
+        recording = SimpleUploadedFile("walkthrough-2026-10-10.webm", b"\x1aE\xdf\xa3" + b"\x00" * 64, content_type="video/webm")
+        thumbnail = SimpleUploadedFile("thumbnail.jpg", frame.getvalue(), content_type="image/jpeg")
+        response = self.client.post(reverse("learning:create"), {"title": "Ledger walkthrough", "kind": "video", "project": self.project.pk, "summary": "", "body": "", "video_script": "INTRO\nHi.", "video_file": recording, "thumbnail": thumbnail, "is_public": "on"})
+        post = LearningPost.objects.get(title="Ledger walkthrough")
+        self.assertRedirects(response, reverse("learning:detail", args=[post.pk]))
+        self.assertTrue(post.video_file.name.endswith(".webm"))
+        self.assertTrue(post.thumbnail.name.endswith(".jpg"))
+        self.assertEqual(post.video_script, "INTRO\nHi.")
+    def test_background_upload_gets_the_post_address_and_keeps_the_success_message(self):
+        data = {"title": "Uploaded in the background", "kind": "article", "summary": "", "body": ARTICLE, "is_public": "on"}
+        response = self.client.post(reverse("learning:create"), data, headers={"X-Requested-With": "XMLHttpRequest"})
+        post = LearningPost.objects.get(title="Uploaded in the background")
+        self.assertEqual(response.json(), {"redirect": reverse("learning:detail", args=[post.pk])})
+        self.assertContains(self.client.get(response.json()["redirect"]), "Published. Share the link")
     def test_article_needs_substance_and_links_only_to_own_projects(self):
         url = reverse("learning:create")
         self.client.post(url, {"title": "Short", "kind": "article", "body": "Too short.", "is_public": "on"})

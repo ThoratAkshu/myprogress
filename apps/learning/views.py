@@ -82,8 +82,12 @@ def post_create_view(request):
         complete_daily_step(request.user, "share")
         refresh_rank(request.user)
         messages.success(request, "Published. Share the link so other developers can learn from it." if post.is_public else "Saved as a private draft.")
-        return redirect("learning:detail", post_id=post.pk)
+        return _published(request, post)
     return render(request, "learning/post_form.html", {"section": "learning", "form": form, "studio_projects": _studio_projects(request.user)})
+def _published(request, post):
+    """Studio uploads run in the background and get the post's address as JSON, so the success message waits for that page."""
+    url = reverse("learning:detail", args=[post.pk])
+    return JsonResponse({"redirect": url}) if request.headers.get("X-Requested-With") == "XMLHttpRequest" else redirect(url)
 def _studio_projects(user):
     """The author's projects as cards for the studio's project picker."""
     cards = []
@@ -129,7 +133,7 @@ def post_edit_view(request, post_id):
         _delete_replaced_files(post, form, previous)
         refresh_rank(request.user)
         messages.success(request, "Post updated.")
-        return redirect("learning:detail", post_id=post.pk)
+        return _published(request, post)
     return render(request, "learning/post_form.html", {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user)})
 @login_required(login_url="landing:home")
 @require_POST
