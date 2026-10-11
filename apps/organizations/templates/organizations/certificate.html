@@ -1,0 +1,22 @@
+{% load static ui %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>{{ certificate.title }} · {{ certificate.student.get_full_name|default:certificate.student.email }}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'organizations/certificate.css' %}"></head>
+<body>
+<div class="cert-toolbar">{% if certificate.revoked_at %}<p class="cert-status revoked">{% icon "alert-circle" 18 %}This certificate was revoked on {{ certificate.revoked_at|date:"M j, Y" }}{% if certificate.revoked_reason %}: {{ certificate.revoked_reason }}{% endif %}.</p>{% else %}<p class="cert-status valid">{% icon "check-circle" 18 %}Verified: {{ certificate.organization.name }} issued this certificate on MyProgress.</p><button type="button" onclick="window.print()">{% icon "download" 16 %}Print or save as PDF</button>{% endif %}</div>
+<main class="cert{% if certificate.revoked_at %} is-revoked{% endif %}">
+<div class="cert-inner">
+<div class="cert-org"><span class="cert-seal">{{ certificate.organization.initials }}</span><span>{{ certificate.organization.name }}{% if certificate.organization.city %}<small>{{ certificate.organization.city }}</small>{% endif %}</span></div>
+<p class="cert-kicker">Certificate of achievement</p>
+<p class="cert-presented">This certifies that</p>
+<h1>{{ certificate.student.get_full_name|default:certificate.student.email }}</h1>
+<p class="cert-presented">has successfully completed</p>
+<h2>{{ certificate.title }}</h2>
+{% if certificate.description %}<p class="cert-description">{{ certificate.description }}</p>{% endif %}
+<div class="cert-footer">
+<div><b>{{ certificate.issued_at|date:"F j, Y" }}</b><small>Date issued</small></div>
+<div class="cert-sign"><b>{{ certificate.issued_by.get_full_name|default:certificate.organization.name }}</b><small>For {{ certificate.organization.name }}</small></div>
+<div><b>{{ certificate.code }}</b><small>Check at {{ verify_url }}</small></div>
+</div>
+{% if certificate.revoked_at %}<span class="cert-stamp">Revoked</span>{% endif %}
+</div>
+</main>
+<p class="cert-foot">{% if certificate.student.profile.handle %}<a href="{% url 'landing:public_profile' certificate.student.profile.handle %}">See {{ certificate.student.first_name|default:"their" }}{% if certificate.student.first_name %}'s{% endif %} work on MyProgress</a> · {% endif %}<a href="{% url 'landing:home' %}">MyProgress</a></p>
+</body></html>

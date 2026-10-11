@@ -3,7 +3,7 @@ from django import forms
 from django.utils import timezone
 from django.core.validators import validate_email
 from apps.core.models import Repository
-from .models import MAX_FILE_BYTES, ChannelPost, LiveClass, Membership, Organization, Submission, Task
+from .models import MAX_FILE_BYTES, Certificate, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
@@ -125,3 +125,10 @@ class LiveClassForm(forms.ModelForm):
         if link and not link.startswith("https://"):
             raise forms.ValidationError("Meeting links must start with https://.")
         return link
+class CertificateForm(forms.Form):
+    title = forms.CharField(max_length=160, widget=forms.TextInput(attrs={"placeholder": "Full-stack Web Development"}))
+    description = forms.CharField(max_length=300, required=False, label="Description (optional)", widget=forms.TextInput(attrs={"placeholder": "Completed 12 weeks of projects, tasks and live classes"}))
+    students = forms.MultipleChoiceField(widget=forms.CheckboxSelectMultiple, error_messages={"required": "Pick at least one student."})
+    def __init__(self, *args, choices=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["students"].choices = choices

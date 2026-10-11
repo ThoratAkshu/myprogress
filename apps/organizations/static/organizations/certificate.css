@@ -1,0 +1,31 @@
+/* A certificate that looks good on screen and prints on one landscape A4 page. */
+:root{--ink:#0f172a;--muted:#475569;--gold:#b7791f;--gold-soft:#fef3c7;--navy:#0f172a;--line:#e2e8f0}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:24px 16px 40px;background:#e2e8f0;color:var(--ink);font:15px/1.5 "DM Sans",system-ui,sans-serif}
+.cert-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;max-width:1000px;margin:0 auto 18px}
+.cert-status{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px;border-radius:99px;font-weight:700;font-size:14px}
+.cert-status.valid{background:#dcfce7;color:#166534}
+.cert-status.revoked{background:#fee2e2;color:#991b1b}
+.cert-toolbar button{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:0;border-radius:10px;background:var(--navy);color:#fff;font:700 14px "DM Sans",sans-serif;cursor:pointer}
+.cert{position:relative;max-width:1000px;margin:0 auto;padding:18px;background:#fff;box-shadow:0 24px 60px rgba(15,23,42,.18)}
+.cert-inner{position:relative;display:grid;justify-items:center;gap:8px;padding:48px 56px 40px;border:2px solid var(--gold);outline:1px solid var(--gold);outline-offset:-10px;text-align:center;background:radial-gradient(circle at 50% 0%,#fffbeb 0,#fff 55%)}
+.cert-org{display:flex;align-items:center;gap:12px;font:800 18px/1.2 Manrope,sans-serif;text-align:left}
+.cert-org small{display:block;color:var(--muted);font:500 13px "DM Sans",sans-serif}
+.cert-seal{display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--navy);color:#fde68a;font:800 18px/1 Manrope,sans-serif;box-shadow:0 0 0 4px #fde68a,0 0 0 6px var(--gold)}
+.cert-kicker{margin:22px 0 4px;color:var(--gold);font:700 13px/1 "DM Sans",sans-serif;letter-spacing:.24em;text-transform:uppercase}
+.cert-presented{margin:6px 0 0;color:var(--muted);font-size:15px}
+.cert h1{margin:4px 0;font:700 clamp(34px,6vw,54px)/1.1 "Cormorant Garamond",Georgia,serif;color:var(--navy)}
+.cert h2{margin:2px 0;font:800 clamp(20px,3vw,26px)/1.3 Manrope,sans-serif}
+.cert-description{max-width:640px;margin:6px 0 0;color:var(--muted)}
+.cert-footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;width:100%;margin-top:34px;padding-top:18px;border-top:1px solid var(--line)}
+.cert-footer div{display:grid;gap:2px}
+.cert-footer b{font-size:15px;overflow-wrap:anywhere}
+.cert-footer small{color:var(--muted);font-size:11.5px;overflow-wrap:anywhere}
+.cert-sign b{font:700 22px/1.2 "Cormorant Garamond",Georgia,serif}
+.cert-stamp{position:absolute;top:44%;left:50%;padding:6px 26px;border:4px solid #dc2626;border-radius:10px;color:#dc2626;font:800 44px/1 Manrope,sans-serif;letter-spacing:.1em;text-transform:uppercase;transform:translate(-50%,-50%) rotate(-12deg);opacity:.75}
+.cert.is-revoked .cert-inner>*:not(.cert-stamp){opacity:.55}
+.cert-foot{max-width:1000px;margin:16px auto 0;text-align:center;font-size:13px;color:var(--muted)}
+.cert-foot a{color:var(--navy);font-weight:700}
+@media(max-width:640px){.cert-inner{padding:30px 18px}.cert-footer{grid-template-columns:minmax(0,1fr);gap:12px}}
+@page{size:A4 landscape;margin:10mm}
+@media print{body{padding:0;background:#fff}.cert-toolbar,.cert-foot{display:none}.cert{max-width:none;box-shadow:none;padding:0}.cert-inner{padding:40px 48px}}

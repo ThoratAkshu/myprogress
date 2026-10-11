@@ -11,7 +11,7 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
-from .models import Attendance, ChannelPost, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, Certificate, ChannelPost, Invite, LiveClass, Membership, Organization, Submission, Task
 # Class points: task points earned, plus these for each class attended and each coding day in the last 30.
 POINTS_PER_CLASS = 5
 POINTS_PER_CODING_DAY = 1
@@ -35,7 +35,7 @@ def visible_to(queryset, member):
     if member.is_staff:
         return queryset
     return queryset.filter(Q(group="") | Q(group__iexact=member.group))
-RESERVED_SLUGS = {"new", "join", "invite"}
+RESERVED_SLUGS = {"new", "join", "invite", "certificates"}
 def unique_slug(name):
     base = slugify(name)[:50] or "organization"
     if base in RESERVED_SLUGS:
@@ -231,3 +231,14 @@ def leaderboard(organization, metric="class_points", group=""):
             rank, previous = position, value(row)
         row["position"], row["value"] = rank, row[metric]
     return rows
+def issue_certificates(organization, actor, students, title, description):
+    """Give each student a certificate, skipping anyone who already holds one with the same title. Returns those created."""
+    holders = set(Certificate.objects.filter(organization=organization, title__iexact=title, revoked_at__isnull=True).values_list("student_id", flat=True))
+    created = []
+    for student in students:
+        if student.pk in holders:
+            continue
+        certificate = Certificate.objects.create(organization=organization, student=student, title=title, description=description, issued_by=actor)
+        notify(student, actor, "organization", f"{organization.name} awarded you a certificate: {title}", reverse("organizations:certificate", args=[certificate.code]))
+        created.append(certificate)
+    return created

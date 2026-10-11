@@ -21,8 +21,8 @@ from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
 from apps.notifications.services import notify
 from . import services
-from .forms import ChannelPostForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, ChannelPost, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .forms import CertificateForm, ChannelPostForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
+from .models import Attendance, Certificate, ChannelPost, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -463,3 +463,39 @@ def leaderboard_view(request, slug):
         "rows": rows, "podium": rows[:3] if len(rows) >= 3 else [], "metric": metric, "metric_label": dict(services.LEADERBOARD_METRICS)[metric], "metrics": services.LEADERBOARD_METRICS,
         "group": group, "mine": mine, "per_class": services.POINTS_PER_CLASS, "per_day": services.POINTS_PER_CODING_DAY,
     })
+@login_required(login_url="landing:home")
+def certificates_view(request, slug):
+    organization, member = _organization(request, slug)
+    if not member.is_staff:
+        certificates = Certificate.objects.filter(organization=organization, student=request.user)
+        if request.method == "POST":
+            certificate = get_object_or_404(certificates, pk=request.POST.get("certificate") or 0)
+            certificate.show_on_profile = request.POST.get("show") == "1"
+            certificate.save(update_fields=["show_on_profile"])
+            messages.success(request, "Shown on your profile." if certificate.show_on_profile else "Hidden from your profile.")
+            return redirect("organizations:certificates", slug=slug)
+        return _render(request, "certificates.html", organization, member, "certificates", {"certificates": certificates})
+    group = request.GET.get("group", "").strip()[:60]
+    rows = services.student_growth(organization, group=group, sort="name")
+    by_id = {str(row["user"].pk): row for row in rows}
+    form = CertificateForm(request.POST or None, choices=[(key, services.display_name(row["user"])) for key, row in by_id.items()] if request.method == "POST" else [])
+    if request.method == "POST" and request.POST.get("action") == "revoke":
+        certificate = get_object_or_404(Certificate, pk=request.POST.get("certificate") or 0, organization=organization)
+        certificate.revoked_at, certificate.revoked_reason = timezone.now(), request.POST.get("reason", "").strip()[:200]
+        certificate.save(update_fields=["revoked_at", "revoked_reason"])
+        messages.success(request, f"Certificate {certificate.code} revoked. Its public page now says so.")
+        return redirect("organizations:certificates", slug=slug)
+    if request.method == "POST":
+        all_rows = {str(row["user"].pk): row for row in services.student_growth(organization)}
+        form.fields["students"].choices = [(key, services.display_name(row["user"])) for key, row in all_rows.items()]
+        if form.is_valid():
+            created = services.issue_certificates(organization, request.user, [all_rows[key]["user"] for key in form.cleaned_data["students"]], form.cleaned_data["title"].strip(), form.cleaned_data["description"].strip())
+            skipped = len(form.cleaned_data["students"]) - len(created)
+            messages.success(request, f"Issued {len(created)} certificate{'' if len(created) == 1 else 's'}." + (f" {skipped} already had this one." if skipped else ""))
+            return redirect("organizations:certificates", slug=slug)
+    issued = Certificate.objects.filter(organization=organization).select_related("student__profile", "issued_by")
+    return _render(request, "certificates.html", organization, member, "certificates", {"form": form, "rows": rows, "group": group, "issued": Paginator(issued, 30).get_page(request.GET.get("page"))})
+def certificate_view(request, code):
+    """The public page that proves a certificate is real. No sign-in needed."""
+    certificate = get_object_or_404(Certificate.objects.select_related("organization", "student__profile", "issued_by"), code=code.upper())
+    return render(request, "organizations/certificate.html", {"certificate": certificate, "verify_url": request.build_absolute_uri(reverse("organizations:certificate", args=[certificate.code]))})

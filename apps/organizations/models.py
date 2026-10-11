@@ -169,3 +169,24 @@ class Attendance(models.Model):
     marked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", help_text="A teacher who set it by hand")
     class Meta:
         constraints = [models.UniqueConstraint(fields=["live_class", "student"], name="one_attendance_per_class")]
+def certificate_code():
+    """A short code people can type to check a certificate, like MP-7KQ2-X9DA."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    raw = "".join(secrets.choice(alphabet) for _ in range(8))
+    return f"MP-{raw[:4]}-{raw[4:]}"
+class Certificate(models.Model):
+    """A certificate an organization gives a student. Anyone can check it at its public address."""
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="certificates")
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name="certificates")
+    title = models.CharField(max_length=160, help_text="Like Full-stack Web Development, Batch A 2026")
+    description = models.CharField(max_length=300, blank=True)
+    code = models.CharField(max_length=20, unique=True, default=certificate_code)
+    issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    issued_at = models.DateTimeField(auto_now_add=True)
+    show_on_profile = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=200, blank=True)
+    class Meta:
+        ordering = ["-issued_at"]
+    def __str__(self):
+        return f"{self.title} for {self.student}"

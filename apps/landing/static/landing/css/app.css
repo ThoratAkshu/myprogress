@@ -1220,3 +1220,35 @@ a.org-item-title:hover{color:var(--violet)}
 .org-who a:hover{color:var(--violet)}
 .org-formula{display:flex;align-items:center;gap:6px;margin:0}
 @media(max-width:860px){.org-tr.board{grid-template-columns:44px minmax(0,1fr) auto}.org-tr.board>span:nth-child(n+4){display:none}.org-tr.board .org-who{grid-column:auto}}
+/* Organizations: certificates */
+.org-cert-pick{display:grid;gap:8px}
+.org-cert-pick-head{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.org-cert-tools{display:flex;gap:12px}
+.org-cert-tools .org-link-button{color:var(--violet)}
+.org-cert-list{display:grid;align-content:start;max-height:360px;overflow-y:auto;border:1px solid var(--line);border-radius:12px}
+.org-new-task>.org-toolbar{margin-bottom:12px}
+.org-cert-row{display:flex!important;align-items:center;gap:10px;min-height:0;margin:0!important;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-weight:500!important}
+.org-cert-row:last-child{border-bottom:0}
+.org-cert-row:hover{background:var(--canvas)}
+.org-cert-row input{width:18px!important;height:18px;min-height:0!important;margin:0;accent-color:var(--violet);flex:none}
+.org-cert-who{display:grid;flex:1;min-width:0}
+.org-cert-who small,.org-cert-facts{color:var(--muted);font-size:12px}
+.org-cert-facts{display:grid;justify-items:end;text-align:right}
+.org-tr.certs{grid-template-columns:minmax(0,1.4fr) minmax(0,1.6fr) .9fr .8fr .9fr}
+.org-inline-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.org-inline-form input{min-height:34px!important;width:auto!important;flex:1}
+.org-cert-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.org-cert-card{display:grid;gap:6px;justify-items:start;border-top:4px solid #d4a017!important}
+.org-cert-card.revoked{opacity:.6;border-top-color:#dc2626!important}
+.org-cert-card b{font:800 16px/1.35 Manrope,sans-serif}
+.org-cert-card small{color:var(--muted);font-size:12.5px}
+.org-cert-seal{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#fef3c7;color:#b45309}
+.org-cert-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.org-cert-actions form{margin:0}
+.profile-certificates{display:grid;gap:8px}
+.profile-certificate{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;color:var(--ink);text-decoration:none}
+.profile-certificate:hover{border-color:var(--violet)}
+.profile-certificate>svg{color:#b45309;flex:none}
+.profile-certificate span{display:grid}
+.profile-certificate small{color:var(--muted);font-size:12.5px}
+@media(max-width:860px){.org-tr.certs{grid-template-columns:1fr 1fr}.org-cert-facts{display:none}}

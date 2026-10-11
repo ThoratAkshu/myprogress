@@ -14,6 +14,9 @@
   document.querySelectorAll("form[data-confirm]").forEach(form => form.addEventListener("submit", event => {
     if (!window.confirm(form.dataset.confirm)) event.preventDefault();
   }));
+  document.querySelectorAll("[data-select]").forEach(button => button.addEventListener("click", () => {
+    button.closest("form").querySelectorAll('input[type="checkbox"][name="students"]').forEach(box => { box.checked = button.dataset.select === "all"; });
+  }));
   const composer = document.querySelector("[data-composer]");
   document.querySelector("[data-toggle-composer]")?.addEventListener("click", () => {
     composer.hidden = !composer.hidden;

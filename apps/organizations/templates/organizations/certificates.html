@@ -1,0 +1,28 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Certificates · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% if member.is_staff %}
+<details class="card org-new-task"{% if form.errors %} open{% endif %}><summary>{% icon "award" 18 %}<b>Issue certificates</b><small>Each one gets a code anyone can check on its public page</small></summary>
+<form method="get" class="org-toolbar"><select name="group" aria-label="Batch" onchange="this.form.submit()"><option value="">Students from all batches</option>{% for value in org_groups %}<option value="{{ value }}"{% if value == group %} selected{% endif %}>Only {{ value }}</option>{% endfor %}</select></form>
+<form method="post" class="org-form" data-cert-form>{% csrf_token %}
+<div class="org-form-row"><label>Title{{ form.title }}{% for error in form.title.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label><label>{{ form.description.label }}{{ form.description }}</label></div>
+<div class="org-cert-pick"><div class="org-cert-pick-head"><b>Students</b><span class="org-cert-tools"><button type="button" class="org-link-button" data-select="all">Select all</button><button type="button" class="org-link-button" data-select="none">None</button></span></div>
+{% for error in form.students.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+<div class="org-cert-list">{% for row in rows %}<label class="org-cert-row"><input type="checkbox" name="students" value="{{ row.user.pk }}"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span class="org-cert-who"><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.member.group|default:"No batch" }}</small></span><span class="org-cert-facts"><span>{{ row.tasks_approved }}/{{ row.tasks_given }} tasks approved</span><span>{% if row.attendance is not None %}{{ row.attendance }}% attendance{% else %}No classes{% endif %}</span></span></label>
+{% empty %}<p class="org-empty-line">No students{% if group %} in {{ group }}{% endif %}.</p>{% endfor %}</div></div>
+<div class="org-form-actions"><button class="button primary">Issue certificates</button><small class="muted">Students are notified, and it shows on their public profile unless they hide it.</small></div>
+</form>
+</details>
+<section class="card org-table-card"><div class="card-heading pad"><h2>Issued</h2></div>
+<div class="org-table" role="table" aria-label="Issued certificates"><div class="org-tr head certs" role="row"><span role="columnheader">Student</span><span role="columnheader">Certificate</span><span role="columnheader">Code</span><span role="columnheader">Issued</span><span role="columnheader"><span class="fin-sr">Actions</span></span></div>
+{% for certificate in issued %}<div class="org-tr certs" role="row"><span role="cell" class="org-who"><span class="avatar avatar-sm {{ certificate.student|avatar_tone }}">{{ certificate.student|initials }}</span><span><b>{{ certificate.student.get_full_name|default:certificate.student.email }}</b></span></span><span role="cell"><b>{{ certificate.title }}</b>{% if certificate.revoked_at %}<small class="org-missed">Revoked {{ certificate.revoked_at|date:"M j" }}</small>{% endif %}</span><span role="cell"><a href="{% url 'organizations:certificate' certificate.code %}" target="_blank" rel="noopener">{{ certificate.code }}</a></span><span role="cell">{{ certificate.issued_at|date:"M j, Y" }}</span>
+<span role="cell">{% if not certificate.revoked_at %}<details class="fin-reject"><summary>Revoke</summary><form method="post" class="org-inline-form" data-confirm="Revoke {{ certificate.code }}? Its public page will say it was revoked.">{% csrf_token %}<input type="hidden" name="action" value="revoke"><input type="hidden" name="certificate" value="{{ certificate.pk }}"><input name="reason" maxlength="200" placeholder="Reason (optional)" aria-label="Reason"><button class="button danger">Revoke</button></form></details>{% endif %}</span></div>
+{% empty %}<p class="org-empty-line pad">No certificates issued yet.</p>{% endfor %}
+</div></section>
+{% else %}
+<section class="org-cert-grid">{% for certificate in certificates %}<article class="card org-cert-card{% if certificate.revoked_at %} revoked{% endif %}"><span class="org-cert-seal">{% icon "award" 22 %}</span><b>{{ certificate.title }}</b><small>{{ certificate.issued_at|date:"M j, Y" }} · {{ certificate.code }}</small>
+{% if certificate.revoked_at %}<em class="org-pill missed">Revoked</em>{% else %}<div class="org-cert-actions"><a class="button primary" href="{% url 'organizations:certificate' certificate.code %}">View and print</a><form method="post">{% csrf_token %}<input type="hidden" name="certificate" value="{{ certificate.pk }}"><input type="hidden" name="show" value="{% if certificate.show_on_profile %}0{% else %}1{% endif %}"><button class="button soft">{% if certificate.show_on_profile %}Hide from profile{% else %}Show on profile{% endif %}</button></form></div>{% endif %}</article>
+{% empty %}<section class="card org-empty">{% icon "award" 28 %}<h2>No certificates yet</h2><p class="muted">When {{ organization.name }} awards you a certificate, it appears here and on your public profile.</p></section>{% endfor %}</section>
+{% endif %}
+</div>{% endblock %}
