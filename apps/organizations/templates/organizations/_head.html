@@ -8,6 +8,7 @@
 <a href="{% url 'organizations:members' organization.slug %}"{% if org_section == 'members' %} aria-current="page"{% endif %}>{% icon "users" 16 %}Students</a>{% endif %}
 <a href="{% url 'organizations:channel' organization.slug %}"{% if org_section == 'channel' %} aria-current="page"{% endif %}>{% icon "book-open" 16 %}Channel</a>
 <a href="{% url 'organizations:tasks' organization.slug %}"{% if org_section == 'tasks' %} aria-current="page"{% endif %}>{% icon "check-circle" 16 %}Tasks</a>
+<a href="{% url 'organizations:classes' organization.slug %}"{% if org_section == 'classes' %} aria-current="page"{% endif %}>{% icon "video" 16 %}Live classes</a>
 {% if member.is_staff %}<a href="{% url 'organizations:invite' organization.slug %}"{% if org_section == 'invite' %} aria-current="page"{% endif %}>{% icon "user-plus" 16 %}Invite</a>{% endif %}
 {% if member.role == 'owner' %}<a href="{% url 'organizations:settings' organization.slug %}"{% if org_section == 'settings' %} aria-current="page"{% endif %}>{% icon "sliders" 16 %}Settings</a>{% endif %}
 </nav>

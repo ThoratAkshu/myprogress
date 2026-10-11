@@ -1,7 +1,9 @@
+from datetime import timedelta
 from django import forms
+from django.utils import timezone
 from django.core.validators import validate_email
 from apps.core.models import Repository
-from .models import MAX_FILE_BYTES, ChannelPost, Membership, Organization, Submission, Task
+from .models import MAX_FILE_BYTES, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
@@ -101,3 +103,25 @@ class ReviewForm(forms.Form):
         if score is not None and score > self.points:
             raise forms.ValidationError(f"The most this task is worth is {self.points}.")
         return score
+class LiveClassForm(forms.ModelForm):
+    starts_at = forms.DateTimeField(label="Starts", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
+    class Meta:
+        model = LiveClass
+        fields = ["title", "starts_at", "duration_minutes", "meeting_link", "group", "agenda"]
+        labels = {"duration_minutes": "Length (minutes)", "meeting_link": "Meeting link (optional)", "group": "Only for batch (optional)", "agenda": "Agenda (optional)"}
+        widgets = {"title": forms.TextInput(attrs={"placeholder": "Live: building a REST API"}), "agenda": forms.Textarea(attrs={"rows": 3, "placeholder": "What we'll cover, and anything to prepare."}), "meeting_link": forms.URLInput(attrs={"placeholder": "https://meet.google.com/... or leave empty for a free Jitsi room"})}
+    def clean_starts_at(self):
+        starts_at = self.cleaned_data["starts_at"]
+        if starts_at < timezone.now() - timedelta(hours=1):
+            raise forms.ValidationError("Pick a time that hasn't passed.")
+        return starts_at
+    def clean_duration_minutes(self):
+        minutes = self.cleaned_data["duration_minutes"]
+        if not 10 <= minutes <= 480:
+            raise forms.ValidationError("Classes can run from 10 minutes to 8 hours.")
+        return minutes
+    def clean_meeting_link(self):
+        link = self.cleaned_data.get("meeting_link", "")
+        if link and not link.startswith("https://"):
+            raise forms.ValidationError("Meeting links must start with https://.")
+        return link

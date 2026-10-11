@@ -1,5 +1,6 @@
 """Organizations: institutes, colleges and teams whose members follow a private channel, do tasks, and whose growth teachers can see."""
 import secrets
+from datetime import timedelta
 import uuid
 from pathlib import PurePosixPath
 from django.contrib.auth.models import User
@@ -126,3 +127,44 @@ class Submission(models.Model):
     @property
     def file_name(self):
         return PurePosixPath(self.file.name).name if self.file else ""
+class LiveClass(models.Model):
+    """A scheduled live lecture. Students join through MyProgress, which records attendance, then go to the meeting."""
+    JOIN_OPENS_MINUTES = 15
+    LATE_AFTER_MINUTES = 10
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="live_classes")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    title = models.CharField(max_length=160)
+    agenda = models.TextField(blank=True)
+    starts_at = models.DateTimeField()
+    duration_minutes = models.PositiveSmallIntegerField(default=60)
+    meeting_link = models.URLField(blank=True, help_text="Google Meet, Zoom or any https link; empty makes a free Jitsi room")
+    group = models.CharField(max_length=60, blank=True, help_text="Only this batch; empty means everyone")
+    recording = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reminded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["starts_at"]
+    def __str__(self):
+        return self.title
+    def save(self, *args, **kwargs):
+        if not self.meeting_link:
+            self.meeting_link = f"https://meet.jit.si/MyProgress-{self.organization.slug}-{secrets.token_hex(4)}"
+        super().save(*args, **kwargs)
+    @property
+    def ends_at(self):
+        return self.starts_at + timedelta(minutes=self.duration_minutes)
+    def state(self, now):
+        if now >= self.ends_at:
+            return "over"
+        if now >= self.starts_at:
+            return "live"
+        return "open" if now >= self.starts_at - timedelta(minutes=self.JOIN_OPENS_MINUTES) else "upcoming"
+class Attendance(models.Model):
+    STATUSES = [("present", "Present"), ("late", "Late"), ("absent", "Absent")]
+    live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name="attendance")
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name="class_attendance")
+    status = models.CharField(max_length=10, choices=STATUSES)
+    joined_at = models.DateTimeField(null=True, blank=True)
+    marked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", help_text="A teacher who set it by hand")
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["live_class", "student"], name="one_attendance_per_class")]

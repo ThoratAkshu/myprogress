@@ -1,0 +1,36 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ live.title }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<a class="org-back" href="{% url 'organizations:classes' organization.slug %}">{% icon "chevron-right" 14 %}All live classes</a>
+<section class="card org-live">
+<div class="org-live-when"><span class="org-date lg{% if state == 'live' %} live{% endif %}"><b>{{ live.starts_at|date:"j" }}</b><small>{{ live.starts_at|date:"M" }}</small></span>
+<div><span class="kicker">{% if state == 'live' %}Live now{% elif state == 'over' %}Ended{% else %}Live class{% endif %}{% if live.group %} · {{ live.group }}{% endif %}</span><h2>{{ live.title }}</h2><p class="muted">{{ live.starts_at|date:"l, M j · g:i a" }} to {{ live.ends_at|date:"g:i a" }} ({{ live.duration_minutes }} min)</p></div></div>
+{% if live.agenda %}<p class="org-agenda">{{ live.agenda|linebreaksbr }}</p>{% endif %}
+<div class="org-live-actions">
+{% if state == 'over' %}{% if live.recording %}<a class="button primary" href="{% url 'learning:detail' live.recording.pk %}">{% icon "play" 16 %}Watch the recording</a>{% else %}<span class="muted">This class has ended.{% if not member.is_staff %} The recording will appear here if your teacher shares it.{% endif %}</span>{% endif %}
+{% elif state == 'upcoming' %}<span class="org-pill todo">{% icon "clock" 14 %}Join opens 15 minutes before it starts</span>
+{% else %}<a class="button primary large" href="{% url 'organizations:join_class' organization.slug live.pk %}" target="_blank" rel="noopener">{% icon "video" 18 %}{% if member.is_staff %}Start the class{% else %}Join the class{% endif %}</a>{% if not member.is_staff %}<small class="muted">Joining marks you present{% if state == 'live' %}, or late after the first 10 minutes{% endif %}.</small>{% endif %}{% endif %}
+{% if not member.is_staff and mine %}<em class="org-pill {% if mine.status == 'absent' %}missed{% else %}approved{% endif %}">You were {{ mine.get_status_display|lower }}</em>{% endif %}
+</div>
+{% if member.is_staff %}<p class="muted small">Meeting link: <a href="{{ live.meeting_link }}" target="_blank" rel="noopener">{{ live.meeting_link|truncatechars:70 }}</a>{% if "meet.jit.si" in live.meeting_link %}. Jitsi may ask the first person in the room to sign in, so start it a few minutes early.{% endif %}</p>{% endif %}
+</section>
+{% if member.is_staff %}
+<div class="org-grid">
+<form method="post" class="card org-roster">{% csrf_token %}<input type="hidden" name="action" value="attendance">
+<div class="card-heading"><h2>Attendance</h2><span class="muted">{{ came }} of {{ roster|length }} attended</span></div>
+{% for row in roster %}{% with mark=row.attendance student=row.member.user %}<div class="org-roster-row"><span class="avatar avatar-sm {{ student|avatar_tone }}">{{ student|initials }}</span><span class="org-roster-name"><b>{{ student.get_full_name|default:student.email }}</b><small>{% if mark.joined_at %}Joined {{ mark.joined_at|date:"g:i a" }}{% elif mark.marked_by %}Marked by a teacher{% else %}Not joined{% endif %}</small></span>
+<span class="org-segment">{% for value, label in statuses %}<label><input type="radio" name="status-{{ student.pk }}" value="{{ value }}"{% if mark.status == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</span></div>{% endwith %}
+{% empty %}<p class="org-empty-line">No students in this class.</p>{% endfor %}
+{% if roster %}<div class="org-form-actions"><button class="button primary">Save attendance</button></div>{% endif %}
+</form>
+<div class="org-stack">
+{% if state == 'over' %}<form method="post" class="card" data-confirm="Mark everyone who didn't join as absent?">{% csrf_token %}<input type="hidden" name="action" value="absent_rest"><h2>Finish the register</h2><p class="muted">Students who never joined are counted absent in attendance figures either way; this records it explicitly.</p><button class="button soft">Mark the rest absent</button></form>{% endif %}
+<form method="post" class="card org-form">{% csrf_token %}<input type="hidden" name="action" value="recording"><h2>Recording</h2><p class="muted">Record the class with the lecture studio or upload it there, then attach it here.</p>
+<label>Lecture<select name="recording"><option value="">No recording</option>{% for post in recordings %}<option value="{{ post.pk }}"{% if live.recording_id == post.pk %} selected{% endif %}>{{ post.title }}</option>{% endfor %}</select></label>
+<div class="org-form-actions"><button class="button soft">Save</button><a href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">Record or upload one</a></div></form>
+<form method="post" action="{% url 'organizations:cancel_class' organization.slug live.pk %}" data-confirm="Cancel {{ live.title }}? Its attendance is deleted too.">{% csrf_token %}<button class="org-link-button danger">Cancel this class</button></form>
+</div>
+</div>
+{% endif %}
+</div>{% endblock %}

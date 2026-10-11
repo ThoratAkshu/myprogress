@@ -1,0 +1,20 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Live classes · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% if member.is_staff %}
+<details class="card org-new-task" id="new-class"{% if form.errors %} open{% endif %}><summary>{% icon "video" 18 %}<b>Schedule a live class</b><small>Students join from here, so attendance is taken for you</small></summary>
+<form method="post" class="org-form">{% csrf_token %}
+<div class="org-form-row">{% for field in form %}{% if field.name == 'group' %}<label>{{ field.label }}<input name="group" list="org-groups" value="{{ field.value|default:'' }}" maxlength="60"><datalist id="org-groups">{% for value in org_groups %}<option value="{{ value }}">{% endfor %}</datalist></label>{% else %}<label{% if field.name == 'title' or field.name == 'agenda' %} class="span"{% endif %}>{{ field.label }}{{ field }}{% if field.name == 'meeting_link' %}<small class="muted">Leave empty and a free Jitsi room is created for this class.</small>{% endif %}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}</div>
+<div class="org-form-actions"><button class="button primary">Schedule class</button><small class="muted">Members are told now and reminded 15 minutes before.</small></div>
+</form></details>{% endif %}
+<section class="card"><div class="card-heading"><h2>Coming up</h2></div>
+{% for live in upcoming %}<a class="org-line" href="{% url 'organizations:live_class' organization.slug live.pk %}"><span class="org-date{% if live.current == 'live' %} live{% endif %}"><b>{{ live.starts_at|date:"j" }}</b><small>{{ live.starts_at|date:"M" }}</small></span><span><b>{{ live.title }}</b><small>{{ live.starts_at|date:"D, g:i a" }} · {{ live.duration_minutes }} min{% if live.group %} · {{ live.group }}{% endif %}</small></span>{% if live.current == 'live' %}<em class="org-pill live">Live now</em>{% elif live.current == 'open' %}<em class="org-pill todo">Opening</em>{% endif %}{% icon "chevron-right" 16 %}</a>
+{% empty %}<p class="org-empty-line">{% icon "calendar" 16 %}No classes scheduled.</p>{% endfor %}
+</section>
+<section class="card"><div class="card-heading"><h2>Past classes</h2></div>
+{% for live in past %}<a class="org-line" href="{% url 'organizations:live_class' organization.slug live.pk %}"><span><b>{{ live.title }}</b><small>{{ live.starts_at|date:"D, M j · g:i a" }}{% if live.recording %} · Recording available{% endif %}</small></span>
+{% if member.is_staff %}<em class="org-pill">{{ live.came }}/{{ live.expected }} attended</em>{% else %}<em class="org-pill {% if live.mine == 'absent' %}missed{% else %}approved{% endif %}">{% if live.mine == 'present' %}Present{% elif live.mine == 'late' %}Late{% else %}Absent{% endif %}</em>{% endif %}{% icon "chevron-right" 16 %}</a>
+{% empty %}<p class="org-empty-line">No past classes yet.</p>{% endfor %}
+</section>
+</div>{% endblock %}

@@ -15,13 +15,14 @@
 </form>
 <section class="card org-table-card">
 <div class="org-table" role="table" aria-label="Student growth">
-<div class="org-tr head" role="row"><span role="columnheader">Student</span><span role="columnheader">Score</span><span role="columnheader">Coding (30 days)</span><span role="columnheader">Projects · posts</span><span role="columnheader">Tasks</span><span role="columnheader">Last active</span></div>
+<div class="org-tr head" role="row"><span role="columnheader">Student</span><span role="columnheader">Score</span><span role="columnheader">Coding (30 days)</span><span role="columnheader">Projects · posts</span><span role="columnheader">Tasks</span><span role="columnheader">Attendance</span><span role="columnheader">Last active</span></div>
 {% for row in rows %}<a class="org-tr" role="row" href="{% url 'organizations:member' organization.slug row.user.pk %}">
 <span role="cell" class="org-who"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.member.group %}{{ row.member.group }} · {% endif %}{% if row.profile.handle %}@{{ row.profile.handle }}{% else %}{{ row.user.email }}{% endif %}</small></span></span>
 <span role="cell"><b class="org-score">{{ row.score }}</b>{% if row.rank %}<small>#{{ row.rank }}</small>{% endif %}</span>
 <span role="cell"><span><b>{{ row.coding_days }}</b> day{{ row.coding_days|pluralize }}</span>{% if row.streak %}<small>{% icon "zap" 12 %}{{ row.streak }}-day streak</small>{% endif %}<i class="org-meter"><i style="width:{% widthratio row.coding_days 30 100 %}%"></i></i></span>
 <span role="cell">{{ row.projects }} · {{ row.posts }}</span>
 <span role="cell"><b>{{ row.tasks_submitted }}/{{ row.tasks_given }}</b>{% if row.task_percent is not None %}<small>{{ row.task_percent }}% score</small>{% endif %}{% if row.tasks_missed %}<small class="org-missed">{{ row.tasks_missed }} missed</small>{% endif %}</span>
+<span role="cell">{% if row.attendance is not None %}<b class="{% if row.attendance < 75 %}org-missed{% endif %}">{{ row.attendance }}%</b><small>{{ row.classes_attended }}/{{ row.classes_held }} classes</small>{% else %}<small>No classes yet</small>{% endif %}</span>
 <span role="cell">{% if row.last_active %}<span class="{% if row.last_active < week_ago %}org-stale{% endif %}">{{ row.last_active|timesince }} ago</span>{% else %}<span class="org-stale">Not yet</span>{% endif %}</span>
 </a>{% empty %}<p class="org-empty-line pad">{% if query or group %}No students match.{% else %}No students yet. <a href="{% url 'organizations:invite' organization.slug %}">Invite them</a>.{% endif %}</p>{% endfor %}
 </div></section>

@@ -9,6 +9,7 @@
 </ol></section>{% endif %}
 <section class="org-kpis">
 <a class="org-kpi" href="{% url 'organizations:members' organization.slug %}"><small>Students</small><b>{{ stats.students }}</b><span>{{ stats.active_week }} active this week</span></a>
+<a class="org-kpi" href="{% url 'organizations:classes' organization.slug %}"><small>Attendance</small><b>{% if stats.attendance is not None %}{{ stats.attendance }}%{% else %}—{% endif %}</b><span>Average across live classes</span></a>
 <div class="org-kpi"><small>Average score</small><b>{{ stats.average_score }}</b><span>Out of 100, from real work</span></div>
 <a class="org-kpi" href="{% url 'organizations:tasks' organization.slug %}"><small>Tasks handed in</small><b>{% if stats.completion is not None %}{{ stats.completion }}%{% else %}—{% endif %}</b><span>Of everything assigned so far</span></a>
 <a class="org-kpi{% if stats.to_review_count %} attention{% endif %}" href="{% url 'organizations:tasks' organization.slug %}"><small>To review</small><b>{{ stats.to_review_count }}</b><span>Submissions waiting for you</span></a>
@@ -21,6 +22,7 @@
 {% empty %}<p class="org-empty-line">{% icon "check-circle" 16 %}Nothing waiting for review.</p>{% endfor %}
 </section>
 <section class="card"><div class="card-heading"><h2>Coming up</h2><a href="{% url 'organizations:tasks' organization.slug %}#new-task">New task</a></div>
+{% if stats.next_class %}<a class="org-line" href="{% url 'organizations:live_class' organization.slug stats.next_class.pk %}"><span class="org-date live"><b>{{ stats.next_class.starts_at|date:"j" }}</b><small>{{ stats.next_class.starts_at|date:"M" }}</small></span><span><b>{% icon "video" 14 %} {{ stats.next_class.title }}</b><small>Live class · {{ stats.next_class.starts_at|date:"D, g:i a" }}</small></span>{% icon "chevron-right" 16 %}</a>{% endif %}
 {% for task in stats.upcoming %}<a class="org-line" href="{% url 'organizations:task' organization.slug task.pk %}"><span class="org-date"><b>{{ task.due_at|date:"j" }}</b><small>{{ task.due_at|date:"M" }}</small></span><span><b>{{ task.title }}</b><small>Due {{ task.due_at|date:"D, g:i a" }}{% if task.group %} · {{ task.group }}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>
 {% empty %}<p class="org-empty-line">No tasks with an upcoming due date.</p>{% endfor %}
 </section>

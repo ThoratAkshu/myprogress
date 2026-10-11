@@ -1,0 +1,8 @@
+from django.core.management.base import BaseCommand
+from apps.organizations import services
+class Command(BaseCommand):
+    help = "Organization jobs to run every few minutes: reminds members 15 minutes before a live class."
+    def handle(self, **options):
+        reminded = services.send_class_reminders()
+        if reminded:
+            self.stdout.write(f"Sent reminders for {reminded} class{'es' if reminded != 1 else ''}.")

@@ -100,6 +100,7 @@ compressed.
 |---|---|---|
 | Daily | `python manage.py refresh_scores` | Scores use a 90-day window and must decay over time; it also saves each day's ranks so Rankings can show weekly movement and climbers |
 | After restores | `python manage.py refresh_languages` | Rebuilds language data from repositories |
+| Every 5 minutes | `python manage.py run_organization_jobs` | Reminds organization members 15 minutes before a live class |
 | Daily | `python manage.py run_payment_cycle` | Creator payments, like YouTube's monthly cycle: closes last month on the 1st and tells creators what they earned, prepares payments on payment day (default the 21st), sends them through RazorpayX when auto-send is on, and checks payments still sending |
 
 ### Creator payments

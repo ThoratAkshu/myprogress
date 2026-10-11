@@ -21,10 +21,10 @@ from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
 from apps.notifications.services import notify
 from . import services
-from .forms import ChannelPostForm, InviteForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
-from .models import ChannelPost, ChannelSeen, Invite, Membership, Organization, Submission, Task
+from .forms import ChannelPostForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
+from .models import Attendance, ChannelPost, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
-GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
+GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
 def _organization(request, slug, staff=False):
     """The organization and the viewer's membership; 404 for outsiders, so private organizations stay invisible."""
@@ -81,9 +81,9 @@ def members_view(request, slug):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{organization.slug}-students-{timezone.localdate():%Y-%m-%d}.csv"'
         writer = csv.writer(response)
-        writer.writerow(["name", "email", "batch", "score", "rank", "coding_days_30", "streak", "projects", "public_posts", "tasks_given", "tasks_submitted", "tasks_approved", "tasks_missed", "task_score_percent", "last_active"])
+        writer.writerow(["name", "email", "batch", "score", "rank", "coding_days_30", "streak", "projects", "public_posts", "tasks_given", "tasks_submitted", "tasks_approved", "tasks_missed", "task_score_percent", "classes_held", "classes_attended", "attendance_percent", "last_active"])
         for row in rows:
-            writer.writerow([services.display_name(row["user"]), row["user"].email, row["member"].group, row["score"], row["rank"] or "", row["coding_days"], row["streak"], row["projects"], row["posts"], row["tasks_given"], row["tasks_submitted"], row["tasks_approved"], row["tasks_missed"], "" if row["task_percent"] is None else row["task_percent"], row["last_active"].strftime("%Y-%m-%d") if row["last_active"] else ""])
+            writer.writerow([services.display_name(row["user"]), row["user"].email, row["member"].group, row["score"], row["rank"] or "", row["coding_days"], row["streak"], row["projects"], row["posts"], row["tasks_given"], row["tasks_submitted"], row["tasks_approved"], row["tasks_missed"], "" if row["task_percent"] is None else row["task_percent"], row["classes_held"], row["classes_attended"], "" if row["attendance"] is None else row["attendance"], row["last_active"].strftime("%Y-%m-%d") if row["last_active"] else ""])
         return response
     staff = Membership.objects.filter(organization=organization, status="active", role__in=["owner", "teacher"]).select_related("user__profile")
     pending = Membership.objects.filter(organization=organization, status="pending").select_related("user__profile")
@@ -219,7 +219,7 @@ def channel_view(request, slug):
     lesson_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "lesson"]
     watched = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
     return _render(request, "channel.html", organization, member, "channel", {
-        "form": form, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
+        "next_class": services.next_class(organization, member), "now": timezone.now(), "form": form, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
         "member_count": Membership.objects.filter(organization=organization, status="active").count(),
     })
 @login_required(login_url="landing:home")
@@ -357,3 +357,93 @@ def settings_view(request, slug):
             messages.success(request, "Settings saved.")
             return redirect("organizations:settings", slug=slug)
     return _render(request, "settings.html", organization, member, "settings", {"form": form})
+
+@login_required(login_url="landing:home")
+def classes_view(request, slug):
+    organization, member = _organization(request, slug)
+    form = LiveClassForm(request.POST or None) if member.is_staff else None
+    if request.method == "POST":
+        if not member.is_staff:
+            raise Http404
+        if form.is_valid():
+            live = form.save(commit=False)
+            live.organization, live.created_by = organization, request.user
+            live.save()
+            when = timezone.localtime(live.starts_at)
+            services.notify_members(organization, request.user, f"Live class scheduled: {live.title}, {when:%a} {when:%b} {when.day} at {when.strftime('%I:%M %p').lstrip('0')}", reverse("organizations:live_class", args=[slug, live.pk]), live.group)
+            messages.success(request, "Class scheduled. Members have been told, and they'll get a reminder 15 minutes before.")
+            return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    now = timezone.now()
+    classes = list(services.classes_for(organization, member).select_related("recording"))
+    for live in classes:
+        live.current = live.state(now)
+    upcoming = [live for live in classes if live.current != "over"]
+    past = sorted([live for live in classes if live.current == "over"], key=lambda live: live.starts_at, reverse=True)[:30]
+    if member.is_staff:
+        counts = dict(Attendance.objects.filter(live_class__in=past, status__in=["present", "late"]).values("live_class_id").annotate(total=Count("id")).values_list("live_class_id", "total"))
+        students = list(services.students_of(organization))
+        for live in past:
+            live.came = counts.get(live.pk, 0)
+            live.expected = len([student for student in students if not live.group or student.group.lower() == live.group.lower()])
+    else:
+        mine = dict(Attendance.objects.filter(live_class__in=past, student=request.user).values_list("live_class_id", "status"))
+        for live in past:
+            live.mine = mine.get(live.pk, "absent")
+    return _render(request, "classes.html", organization, member, "classes", {"form": form, "upcoming": upcoming, "past": past})
+@login_required(login_url="landing:home")
+def class_detail_view(request, slug, class_id):
+    organization, member = _organization(request, slug)
+    live = get_object_or_404(services.classes_for(organization, member).select_related("recording"), pk=class_id)
+    now = timezone.now()
+    if request.method == "POST":
+        if not member.is_staff:
+            raise Http404
+        action = request.POST.get("action")
+        if action == "attendance":
+            for row in services.class_roster(live):
+                status = request.POST.get(f"status-{row['member'].user_id}", "")
+                if status in {"present", "late", "absent"} and (not row["attendance"] or row["attendance"].status != status):
+                    Attendance.objects.update_or_create(live_class=live, student=row["member"].user, defaults={"status": status, "marked_by": request.user})
+            messages.success(request, "Attendance saved.")
+        elif action == "absent_rest":
+            roster = services.class_roster(live)
+            Attendance.objects.bulk_create([Attendance(live_class=live, student=row["member"].user, status="absent", marked_by=request.user) for row in roster if not row["attendance"]], ignore_conflicts=True)
+            messages.success(request, "Everyone who didn't join is marked absent.")
+        elif action == "recording":
+            recording = LearningPost.objects.filter(organization=organization, pk=request.POST.get("recording") or 0).first()
+            live.recording = recording
+            live.save(update_fields=["recording"])
+            if recording:
+                services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[recording.pk]), live.group)
+            messages.success(request, "Recording attached." if recording else "Recording removed.")
+        return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    context = {"live": live, "state": live.state(now), "now": now}
+    if member.is_staff:
+        roster = services.class_roster(live)
+        context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30]})
+    else:
+        context["mine"] = Attendance.objects.filter(live_class=live, student=request.user).first()
+    return _render(request, "class_detail.html", organization, member, "classes", context)
+@login_required(login_url="landing:home")
+def class_join_view(request, slug, class_id):
+    """Students join through here so attendance is recorded, then go on to the meeting."""
+    organization, member = _organization(request, slug)
+    live = get_object_or_404(services.classes_for(organization, member), pk=class_id)
+    state = live.state(timezone.now())
+    if state == "upcoming":
+        messages.info(request, f"The class opens {LiveClass.JOIN_OPENS_MINUTES} minutes before it starts.")
+        return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    if state == "over":
+        messages.info(request, "This class has ended." + (" The recording is below." if live.recording_id else ""))
+        return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    if not member.is_staff:
+        services.join_class(live, request.user)
+    return redirect(live.meeting_link)
+@login_required(login_url="landing:home")
+@require_POST
+def class_delete_view(request, slug, class_id):
+    organization, member = _organization(request, slug, staff=True)
+    live = get_object_or_404(LiveClass, pk=class_id, organization=organization)
+    live.delete()
+    messages.success(request, "Class cancelled.")
+    return redirect("organizations:classes", slug=slug)

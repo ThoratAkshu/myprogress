@@ -12,6 +12,7 @@
 <div class="org-kpi"><small>Score</small><b>{{ row.score }}</b><span>{% if row.rank %}Rank #{{ row.rank }} on MyProgress{% else %}Not ranked yet{% endif %}</span></div>
 <div class="org-kpi"><small>Coding days</small><b>{{ row.coding_days }}</b><span>In the last 30 days{% if row.streak %} · {{ row.streak }}-day streak{% endif %}</span></div>
 <div class="org-kpi"><small>Projects with code</small><b>{{ row.projects }}</b><span>{{ row.posts }} public post{{ row.posts|pluralize }}</span></div>
+<div class="org-kpi"><small>Attendance</small><b>{% if row.attendance is not None %}{{ row.attendance }}%{% else %}—{% endif %}</b><span>{{ row.classes_attended }} of {{ row.classes_held }} live classes</span></div>
 <div class="org-kpi"><small>Tasks</small><b>{{ row.tasks_submitted }}/{{ row.tasks_given }}</b><span>{% if row.task_percent is not None %}{{ row.task_percent }}% average score{% else %}No scores yet{% endif %}{% if row.tasks_missed %} · {{ row.tasks_missed }} missed{% endif %}</span></div>
 </section>{% endif %}
 <div class="org-grid">

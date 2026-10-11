@@ -22,4 +22,8 @@ urlpatterns = [
     path("<slug:slug>/submissions/<int:submission_id>/review/", views.review_view, name="review"),
     path("<slug:slug>/submissions/<int:submission_id>/file/", views.submission_file_view, name="submission_file"),
     path("<slug:slug>/settings/", views.settings_view, name="settings"),
+    path("<slug:slug>/live/", views.classes_view, name="classes"),
+    path("<slug:slug>/live/<int:class_id>/", views.class_detail_view, name="live_class"),
+    path("<slug:slug>/live/<int:class_id>/join/", views.class_join_view, name="join_class"),
+    path("<slug:slug>/live/<int:class_id>/cancel/", views.class_delete_view, name="cancel_class"),
 ]

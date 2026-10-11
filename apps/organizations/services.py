@@ -11,7 +11,7 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
-from .models import ChannelPost, Invite, Membership, Organization, Submission, Task
+from .models import Attendance, ChannelPost, Invite, LiveClass, Membership, Organization, Submission, Task
 # What teachers can see about a student, shown to students before they join.
 SHARED_WITH_TEACHERS = ["Your score, rank and coding days", "How many projects and public posts you have", "Your task submissions and scores", "When you were last active"]
 def membership(organization, user):
@@ -117,6 +117,10 @@ def student_growth(organization, group="", query="", sort="score"):
     projects = dict(Repository.objects.filter(owner_id__in=ids).exclude(languages={}).values("owner_id").annotate(total=Count("id")).values_list("owner_id", "total"))
     posts = dict(LearningPost.objects.filter(author_id__in=ids, is_public=True).values("author_id").annotate(total=Count("id")).values_list("author_id", "total"))
     tasks = list(Task.objects.filter(organization=organization))
+    held = [live for live in LiveClass.objects.filter(organization=organization, starts_at__lt=now) if live.ends_at <= now]
+    attended = defaultdict(set)
+    for user_id, class_id in Attendance.objects.filter(live_class__in=held, student_id__in=ids, status__in=["present", "late"]).values_list("student_id", "live_class_id"):
+        attended[user_id].add(class_id)
     submissions = defaultdict(list)
     for submission in Submission.objects.filter(task__organization=organization, student_id__in=ids).select_related("task"):
         submissions[submission.student_id].append(submission)
@@ -127,7 +131,10 @@ def student_growth(organization, group="", query="", sort="score"):
         due = [task for task in given if task.due_at and task.due_at < now]
         scored = [submission for submission in done.values() if submission.score is not None and submission.task.points]
         profile = getattr(member.user, "profile", None)
+        their_classes = [live.pk for live in held if not live.group or live.group.lower() == member.group.lower()]
+        came = len([class_id for class_id in their_classes if class_id in attended[member.user_id]])
         rows.append({
+            "classes_held": len(their_classes), "classes_attended": came, "attendance": round(came * 100 / len(their_classes)) if their_classes else None,
             "member": member, "user": member.user, "profile": profile, "score": profile.score if profile else 0, "rank": profile.rank if profile else None,
             "coding_days": len({day for day in code_days[member.user_id] if day > today - timedelta(days=30)}), "streak": _streak(code_days[member.user_id], today),
             "projects": projects.get(member.user_id, 0), "posts": posts.get(member.user_id, 0),
@@ -136,7 +143,7 @@ def student_growth(organization, group="", query="", sort="score"):
             "task_percent": round(sum(submission.score * 100 / submission.task.points for submission in scored) / len(scored)) if scored else None,
             "last_active": last_active.get(member.user_id),
         })
-    keys = {"score": lambda row: (-row["score"], display_name(row["user"]).lower()), "name": lambda row: display_name(row["user"]).lower(), "active": lambda row: -(row["last_active"].timestamp() if row["last_active"] else 0), "tasks": lambda row: (-(row["tasks_submitted"]), row["tasks_missed"]), "coding": lambda row: -row["coding_days"]}
+    keys = {"score": lambda row: (-row["score"], display_name(row["user"]).lower()), "name": lambda row: display_name(row["user"]).lower(), "active": lambda row: -(row["last_active"].timestamp() if row["last_active"] else 0), "tasks": lambda row: (-(row["tasks_submitted"]), row["tasks_missed"]), "coding": lambda row: -row["coding_days"], "attendance": lambda row: -(row["attendance"] if row["attendance"] is not None else -1)}
     rows.sort(key=keys.get(sort, keys["score"]))
     return rows
 def overview(organization):
@@ -145,7 +152,9 @@ def overview(organization):
     week_ago = timezone.now() - timedelta(days=7)
     given = sum(row["tasks_given"] for row in rows)
     submitted = sum(row["tasks_submitted"] for row in rows)
+    with_classes = [row["attendance"] for row in rows if row["attendance"] is not None]
     return {
+        "attendance": round(sum(with_classes) / len(with_classes)) if with_classes else None, "next_class": next_class(organization, None),
         "students": len(rows), "active_week": len([row for row in rows if row["last_active"] and row["last_active"] >= week_ago]),
         "average_score": round(sum(row["score"] for row in rows) / len(rows)) if rows else 0,
         "completion": round(submitted * 100 / given) if given else None,
@@ -165,5 +174,41 @@ def student_summary(user):
         submitted = set(Submission.objects.filter(task__organization=organization, student=user).values_list("task_id", flat=True))
         open_tasks = sorted([task for task in given if task.id not in submitted], key=lambda task: (task.due_at is None, task.due_at or timezone.now()))
         latest = visible_to(ChannelPost.objects.filter(organization=organization), member).first()
-        summary.append({"organization": organization, "member": member, "open_tasks": open_tasks[:3], "open_count": len(open_tasks), "latest": latest})
+        summary.append({"organization": organization, "member": member, "open_tasks": open_tasks[:3], "open_count": len(open_tasks), "latest": latest, "next_class": next_class(organization, member)})
     return summary
+
+def classes_for(organization, member):
+    return visible_to(LiveClass.objects.filter(organization=organization), member) if member else LiveClass.objects.filter(organization=organization)
+def next_class(organization, member):
+    """The class that's live now or coming up next."""
+    now = timezone.now()
+    for live in classes_for(organization, member).filter(starts_at__gte=now - timedelta(hours=12)).order_by("starts_at")[:20]:
+        if live.ends_at > now:
+            return live
+    return None
+def join_class(live_class, user):
+    """Record a student's attendance when they join: present on time, late after the grace period. Teachers' marks win."""
+    now = timezone.now()
+    status = "late" if now > live_class.starts_at + timedelta(minutes=LiveClass.LATE_AFTER_MINUTES) else "present"
+    attendance, created = Attendance.objects.get_or_create(live_class=live_class, student=user, defaults={"status": status, "joined_at": now})
+    if not created and attendance.joined_at is None and attendance.marked_by is None:
+        attendance.status, attendance.joined_at = status, now
+        attendance.save(update_fields=["status", "joined_at"])
+    return attendance
+def class_roster(live_class):
+    """Every student expected at a class, with their attendance if any."""
+    students = students_of(live_class.organization, live_class.group)
+    marks = {mark.student_id: mark for mark in live_class.attendance.all()}
+    return [{"member": member, "attendance": marks.get(member.user_id)} for member in students]
+def send_class_reminders():
+    """Tell members a class starts soon; each class is reminded once. Returns how many classes were reminded."""
+    now = timezone.now()
+    due = LiveClass.objects.filter(reminded_at__isnull=True, starts_at__gt=now, starts_at__lte=now + timedelta(minutes=LiveClass.JOIN_OPENS_MINUTES)).select_related("organization")
+    count = 0
+    for live in due:
+        starts = timezone.localtime(live.starts_at).strftime("%I:%M %p").lstrip("0")
+        notify_members(live.organization, None, f"{live.title} starts at {starts}. Join from {live.organization.name}.", reverse("organizations:live_class", args=[live.organization.slug, live.pk]), live.group)
+        live.reminded_at = now
+        live.save(update_fields=["reminded_at"])
+        count += 1
+    return count
