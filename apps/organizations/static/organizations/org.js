@@ -17,6 +17,28 @@
   document.querySelectorAll("[data-select]").forEach(button => button.addEventListener("click", () => {
     button.closest("form").querySelectorAll('input[type="checkbox"][name="students"]').forEach(box => { box.checked = button.dataset.select === "all"; });
   }));
+  // Class room: hold the class inside MyProgress with the Jitsi Meet API from the institute's own server.
+  const room = document.querySelector("[data-jitsi]");
+  if (room) {
+    const status = room.querySelector(".org-room-loading");
+    const script = document.createElement("script");
+    script.src = `https://${room.dataset.domain}/external_api.js`;
+    script.onload = () => {
+      status.remove();
+      const api = new window.JitsiMeetExternalAPI(room.dataset.domain, {
+        roomName: room.dataset.room,
+        parentNode: room,
+        jwt: room.dataset.jwt || undefined,
+        width: "100%",
+        height: "100%",
+        userInfo: { displayName: room.dataset.name },
+        configOverwrite: { prejoinConfig: { enabled: true }, disableDeepLinking: true },
+      });
+      api.addListener("readyToClose", () => { window.location.href = room.dataset.back; });
+    };
+    script.onerror = () => { status.textContent = "Couldn't reach the video server. Try “Open in a new tab”, or tell your teacher."; };
+    document.head.appendChild(script);
+  }
   // Repeating classes: only show the days and the count when they apply.
   const repeat = document.querySelector('select[name="repeat"]');
   if (repeat) {

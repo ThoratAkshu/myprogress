@@ -10,10 +10,10 @@
 <div class="org-live-actions">
 {% if state == 'over' %}{% if live.recording %}<a class="button primary" href="{% url 'learning:detail' live.recording.pk %}">{% icon "play" 16 %}Watch the recording</a>{% else %}<span class="muted">This class has ended.{% if not member.is_staff %} The recording will appear here if your teacher shares it.{% endif %}</span>{% endif %}
 {% elif state == 'upcoming' %}<span class="org-pill todo">{% icon "clock" 14 %}Join opens 15 minutes before it starts</span>
-{% else %}<a class="button primary large" href="{% url 'organizations:join_class' organization.slug live.pk %}" target="_blank" rel="noopener">{% icon "video" 18 %}{% if member.is_staff %}Start the class{% else %}Join the class{% endif %}</a>{% if not member.is_staff %}<small class="muted">Joining marks you present{% if state == 'live' %}, or late after the first 10 minutes{% endif %}.</small>{% endif %}{% endif %}
+{% else %}<a class="button primary large" href="{% if in_app %}{% url 'organizations:class_room' organization.slug live.pk %}"{% else %}{% url 'organizations:join_class' organization.slug live.pk %}" target="_blank" rel="noopener"{% endif %}>{% icon "video" 18 %}{% if member.is_staff %}Start the class{% else %}Join the class{% endif %}</a>{% if not member.is_staff %}<small class="muted">Joining marks you present{% if state == 'live' %}, or late after the first 10 minutes{% endif %}.</small>{% endif %}{% endif %}
 {% if not member.is_staff and mine %}<em class="org-pill {% if mine.status == 'absent' %}missed{% else %}approved{% endif %}">You were {{ mine.get_status_display|lower }}</em>{% endif %}
 </div>
-{% if member.is_staff %}<p class="muted small">Meeting link: <a href="{{ live.meeting_link }}" target="_blank" rel="noopener">{{ live.meeting_link|truncatechars:70 }}</a>{% if "meet.jit.si" in live.meeting_link %}. Jitsi may ask the first person in the room to sign in, so start it a few minutes early.{% endif %}</p>{% endif %}
+{% if member.is_staff %}<p class="muted small">{% if in_app %}This class is held inside MyProgress, on your video server ({{ jitsi_domain }}). Students join from this page.{% else %}Meeting link: <a href="{{ live.meeting_link }}" target="_blank" rel="noopener">{{ live.meeting_link|truncatechars:70 }}</a>{% if "meet.jit.si" in live.meeting_link %}. Jitsi may ask the first person in the room to sign in, so start it a few minutes early.{% endif %}{% endif %}</p>{% endif %}
 </section>
 {% if member.is_staff %}
 <div class="org-grid">

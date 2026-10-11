@@ -1,0 +1,6 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ live.title }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page org-room-page">
+<div class="org-room-bar"><a class="org-back" href="{% url 'organizations:live_class' organization.slug live.pk %}">{% icon "chevron-right" 14 %}{{ live.title }}</a><span class="muted">{{ live.starts_at|date:"g:i a" }} to {{ live.ends_at|date:"g:i a" }}{% if mine %} · You're marked {{ mine.get_status_display|lower }}{% endif %}</span><a class="org-room-out" href="https://{{ domain }}/{{ room }}{% if token %}?jwt={{ token }}{% endif %}" target="_blank" rel="noopener noreferrer">{% icon "arrow-up-right" 14 %}Open in a new tab</a></div>
+<div class="org-room" data-jitsi data-domain="{{ domain }}" data-room="{{ room }}" data-jwt="{{ token }}" data-name="{{ display_name }}" data-back="{% url 'organizations:live_class' organization.slug live.pk %}"><p class="org-room-loading">Connecting to the class…</p></div>
+</div>{% endblock %}

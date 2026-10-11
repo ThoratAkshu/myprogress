@@ -274,3 +274,12 @@ LOGGING = {
         "level": "INFO",
     },
 }
+# -----------------------------------------------------------------------------
+# VIDEO CLASSES
+# -----------------------------------------------------------------------------
+# A Jitsi Meet server to hold live classes inside MyProgress, like meet.yourinstitute.in.
+# Empty: classes open a meet.jit.si room in a new tab (meet.jit.si ends embedded calls after 5 minutes).
+JITSI_DOMAIN = config("JITSI_DOMAIN", default="").strip().removeprefix("https://").strip("/")
+# Set both when that server uses token authentication (the app_id and app_secret from its Prosody config).
+JITSI_APP_ID = config("JITSI_APP_ID", default="")
+JITSI_APP_SECRET = config("JITSI_APP_SECRET", default="")

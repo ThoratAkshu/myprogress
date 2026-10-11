@@ -1289,3 +1289,11 @@ a.org-item-title:hover{color:var(--violet)}
 .org-days input:focus-visible+span{outline:2px solid var(--violet);outline-offset:2px}
 .org-cancel{display:flex;flex-wrap:wrap;gap:16px}
 .org-cancel form{margin:0}
+/* Organizations: class room inside MyProgress */
+.org-room-page{display:flex;flex-direction:column;gap:12px}
+.org-room-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+.org-room-out{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:14px;font-weight:700;text-decoration:none}
+.org-room{position:relative;height:calc(100vh - 190px);height:calc(100dvh - 190px);min-height:440px;overflow:hidden;border-radius:16px;background:#0b1020}
+.org-room iframe{display:block;border:0}
+.org-room-loading{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:24px;color:#cbd5e1;text-align:center}
+@media(max-width:760px){.org-room{height:calc(100vh - 230px);height:calc(100dvh - 230px);min-height:380px;border-radius:12px}.org-room-out{margin-left:0}}

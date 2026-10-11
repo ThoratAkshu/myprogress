@@ -2,6 +2,7 @@
 import secrets
 from datetime import timedelta
 import uuid
+from django.conf import settings
 from pathlib import PurePosixPath
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
@@ -163,7 +164,7 @@ class LiveClass(models.Model):
         return self.title
     def save(self, *args, **kwargs):
         if not self.meeting_link:
-            self.meeting_link = f"https://meet.jit.si/MyProgress-{self.organization.slug}-{secrets.token_hex(4)}"
+            self.meeting_link = f"https://{settings.JITSI_DOMAIN or 'meet.jit.si'}/MyProgress-{self.organization.slug}-{secrets.token_hex(6)}"
         super().save(*args, **kwargs)
     @property
     def ends_at(self):

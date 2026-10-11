@@ -3,6 +3,7 @@ import csv
 import logging
 from datetime import timedelta
 from itertools import groupby
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
@@ -413,7 +414,7 @@ def classes_view(request, slug):
         mine = dict(Attendance.objects.filter(live_class__in=past, student=request.user).values_list("live_class_id", "status"))
         for live in past:
             live.mine = mine.get(live.pk, "absent")
-    return _render(request, "classes.html", organization, member, "classes", {"form": form, "upcoming": upcoming, "past": past})
+    return _render(request, "classes.html", organization, member, "classes", {"form": form, "upcoming": upcoming, "past": past, "in_app_video": bool(settings.JITSI_DOMAIN)})
 @login_required(login_url="landing:home")
 def class_detail_view(request, slug, class_id):
     organization, member = _organization(request, slug)
@@ -441,7 +442,7 @@ def class_detail_view(request, slug, class_id):
                 services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[recording.pk]), live.group)
             messages.success(request, "Recording attached." if recording else "Recording removed.")
         return redirect("organizations:live_class", slug=slug, class_id=live.pk)
-    context = {"live": live, "state": live.state(now), "now": now, "position": services.series_position(live)}
+    context = {"live": live, "state": live.state(now), "now": now, "position": services.series_position(live), "in_app": services.video_room(live) is not None, "jitsi_domain": settings.JITSI_DOMAIN}
     if member.is_staff:
         roster = services.class_roster(live)
         context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30]})
@@ -460,9 +461,24 @@ def class_join_view(request, slug, class_id):
     if state == "over":
         messages.info(request, "This class has ended." + (" The recording is below." if live.recording_id else ""))
         return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    if services.video_room(live):
+        return redirect("organizations:class_room", slug=slug, class_id=live.pk)
     if not member.is_staff:
         services.join_class(live, request.user)
     return redirect(live.meeting_link)
+@login_required(login_url="landing:home")
+def class_room_view(request, slug, class_id):
+    """The class held inside MyProgress: the Jitsi room embedded in the page. Coming in marks a student present, or late."""
+    organization, member = _organization(request, slug)
+    live = get_object_or_404(services.classes_for(organization, member), pk=class_id)
+    room = services.video_room(live)
+    if room is None or live.state(timezone.now()) not in {"open", "live"}:
+        return redirect("organizations:join_class", slug=slug, class_id=live.pk)
+    mine = None if member.is_staff else services.join_class(live, request.user)
+    response = _render(request, "class_room.html", organization, member, "classes", {"live": live, "room": room, "domain": settings.JITSI_DOMAIN, "token": services.video_token(live, request.user, member.is_staff, room), "display_name": services.display_name(request.user), "mine": mine})
+    response["Cache-Control"] = "private, no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
 @login_required(login_url="landing:home")
 @require_POST
 def class_delete_view(request, slug, class_id):

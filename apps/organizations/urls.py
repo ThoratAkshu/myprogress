@@ -35,5 +35,6 @@ urlpatterns = [
     path("<slug:slug>/live/", views.classes_view, name="classes"),
     path("<slug:slug>/live/<int:class_id>/", views.class_detail_view, name="live_class"),
     path("<slug:slug>/live/<int:class_id>/join/", views.class_join_view, name="join_class"),
+    path("<slug:slug>/live/<int:class_id>/room/", views.class_room_view, name="class_room"),
     path("<slug:slug>/live/<int:class_id>/cancel/", views.class_delete_view, name="cancel_class"),
 ]

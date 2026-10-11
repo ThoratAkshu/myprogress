@@ -124,6 +124,38 @@ Back up all three together so they stay consistent:
 `503` if the database or Git is unavailable. Point your load balancer or uptime
 monitor at it.
 
+## Video classes inside MyProgress
+
+Live classes link out to a free meet.jit.si room in a new tab unless you set
+`JITSI_DOMAIN`. meet.jit.si can't be used for classes held inside the site:
+calls embedded from other websites end after 5 minutes there.
+
+To hold classes inside MyProgress, run your own Jitsi Meet server (the Debian
+packages in the Jitsi handbook take about an hour on a 4 GB VPS) and set:
+
+| Setting | Value |
+| --- | --- |
+| `JITSI_DOMAIN` | The server's host name, like `meet.yourinstitute.in` |
+| `JITSI_APP_ID`, `JITSI_APP_SECRET` | Optional. With token authentication on the server (`jitsi-meet-tokens`), the `app_id` and `app_secret` from its Prosody config. Only signed-in members of a class can then enter its room |
+
+What changes:
+
+- The class page opens the room on the page itself; students who come in are
+  marked present, or late after the first 10 minutes, as before.
+- Classes with a blank meeting link get a room on your server. Classes made
+  earlier with an automatic meet.jit.si room move to your server too. Classes
+  with their own Zoom or Google Meet link keep opening that link.
+- With token authentication each person gets a pass for that one room, valid
+  until two hours after the class ends, with their name filled in. Teachers'
+  passes say they're moderators (`moderator` and `context.user.affiliation`
+  "owner"); the server only acts on that with a token-affiliation Prosody module,
+  otherwise the first person in becomes moderator.
+- Keep the site's pages free of a `Permissions-Policy` header that blocks the
+  camera or microphone, or the embedded room can't use them.
+
+JaaS (8x8's hosted Jitsi) needs RS256-signed tokens, which this version doesn't
+make; use a self-hosted server.
+
 ## Security features to know about
 
 - **Rate limits:** failed sign-ins lock an email for 15 minutes after 10 failures

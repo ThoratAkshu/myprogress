@@ -2,9 +2,13 @@
 import csv
 import io
 import logging
+import re
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
+import jwt
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
@@ -484,3 +488,26 @@ def send_parent_digests(site_url, now=None):
         access.save(update_fields=["digest_sent_at"])
         sent += 1
     return sent, quiet
+JITSI_ROOM = re.compile(r"[A-Za-z0-9_-]{6,120}")
+def video_room(live):
+    """The Jitsi room a class is held in inside MyProgress, or None when it links out instead:
+    no Jitsi server is set up, or the teacher gave the class its own link (Zoom, Google Meet...)."""
+    domain = settings.JITSI_DOMAIN.lower()
+    link = urlparse(live.meeting_link)
+    room = link.path.strip("/")
+    if not domain or link.scheme != "https" or not JITSI_ROOM.fullmatch(room):
+        return None
+    host = link.netloc.lower()
+    # Rooms made for classes before the server was set up move to it; they were only ever named here.
+    return room if host == domain or (host == "meet.jit.si" and room.startswith("MyProgress-")) else None
+def video_token(live, user, staff, room, now=None):
+    """A signed pass into one class room, for Jitsi servers with token authentication. Teachers come in as moderators."""
+    if not (settings.JITSI_APP_ID and settings.JITSI_APP_SECRET):
+        return ""
+    now = now or timezone.now()
+    payload = {
+        "aud": "jitsi", "iss": settings.JITSI_APP_ID, "sub": settings.JITSI_DOMAIN, "room": room, "moderator": staff,
+        "nbf": int((now - timedelta(minutes=5)).timestamp()), "exp": int((max(now, live.ends_at) + timedelta(hours=2)).timestamp()),
+        "context": {"user": {"id": str(user.pk), "name": display_name(user), "moderator": staff, "affiliation": "owner" if staff else "member"}},
+    }
+    return jwt.encode(payload, settings.JITSI_APP_SECRET, algorithm="HS256")
