@@ -17,6 +17,16 @@
   document.querySelectorAll("[data-select]").forEach(button => button.addEventListener("click", () => {
     button.closest("form").querySelectorAll('input[type="checkbox"][name="students"]').forEach(box => { box.checked = button.dataset.select === "all"; });
   }));
+  // Repeating classes: only show the days and the count when they apply.
+  const repeat = document.querySelector('select[name="repeat"]');
+  if (repeat) {
+    const sync = () => {
+      document.querySelector("[data-days]").hidden = repeat.value !== "days";
+      document.querySelector("[data-occurrences]").hidden = repeat.value === "none";
+    };
+    repeat.addEventListener("change", sync);
+    sync();
+  }
   const composer = document.querySelector("[data-composer]");
   document.querySelector("[data-toggle-composer]")?.addEventListener("click", () => {
     composer.hidden = !composer.hidden;

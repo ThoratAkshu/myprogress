@@ -118,8 +118,13 @@ class ReviewForm(forms.Form):
         if score is not None and score > self.points:
             raise forms.ValidationError(f"The most this task is worth is {self.points}.")
         return score
+WEEKDAYS = [("0", "Mon"), ("1", "Tue"), ("2", "Wed"), ("3", "Thu"), ("4", "Fri"), ("5", "Sat"), ("6", "Sun")]
 class LiveClassForm(forms.ModelForm):
+    repeat = forms.ChoiceField(choices=[("none", "Doesn't repeat"), ("weekly", "Every week"), ("weekdays", "Every weekday (Mon to Fri)"), ("days", "On chosen days")], initial="none", required=False, label="Repeat")
+    days = forms.MultipleChoiceField(choices=WEEKDAYS, required=False, widget=forms.CheckboxSelectMultiple, label="On")
+    occurrences = forms.IntegerField(min_value=2, max_value=60, initial=8, required=False, label="Number of classes")
     starts_at = forms.DateTimeField(label="Starts", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
+    field_order = ["title", "starts_at", "duration_minutes", "repeat", "days", "occurrences", "meeting_link", "group", "agenda"]
     class Meta:
         model = LiveClass
         fields = ["title", "starts_at", "duration_minutes", "meeting_link", "group", "agenda"]
@@ -140,6 +145,13 @@ class LiveClassForm(forms.ModelForm):
         if link and not link.startswith("https://"):
             raise forms.ValidationError("Meeting links must start with https://.")
         return link
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("repeat") == "days" and not cleaned.get("days"):
+            self.add_error("days", "Pick the days the class happens.")
+        if (cleaned.get("repeat") or "none") != "none" and not cleaned.get("occurrences"):
+            self.add_error("occurrences", "How many classes in the series?")
+        return cleaned
 class CertificateForm(forms.Form):
     title = forms.CharField(max_length=160, widget=forms.TextInput(attrs={"placeholder": "Full-stack Web Development"}))
     description = forms.CharField(max_length=300, required=False, label="Description (optional)", widget=forms.TextInput(attrs={"placeholder": "Completed 12 weeks of projects, tasks and live classes"}))

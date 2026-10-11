@@ -1,8 +1,9 @@
 """Organization rules: who can see what, joining, invites, and the growth numbers teachers see."""
 import csv
 import io
+import secrets
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -378,3 +379,50 @@ def release_due_items():
         announce_task(task)
         count += 1
     return count
+def class_dates(starts_at, repeat, days=(), count=1):
+    """When each class in a series happens, keeping the same local time even across daylight-saving changes."""
+    first = timezone.localtime(starts_at)
+    if repeat == "weekly":
+        weekdays = {first.weekday()}
+    elif repeat == "weekdays":
+        weekdays = {0, 1, 2, 3, 4}
+    elif repeat == "days":
+        weekdays = {int(day) for day in days}
+    else:
+        return [starts_at]
+    dates, day = [], first.date()
+    while len(dates) < count:
+        if day.weekday() in weekdays:
+            dates.append(timezone.make_aware(datetime.combine(day, first.time().replace(tzinfo=None))))
+        day += timedelta(days=1)
+    return dates
+def schedule_classes(organization, actor, data):
+    """Create one class, or a repeating series sharing one meeting room. Returns the classes created."""
+    fields = {key: data[key] for key in ["title", "agenda", "duration_minutes", "meeting_link", "group"]}
+    repeat = data.get("repeat") or "none"
+    dates = class_dates(data["starts_at"], repeat, data.get("days") or (), data.get("occurrences") or 1)
+    series = secrets.token_hex(8) if len(dates) > 1 else ""
+    created = []
+    for when in dates:
+        live = LiveClass(organization=organization, created_by=actor, starts_at=when, series=series, **fields)
+        live.save()
+        fields["meeting_link"] = live.meeting_link  # the whole series uses the first class's room
+        created.append(live)
+    first = timezone.localtime(created[0].starts_at)
+    at = first.strftime("%I:%M %p").lstrip("0")
+    if len(created) == 1:
+        text = f"Live class scheduled: {created[0].title}, {first:%a} {first:%b} {first.day} at {at}"
+    else:
+        chosen = [dict(WEEKDAY_NAMES)[str(day)] for day in sorted({int(day) for day in data.get("days") or ()})]
+        listed = ", ".join(chosen[:-1]) + " and " + chosen[-1] if len(chosen) > 1 else "".join(chosen)
+        names = {"weekly": f"every {first:%A}", "weekdays": "every weekday"}.get(repeat) or "every " + listed
+        text = f"Live classes scheduled: {created[0].title}, {names} at {at}, {len(created)} classes from {first:%b} {first.day}"
+    notify_members(organization, actor, text, reverse("organizations:live_class", args=[organization.slug, created[0].pk]), created[0].group)
+    return created
+WEEKDAY_NAMES = [("0", "Monday"), ("1", "Tuesday"), ("2", "Wednesday"), ("3", "Thursday"), ("4", "Friday"), ("5", "Saturday"), ("6", "Sunday")]
+def series_position(live):
+    """(number, total) of a class within its series, or None."""
+    if not live.series:
+        return None
+    ids = list(LiveClass.objects.filter(series=live.series).order_by("starts_at").values_list("pk", flat=True))
+    return (ids.index(live.pk) + 1, len(ids)) if live.pk in ids else None

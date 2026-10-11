@@ -5,7 +5,7 @@
 <a class="org-back" href="{% url 'organizations:classes' organization.slug %}">{% icon "chevron-right" 14 %}All live classes</a>
 <section class="card org-live">
 <div class="org-live-when"><span class="org-date lg{% if state == 'live' %} live{% endif %}"><b>{{ live.starts_at|date:"j" }}</b><small>{{ live.starts_at|date:"M" }}</small></span>
-<div><span class="kicker">{% if state == 'live' %}Live now{% elif state == 'over' %}Ended{% else %}Live class{% endif %}{% if live.group %} · {{ live.group }}{% endif %}</span><h2>{{ live.title }}</h2><p class="muted">{{ live.starts_at|date:"l, M j · g:i a" }} to {{ live.ends_at|date:"g:i a" }} ({{ live.duration_minutes }} min)</p></div></div>
+<div><span class="kicker">{% if state == 'live' %}Live now{% elif state == 'over' %}Ended{% else %}Live class{% endif %}{% if live.group %} · {{ live.group }}{% endif %}{% if position %} · class {{ position.0 }} of {{ position.1 }}{% endif %}</span><h2>{{ live.title }}</h2><p class="muted">{{ live.starts_at|date:"l, M j · g:i a" }} to {{ live.ends_at|date:"g:i a" }} ({{ live.duration_minutes }} min)</p></div></div>
 {% if live.agenda %}<p class="org-agenda">{{ live.agenda|linebreaksbr }}</p>{% endif %}
 <div class="org-live-actions">
 {% if state == 'over' %}{% if live.recording %}<a class="button primary" href="{% url 'learning:detail' live.recording.pk %}">{% icon "play" 16 %}Watch the recording</a>{% else %}<span class="muted">This class has ended.{% if not member.is_staff %} The recording will appear here if your teacher shares it.{% endif %}</span>{% endif %}
@@ -29,7 +29,7 @@
 <form method="post" class="card org-form">{% csrf_token %}<input type="hidden" name="action" value="recording"><h2>Recording</h2><p class="muted">Record the class with the lecture studio or upload it there, then attach it here.</p>
 <label>Lecture<select name="recording"><option value="">No recording</option>{% for post in recordings %}<option value="{{ post.pk }}"{% if live.recording_id == post.pk %} selected{% endif %}>{{ post.title }}</option>{% endfor %}</select></label>
 <div class="org-form-actions"><button class="button soft">Save</button><a href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">Record or upload one</a></div></form>
-<form method="post" action="{% url 'organizations:cancel_class' organization.slug live.pk %}" data-confirm="Cancel {{ live.title }}? Its attendance is deleted too.">{% csrf_token %}<button class="org-link-button danger">Cancel this class</button></form>
+<div class="org-cancel"><form method="post" action="{% url 'organizations:cancel_class' organization.slug live.pk %}" data-confirm="Cancel this class? Its attendance is deleted too.">{% csrf_token %}<button class="org-link-button danger">Cancel this class</button></form>{% if position and position.0 < position.1 %}<form method="post" action="{% url 'organizations:cancel_class' organization.slug live.pk %}" data-confirm="Cancel this class and every later class in the series?">{% csrf_token %}<input type="hidden" name="scope" value="following"><button class="org-link-button danger">Cancel this and all later classes</button></form>{% endif %}</div>
 </div>
 </div>
 {% endif %}

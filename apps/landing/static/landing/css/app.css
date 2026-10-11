@@ -1278,3 +1278,14 @@ a.org-item-title:hover{color:var(--violet)}
 .org-scheduled-note form{margin:0}
 .org-task-main b .org-pill{margin-left:6px;vertical-align:1px}
 .org-share.form-grid{align-items:start}
+/* Organizations: repeating classes */
+.org-days{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0;border:0}
+.org-days[hidden],.org-form [data-occurrences][hidden]{display:none!important}
+.org-days legend{width:100%;margin-bottom:4px;padding:0;font-size:13px;font-weight:700}
+.org-days label{position:relative;display:inline-flex!important;cursor:pointer}
+.org-days input{position:absolute;opacity:0;width:1px!important;height:1px;min-height:0!important}
+.org-days span{padding:6px 12px;border:1px solid var(--line);border-radius:99px;color:var(--muted);font-size:13px;font-weight:700}
+.org-days input:checked+span{border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
+.org-days input:focus-visible+span{outline:2px solid var(--violet);outline-offset:2px}
+.org-cancel{display:flex;flex-wrap:wrap;gap:16px}
+.org-cancel form{margin:0}

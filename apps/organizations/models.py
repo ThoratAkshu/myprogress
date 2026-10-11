@@ -153,6 +153,7 @@ class LiveClass(models.Model):
     meeting_link = models.URLField(blank=True, help_text="Google Meet, Zoom or any https link; empty makes a free Jitsi room")
     group = models.CharField(max_length=60, blank=True, help_text="Only this batch; empty means everyone")
     recording = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    series = models.CharField(max_length=32, blank=True, db_index=True, help_text="Shared by every class created together as a repeating series")
     reminded_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:

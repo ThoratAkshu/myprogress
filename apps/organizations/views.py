@@ -387,17 +387,19 @@ def classes_view(request, slug):
         if not member.is_staff:
             raise Http404
         if form.is_valid():
-            live = form.save(commit=False)
-            live.organization, live.created_by = organization, request.user
-            live.save()
-            when = timezone.localtime(live.starts_at)
-            services.notify_members(organization, request.user, f"Live class scheduled: {live.title}, {when:%a} {when:%b} {when.day} at {when.strftime('%I:%M %p').lstrip('0')}", reverse("organizations:live_class", args=[slug, live.pk]), live.group)
-            messages.success(request, "Class scheduled. Members have been told, and they'll get a reminder 15 minutes before.")
-            return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+            created = services.schedule_classes(organization, request.user, form.cleaned_data)
+            messages.success(request, (f"{len(created)} classes scheduled." if len(created) > 1 else "Class scheduled.") + " Members have been told, and they'll get a reminder 15 minutes before each one.")
+            return redirect("organizations:live_class", slug=slug, class_id=created[0].pk)
     now = timezone.now()
     classes = list(services.classes_for(organization, member).select_related("recording"))
     for live in classes:
         live.current = live.state(now)
+    totals = dict(LiveClass.objects.filter(organization=organization).exclude(series="").values("series").annotate(total=Count("id")).values_list("series", "total"))
+    seen = {}
+    for live in sorted(classes, key=lambda live: live.starts_at):
+        if live.series:
+            seen[live.series] = seen.get(live.series, 0) + 1
+            live.position = (seen[live.series], totals.get(live.series, 1))
     upcoming = [live for live in classes if live.current != "over"]
     past = sorted([live for live in classes if live.current == "over"], key=lambda live: live.starts_at, reverse=True)[:30]
     if member.is_staff:
@@ -438,7 +440,7 @@ def class_detail_view(request, slug, class_id):
                 services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[recording.pk]), live.group)
             messages.success(request, "Recording attached." if recording else "Recording removed.")
         return redirect("organizations:live_class", slug=slug, class_id=live.pk)
-    context = {"live": live, "state": live.state(now), "now": now}
+    context = {"live": live, "state": live.state(now), "now": now, "position": services.series_position(live)}
     if member.is_staff:
         roster = services.class_roster(live)
         context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30]})
@@ -465,8 +467,14 @@ def class_join_view(request, slug, class_id):
 def class_delete_view(request, slug, class_id):
     organization, member = _organization(request, slug, staff=True)
     live = get_object_or_404(LiveClass, pk=class_id, organization=organization)
-    live.delete()
-    messages.success(request, "Class cancelled.")
+    if request.POST.get("scope") == "following" and live.series:
+        later = LiveClass.objects.filter(series=live.series, starts_at__gte=live.starts_at)
+        count = later.count()
+        later.delete()
+        messages.success(request, f"Cancelled {count} class{'es' if count != 1 else ''} in the series.")
+    else:
+        live.delete()
+        messages.success(request, "Class cancelled.")
     return redirect("organizations:classes", slug=slug)
 
 @login_required(login_url="landing:home")
