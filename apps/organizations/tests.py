@@ -222,3 +222,31 @@ class OrganizationTests(TestCase):
         self.client.force_login(self.owner)
         self.assertEqual(self.client.get(reverse("organizations:member", args=[self.organization.slug, self.student.pk])).status_code, 404)
         self.assertEqual(services.student_growth(self.organization), [])
+    def test_lecture_videos_are_locked_to_members(self):
+        from django.test import RequestFactory
+        from apps.common.views import serve_media
+        mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + b"\x00" * 64
+        self.join(self.student)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("learning:create"), {"title": "Lecture 1", "kind": "video", "video_file": SimpleUploadedFile("lecture.mp4", mp4, content_type="video/mp4"), "organization": self.organization.pk})
+        lecture = LearningPost.objects.get(title="Lecture 1")
+        self.assertTrue(lecture.video_file.name.startswith("private/learning/videos/"))
+        media_url = reverse("learning:media", args=[lecture.pk, "video"])
+        self.assertEqual(lecture.video_src, media_url)
+        self.client.force_login(self.student)
+        self.assertContains(self.client.get(reverse("learning:detail", args=[lecture.pk])), f'src="{media_url}"')
+        partial = self.client.get(media_url, headers={"Range": "bytes=0-9"})
+        self.assertEqual((partial.status_code, partial["Content-Range"], partial["Cache-Control"]), (206, f"bytes 0-9/{len(mp4)}", "private, no-store"))
+        self.assertEqual(b"".join(partial.streaming_content), mp4[:10])
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(media_url).status_code, 404)
+        request = RequestFactory().get("/media/x")
+        for path in [lecture.video_file.name, "learning/../" + lecture.video_file.name]:
+            with self.assertRaises(Exception):
+                serve_media(request, path)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("learning:edit", args=[lecture.pk]), {"title": "Lecture 1", "kind": "video", "is_public": "on", "organization": ""})
+        lecture.refresh_from_db()
+        self.assertTrue(lecture.is_public)
+        self.assertTrue(lecture.video_file.name.startswith("learning/videos/"))
+        self.assertEqual(lecture.video_src, lecture.video_file.url)

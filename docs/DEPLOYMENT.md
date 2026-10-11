@@ -68,6 +68,11 @@ server {
     # Git pushes can be large; keep this ≥ GIT_MAX_REQUEST_BYTES.
     client_max_body_size 1g;
 
+    # Organization lecture videos live under media/private/ and are only served by the app, to members.
+    location /media/private/ {
+        return 404;
+    }
+
     location /media/ {
         alias /var/lib/myprogress/media/;
         # User uploads must never run as part of the site.

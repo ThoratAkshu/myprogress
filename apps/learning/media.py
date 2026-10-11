@@ -30,3 +30,22 @@ def youtube_embed_url(url):
     elif host == "youtu.be":
         video_id = parsed.path.lstrip("/").split("/")[0]
     return f"https://www.youtube-nocookie.com/embed/{video_id}" if YOUTUBE_ID.match(video_id) else ""
+PRIVATE_PREFIX = "private/"
+def place_post_files(post):
+    """Keep an organization post's video and thumbnail in the private folder, which is only reachable through
+    the members-only media view, and move them back out if the post becomes public."""
+    private = bool(post.organization_id and not post.is_public)
+    moved = []
+    for field_name in ["video_file", "thumbnail"]:
+        field = getattr(post, field_name)
+        if not field or field.name.startswith(PRIVATE_PREFIX) == private:
+            continue
+        storage, old_name = field.storage, field.name
+        new_name = PRIVATE_PREFIX + old_name if private else old_name[len(PRIVATE_PREFIX):]
+        with storage.open(old_name, "rb") as handle:
+            field.name = storage.save(new_name, handle)
+        storage.delete(old_name)
+        moved.append(field_name)
+    if moved:
+        type(post).objects.filter(pk=post.pk).update(**{name: getattr(post, name).name for name in moved})
+    return moved

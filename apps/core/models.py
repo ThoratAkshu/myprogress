@@ -72,6 +72,17 @@ class LearningPost(models.Model):
     def has_video(self):
         return bool(self.video_file or self.video_url)
     @property
+    def video_src(self):
+        """Where the browser loads the video: straight from media, or through the members-only view for organization posts."""
+        if not self.video_file:
+            return ""
+        return reverse("learning:media", args=[self.pk, "video"]) if self.video_file.name.startswith("private/") else self.video_file.url
+    @property
+    def thumbnail_src(self):
+        if not self.thumbnail:
+            return ""
+        return reverse("learning:media", args=[self.pk, "thumbnail"]) if self.thumbnail.name.startswith("private/") else self.thumbnail.url
+    @property
     def reading_minutes(self):
         return max(1, round(len(self.body.split()) / 200))
 class RankSnapshot(models.Model):

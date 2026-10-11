@@ -15,14 +15,35 @@ def _read_range(path, start, length):
                 return
             length -= len(chunk)
             yield chunk
+PRIVATE_PREFIX = "private/"
 def serve_media(request, path):
-    """Uploaded files in development, with byte ranges so videos can seek (nginx does this in production)."""
+    """Uploaded files in development, with byte ranges so videos can seek (nginx does this in production).
+    Files under private/ are never served here; they go through views that check who's asking."""
     try:
         full_path = safe_join(settings.MEDIA_ROOT, path)
     except Exception:
         raise Http404
+    private_root = os.path.realpath(os.path.join(settings.MEDIA_ROOT, PRIVATE_PREFIX))
+    resolved = os.path.realpath(full_path)
+    if resolved == private_root or resolved.startswith(private_root + os.sep):
+        raise Http404
     if not os.path.isfile(full_path):
         raise Http404
+    return ranged_file_response(request, full_path)
+def stored_file_response(request, field):
+    """A stored file with byte-range support, for views that check access first."""
+    try:
+        path = field.path
+    except NotImplementedError:  # remote storage: stream it whole
+        response = FileResponse(field.open("rb"), content_type=mimetypes.guess_type(field.name)[0] or "application/octet-stream")
+        response["Cache-Control"] = "private, no-store"
+        return response
+    if not os.path.isfile(path):
+        raise Http404
+    response = ranged_file_response(request, path)
+    response["Cache-Control"] = "private, no-store"
+    return response
+def ranged_file_response(request, full_path):
     size = os.path.getsize(full_path)
     content_type = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
     match = RANGE_HEADER.fullmatch(request.headers.get("Range", "").strip())

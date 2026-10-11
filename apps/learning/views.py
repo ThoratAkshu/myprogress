@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 from django.conf import settings
 from apps.common.http import redirect_back
 from apps.common.ratelimit import rate_limit
+from apps.common.views import stored_file_response
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
@@ -25,7 +26,7 @@ from apps.organizations.services import membership, notify_members, staff_organi
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
-from .media import youtube_embed_url
+from .media import place_post_files, youtube_embed_url
 from .studio import StudioError, branch_paths, draft_post, project_branches
 from .timeline import parse_captions, parse_chapters
 MAX_INSERT_BYTES = 300_000
@@ -95,6 +96,7 @@ def post_create_view(request):
         post = form.save(commit=False)
         post.author = request.user
         post.save()
+        place_post_files(post)
         record_activity(request.user, "learning", "published_learning", 4, {"post_id": post.pk})
         complete_daily_step(request.user, "share")
         refresh_rank(request.user)
@@ -120,6 +122,13 @@ RECORDER_CORNERS = [("top-left", "Top left"), ("top-right", "Top right"), ("bott
 RECORDER_BACKGROUNDS = [("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("ocean", "Ocean", ("#1d4ed8", "#0ea5e9")), ("sunset", "Sunset", ("#f97316", "#db2777")), ("forest", "Forest", ("#065f46", "#0d9488")), ("graphite", "Graphite", ("#111827", "#374151"))]
 def _form_context(request, form, post=None):
     return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
+def media_view(request, post_id, which):
+    """An organization post's video or thumbnail, only for people who can see the post."""
+    post = _visible_post(request, post_id)
+    field = {"video": post.video_file, "thumbnail": post.thumbnail}.get(which)
+    if not field:
+        raise Http404
+    return stored_file_response(request, field)
 def captions_view(request, post_id):
     """The post's captions as a WebVTT file for the video player."""
     post = _visible_post(request, post_id)
@@ -244,6 +253,7 @@ def post_edit_view(request, post_id):
     form = LearningPostForm(request.POST or None, request.FILES or None, user=request.user, instance=post)
     if request.method == "POST" and form.is_valid():
         post = form.save()
+        place_post_files(post)
         if post.organization_id and post.organization_id != shared_before:
             _share_with_organization(request, post)
         _delete_replaced_files(post, form, previous)
