@@ -25,6 +25,7 @@ class Organization(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="organizations_owned")
     invite_code = models.CharField(max_length=16, unique=True, default=new_invite_code)
     join_requires_approval = models.BooleanField(default=False, help_text="New members wait until a teacher approves them")
+    show_leaderboard = models.BooleanField(default=True, help_text="Students can see the class leaderboard")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["name"]

@@ -447,3 +447,19 @@ def class_delete_view(request, slug, class_id):
     live.delete()
     messages.success(request, "Class cancelled.")
     return redirect("organizations:classes", slug=slug)
+
+@login_required(login_url="landing:home")
+def leaderboard_view(request, slug):
+    organization, member = _organization(request, slug)
+    if not member.is_staff and not organization.show_leaderboard:
+        raise Http404
+    metric = request.GET.get("by") if request.GET.get("by") in dict(services.LEADERBOARD_METRICS) else "class_points"
+    group = request.GET.get("group", "").strip()[:60]
+    if not member.is_staff and request.GET.get("group") is None:
+        group = member.group  # students start on their own batch
+    rows = services.leaderboard(organization, metric, group)
+    mine = next((row for row in rows if row["user"].pk == request.user.pk), None)
+    return _render(request, "leaderboard.html", organization, member, "leaderboard", {
+        "rows": rows, "podium": rows[:3] if len(rows) >= 3 else [], "metric": metric, "metric_label": dict(services.LEADERBOARD_METRICS)[metric], "metrics": services.LEADERBOARD_METRICS,
+        "group": group, "mine": mine, "per_class": services.POINTS_PER_CLASS, "per_day": services.POINTS_PER_CODING_DAY,
+    })

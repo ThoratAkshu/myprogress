@@ -1,0 +1,22 @@
+{% extends "organizations/base.html" %}{% load ui money %}
+{% block title %}Leaderboard · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<div class="org-toolbar org-board-toolbar">
+<nav class="org-filters" aria-label="Rank by">{% for value, label in metrics %}<a href="?by={{ value }}&group={{ group|urlencode }}"{% if value == metric %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+<form method="get"><input type="hidden" name="by" value="{{ metric }}"><select name="group" aria-label="Batch" onchange="this.form.submit()"><option value="">All batches</option>{% for value in org_groups %}<option value="{{ value }}"{% if value|lower == group|lower %} selected{% endif %}>{{ value }}</option>{% endfor %}</select><noscript><button class="button soft">Show</button></noscript></form>
+</div>
+{% if mine %}<section class="org-me"><span class="org-me-rank">#{{ mine.position }}</span><div><b>You're {{ mine.position|ordinal }} of {{ rows|length }}{% if group %} in {{ group }}{% endif %}</b><small>{{ mine.class_points }} class points · {{ mine.task_points }} task points · {% if mine.attendance is not None %}{{ mine.attendance }}% attendance{% else %}no classes yet{% endif %} · {{ mine.coding_days }} coding days</small></div></section>{% endif %}
+{% if podium and metric != 'attendance' or podium and podium.0.value is not None %}<section class="org-podium" aria-label="Top three">
+{% for row in podium %}<div class="org-podium-spot p{{ forloop.counter }}"><span class="avatar {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.member.group|default:"&nbsp;" }}</small><span class="org-podium-block"><em>#{{ row.position }}</em><strong>{% if row.value is None %}—{% else %}{{ row.value }}{% if metric == 'attendance' %}%{% endif %}{% endif %}</strong><small>{{ metric_label }}</small></span></div>{% endfor %}
+</section>{% endif %}
+<section class="card org-table-card">
+<div class="org-table" role="table" aria-label="Leaderboard by {{ metric_label }}">
+<div class="org-tr head board" role="row"><span role="columnheader">#</span><span role="columnheader">Student</span><span role="columnheader">Class points</span><span role="columnheader">Task points</span><span role="columnheader">Attendance</span><span role="columnheader">Coding days</span></div>
+{% for row in rows %}<div class="org-tr board{% if row.user.pk == request.user.pk %} is-me{% endif %}" role="row"><span role="cell" class="org-board-rank">{{ row.position }}</span>
+<span role="cell" class="org-who"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{% if member.is_staff %}<a href="{% url 'organizations:member' organization.slug row.user.pk %}">{{ row.user.get_full_name|default:row.user.email }}</a>{% else %}{{ row.user.get_full_name|default:row.user.email }}{% endif %}{% if row.user.pk == request.user.pk %} (you){% endif %}</b><small>{{ row.member.group|default:"No batch" }}</small></span></span>
+<span role="cell"><b{% if metric == 'class_points' %} class="org-score"{% endif %}>{{ row.class_points }}</b></span><span role="cell"{% if metric == 'task_points' %} class="org-hl"{% endif %}>{{ row.task_points }}</span><span role="cell"{% if metric == 'attendance' %} class="org-hl"{% endif %}>{% if row.attendance is not None %}{{ row.attendance }}%{% else %}—{% endif %}</span><span role="cell"{% if metric == 'coding_days' %} class="org-hl"{% endif %}>{{ row.coding_days }}</span></div>
+{% empty %}<p class="org-empty-line pad">No students{% if group %} in {{ group }}{% endif %} yet.</p>{% endfor %}
+</div></section>
+<p class="muted small org-formula">{% icon "info" 14 %}Class points = task points earned + {{ per_class }} for every live class attended + {{ per_day }} for every coding day in the last 30 days.</p>
+</div>{% endblock %}

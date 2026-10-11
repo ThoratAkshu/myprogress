@@ -7,7 +7,7 @@
 <h1>Join {{ organization.name }}</h1>
 <p class="muted">{% if organization.city %}{{ organization.city }} · {% endif %}{{ member_count }} member{{ member_count|pluralize }}{% if invite %} · Invited as a {{ invite.get_role_display|lower }}{% endif %}</p>
 {% if organization.about %}<p class="org-about">{{ organization.about }}</p>{% endif %}
-<div class="org-consent"><b>{% icon "eye" 16 %}What its teachers will see</b><ul>{% for item in shared %}<li>{{ item }}</li>{% endfor %}</ul><small>Your private repositories and drafts stay private. Leave any time and they lose access.</small></div>
+<div class="org-consent"><b>{% icon "eye" 16 %}What its teachers will see</b><ul>{% for item in shared %}<li>{{ item }}</li>{% endfor %}</ul><small>Your private repositories and drafts stay private. Leave any time and they lose access.</small>{% if organization.show_leaderboard %}<small>Classmates see your name and class points on the class leaderboard.</small>{% endif %}</div>
 {% if existing and existing.status == 'pending' %}<p class="org-waiting">{% icon "clock" 16 %}Your request is waiting for a teacher to approve it.</p>
 {% elif user.is_authenticated %}<form method="post">{% csrf_token %}<button class="button primary block">{% if organization.join_requires_approval and not invite %}Ask to join{% else %}Join {{ organization.name }}{% endif %}</button></form>
 {% else %}<a class="button primary block" href="{% url 'landing:register' %}?next={{ request.path|urlencode }}">Create a free account to join</a>

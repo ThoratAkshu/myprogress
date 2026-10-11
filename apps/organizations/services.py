@@ -12,6 +12,9 @@ from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
 from .models import Attendance, ChannelPost, Invite, LiveClass, Membership, Organization, Submission, Task
+# Class points: task points earned, plus these for each class attended and each coding day in the last 30.
+POINTS_PER_CLASS = 5
+POINTS_PER_CODING_DAY = 1
 # What teachers can see about a student, shown to students before they join.
 SHARED_WITH_TEACHERS = ["Your score, rank and coding days", "How many projects and public posts you have", "Your task submissions and scores", "When you were last active"]
 def membership(organization, user):
@@ -141,8 +144,11 @@ def student_growth(organization, group="", query="", sort="score"):
             "tasks_given": len(given), "tasks_submitted": len([task for task in given if task.id in done]), "tasks_approved": len([task for task in given if task.id in done and done[task.id].status == "approved"]),
             "tasks_missed": len([task for task in due if task.id not in done]),
             "task_percent": round(sum(submission.score * 100 / submission.task.points for submission in scored) / len(scored)) if scored else None,
+            "task_points": sum(submission.score for submission in scored),
             "last_active": last_active.get(member.user_id),
         })
+    for row in rows:
+        row["class_points"] = row["task_points"] + POINTS_PER_CLASS * row["classes_attended"] + POINTS_PER_CODING_DAY * row["coding_days"]
     keys = {"score": lambda row: (-row["score"], display_name(row["user"]).lower()), "name": lambda row: display_name(row["user"]).lower(), "active": lambda row: -(row["last_active"].timestamp() if row["last_active"] else 0), "tasks": lambda row: (-(row["tasks_submitted"]), row["tasks_missed"]), "coding": lambda row: -row["coding_days"], "attendance": lambda row: -(row["attendance"] if row["attendance"] is not None else -1)}
     rows.sort(key=keys.get(sort, keys["score"]))
     return rows
@@ -212,3 +218,16 @@ def send_class_reminders():
         live.save(update_fields=["reminded_at"])
         count += 1
     return count
+
+LEADERBOARD_METRICS = [("class_points", "Class points"), ("task_points", "Task points"), ("attendance", "Attendance"), ("coding_days", "Coding days"), ("score", "MyProgress score")]
+def leaderboard(organization, metric="class_points", group=""):
+    """Students ranked by one measure; equal values share a rank, and students with no attendance yet come last on that board."""
+    rows = student_growth(organization, group=group)
+    value = (lambda row: row[metric] if row[metric] is not None else -1)
+    rows.sort(key=lambda row: (-value(row), display_name(row["user"]).lower()))
+    rank, previous = 0, None
+    for position, row in enumerate(rows, start=1):
+        if value(row) != previous:
+            rank, previous = position, value(row)
+        row["position"], row["value"] = rank, row[metric]
+    return rows
