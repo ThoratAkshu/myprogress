@@ -47,7 +47,7 @@ class AuthenticationFlowTests(TestCase):
         self.assertTrue(user.activity_events.filter(action="created_project").exists())
         self.assertTrue(user.daily_loop_completions.filter(step="build").exists())
     def test_all_workspace_sections_require_auth_and_render(self):
-        sections = ["portfolio", "projects", "learning", "earnings", "rankings", "network"]
+        sections = ["portfolio", "projects", "learning", "earnings", "rankings"]
         for section in sections:
             self.assertEqual(self.client.get(reverse("landing:workspace_section", args=[section])).status_code, 302)
         user = User.objects.create_user(username="tabs@example.com", password="StrongPass!482")

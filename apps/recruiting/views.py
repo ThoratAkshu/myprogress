@@ -15,6 +15,9 @@ from apps.core.models import ActivityEvent
 from apps.notifications.services import notify
 from apps.core.services import CODE_ACTIONS, CONTRIBUTION_ACTIONS, active_coding_days, language_breakdown, platform_languages, visible_developers
 from .models import ContactRequest, Shortlist, ShortlistEntry
+def requests_url():
+    """Where developers answer recruiters: Learn, then Network."""
+    return f'{reverse("landing:workspace_section", args=["learning"])}?tab=network&view=requests'
 recruiter_required = role_required("recruiter", "organization")
 DAILY_CONTACT_LIMIT = 20
 UNVERIFIED_DAILY_CONTACT_LIMIT = 3
@@ -130,12 +133,12 @@ def contact_view(request, handle):
     try:
         with transaction.atomic():
             ContactRequest.objects.create(recruiter=request.user, developer=candidate.user, role_title=role_title, message=message)
-            notify(candidate.user, request.user, "contact_request", f"{request.user.get_full_name() or 'A recruiter'} wants to talk to you about {role_title}", reverse("landing:workspace_section", args=["network"]))
+            notify(candidate.user, request.user, "contact_request", f"{request.user.get_full_name() or 'A recruiter'} wants to talk to you about {role_title}", requests_url())
     except IntegrityError:
         messages.error(request, "You already have a pending request with this developer.")
         return redirect(_safe_next(request, fallback))
     ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=candidate.user, stage="saved").update(stage="contacted", updated_at=timezone.now())
-    messages.success(request, f"Request sent. {candidate.user.first_name or candidate.handle} will see it in their network.")
+    messages.success(request, f"Request sent. {candidate.user.first_name or candidate.handle} will see it under Learn, then Network.")
     return redirect(_safe_next(request, fallback))
 @recruiter_required
 def outreach_view(request):
@@ -154,4 +157,4 @@ def respond_contact_view(request, request_id):
         contact.save(update_fields=["status", "responded_at"])
         notify(contact.recruiter, request.user, "contact_response", f"{request.user.get_full_name() or 'A developer'} {contact.status} your request about {contact.role_title}", reverse("recruiting:outreach"))
         messages.success(request, "Request accepted. Your email is now shared with the recruiter." if action == "accept" else "Request declined.")
-    return redirect("landing:workspace_section", section="network")
+    return redirect(requests_url())

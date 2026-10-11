@@ -23,6 +23,7 @@ from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
 from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
+from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
 from apps.learning.views import record_post_view
@@ -129,12 +130,41 @@ def _workspace_context(request, section="overview"):
         cursor -= timedelta(days=1)
     loop_steps = set(request.user.daily_loop_completions.filter(completed_on=today).values_list("step", flat=True))
     return {"section": section, "profile": profile, "projects": projects, "posts": posts, "own_posts": own_posts, "project_count": project_count, "completed_count": completed_count, "learning_count": own_posts.count(), "total_views": ContentView.objects.filter(post__author=request.user).count(), "total_earnings": earning_balance(request.user), "transactions": request.user.earning_transactions.all()[:10], "follower_count": request.user.follower_relationships.count(), "following_count": request.user.following_relationships.count(), "weekly_days": weekly_days, "weekly_active_count": sum(day["active"] for day in weekly_days), "streak": streak, "loop_steps": loop_steps, "loop_completed_count": len(loop_steps), "setup_percent": sum(setup_items) * 25, "initials": ((request.user.first_name[:1] + request.user.last_name[:1]) or request.user.username[:2]).upper()}
+def network_url(view="discover"):
+    """Where the Network tab lives: under Learn."""
+    return f'{reverse("landing:workspace_section", args=["learning"])}?tab=network' + (f"&view={view}" if view != "discover" else "")
+def _network_context(request, pending):
+    """Learn's Network tab: search anyone, people you may know, who you follow, followers, and recruiter requests."""
+    view = request.GET.get("view") if request.GET.get("view") in NETWORK_VIEWS else "discover"
+    filters = {"query": request.GET.get("q", "").strip()[:100], "language": request.GET.get("language", "").strip()[:40], "location": request.GET.get("location", "").strip()[:60], "role": request.GET.get("role") if request.GET.get("role") in NETWORK_ROLES else "", "sort": request.GET.get("sort") if request.GET.get("sort") in NETWORK_SORTS else "relevant"}
+    searching = any(filters[key] for key in ("query", "language", "location", "role"))
+    people, suggestions = None, []
+    if view == "discover" and searching:
+        people = find_people(request.user, **filters)
+    elif view == "following":
+        people = following_people(request.user)
+    elif view == "followers":
+        people = follower_people(request.user)
+    elif view == "discover":
+        suggestions = decorate_people(request.user, suggested_people(request.user, limit=9))
+    page = Paginator(people, 12).get_page(request.GET.get("page")) if people is not None else None
+    if page:
+        decorate_people(request.user, page.object_list)
+    params = {key: value for key, value in {"q": filters["query"], "language": filters["language"], "location": filters["location"], "role": filters["role"], "sort": filters["sort"] if filters["sort"] != "relevant" else ""}.items() if value}
+    return {
+        "network_view": view, "network_views": NETWORK_VIEWS, "network_filters": filters, "network_searching": searching, "network_page": page, "network_suggestions": suggestions,
+        "network_roles": NETWORK_ROLES, "network_sorts": NETWORK_SORTS, "network_languages": platform_languages(), "network_querystring": urlencode({"tab": "network", "view": view, **params}),
+        "network_counts": {"following": request.user.following_relationships.count(), "followers": request.user.follower_relationships.count(), "requests": pending},
+        "contact_requests": request.user.contact_requests.select_related("recruiter__profile")[:20] if view == "requests" else [],
+    }
 @login_required(login_url="landing:home")
 @never_cache
 def workspace_section_view(request, section):
     allowed = {"portfolio", "projects", "learning", "earnings", "rankings", "network"}
     if section not in allowed:
         return redirect("landing:dashboard")
+    if section == "network":
+        return redirect(network_url("requests" if request.user.contact_requests.filter(status="pending").exists() else "discover"))
     context = _workspace_context(request, section)
     if section == "projects":
         projects = list(request.user.projects.select_related("repository").prefetch_related("milestones"))
@@ -155,22 +185,25 @@ def workspace_section_view(request, section):
             entry.top_language = top[0]["name"] if top else ""
         context.update({"score_components": score_breakdown(request.user), "leaderboard": board, "leaderboard_language": language, "languages": platform_languages(), "is_recruiter": context["profile"].role in RECRUITER_ROLES})
     if section == "learning":
-        tabs = [("for-you", "For you"), ("following", "Following"), ("mine", f"My content {context['learning_count']}")]
+        pending = request.user.contact_requests.filter(status="pending").count()
+        tabs = [("for-you", "For you"), ("following", "Following"), ("mine", f"My content {context['learning_count']}"), ("network", f"Network {pending}" if pending else "Network")]
         tab = request.GET.get("tab") if request.GET.get("tab") in dict(tabs) else "for-you"
-        posts = LearningPost.objects.select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))
-        if tab == "mine":
-            posts = posts.filter(author=request.user)
-        elif tab == "following":
-            posts = posts.filter(is_public=True, author__in=request.user.following_relationships.values("following"))
+        context.update({"learning_tabs": tabs, "learning_tab": tab})
+        if tab == "network":
+            context.update(_network_context(request, pending))
         else:
-            posts = posts.filter(is_public=True)
-        creators = list(User.objects.filter(pk__in=request.user.following_relationships.values("following"), learning_posts__is_public=True).annotate(latest_post=Max("learning_posts__published_at")).select_related("profile").order_by("-latest_post")[:12])
-        for creator in creators:
-            creator.posted_recently = creator.latest_post >= timezone.now() - timedelta(days=7)
-        page = Paginator(posts.order_by("-published_at"), 10).get_page(request.GET.get("page"))
-        context.update({"learning_tabs": tabs, "learning_tab": tab, "learning_creators": creators, "learning_page": page, "liked_ids": set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))})
-    if section == "network":
-        context["contact_requests"] = request.user.contact_requests.select_related("recruiter__profile")[:20]
+            posts = LearningPost.objects.select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))
+            if tab == "mine":
+                posts = posts.filter(author=request.user)
+            elif tab == "following":
+                posts = posts.filter(is_public=True, author__in=request.user.following_relationships.values("following"))
+            else:
+                posts = posts.filter(is_public=True)
+            creators = list(User.objects.filter(pk__in=request.user.following_relationships.values("following"), learning_posts__is_public=True).annotate(latest_post=Max("learning_posts__published_at")).select_related("profile").order_by("-latest_post")[:12])
+            for creator in creators:
+                creator.posted_recently = creator.latest_post >= timezone.now() - timedelta(days=7)
+            page = Paginator(posts.order_by("-published_at"), 10).get_page(request.GET.get("page"))
+            context.update({"learning_creators": creators, "learning_page": page, "liked_ids": set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))})
     if section == "portfolio":
         views = PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30))
         context["portfolio_views"] = views.count()
@@ -452,6 +485,9 @@ def follow_view(request, handle):
         else:
             follow.delete()
         refresh_rank(profile.user)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        following = Follow.objects.filter(follower=request.user, following=profile.user).exists()
+        return JsonResponse({"following": following, "followers": profile.user.follower_relationships.count()})
     return redirect_back(request, "landing:public_profile", handle=profile.handle)
 def verify_email_view(request, token):
     user = user_from_verification_token(token)

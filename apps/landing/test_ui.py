@@ -12,11 +12,14 @@ class AppShellTests(TestCase):
     def test_navigation_depends_on_role_and_highlights_the_current_page(self):
         make_user("dev@example.com", "Dev", "Eloper")
         self.client.force_login(User.objects.get(username="dev@example.com"))
-        network_url = reverse("landing:workspace_section", args=["network"])
-        page = self.client.get(network_url)
-        for label in ["Home", "Network", "Projects", "Learn", "Notifications", "Create"]:
+        rankings_url = reverse("landing:workspace_section", args=["rankings"])
+        page = self.client.get(rankings_url)
+        for label in ["Home", "Rankings", "Projects", "Learn", "Notifications", "Create"]:
             self.assertContains(page, f"<span>{label}</span>", html=False)
-        self.assertContains(page, f'<a class="active" href="{network_url}">', html=False)
+        self.assertNotContains(page, "<span>Network</span>", html=False)
+        self.assertContains(page, f'<a class="active" href="{rankings_url}">', html=False)
+        old_network = self.client.get(reverse("landing:workspace_section", args=["network"]))
+        self.assertRedirects(old_network, reverse("landing:workspace_section", args=["learning"]) + "?tab=network", fetch_redirect_response=False)
         recruiter = make_user("hr@example.com", "Hana", "Iyer", role="recruiter")
         self.client.force_login(recruiter)
         page = self.client.get(reverse("recruiting:search"))
@@ -158,3 +161,51 @@ class ProjectPageTests(TestCase):
         page = self.client.get(reverse("landing:workspace_section", args=["projects"]))
         self.assertContains(page, f'<a href="{reverse("landing:project", args=[self.project.pk])}">Ledger</a>', html=False)
         self.assertContains(page, "data-filter-search")
+class NetworkTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.me = make_user("me@example.com", "Mira", "Kapoor", skills="Django")
+        self.asha = make_user("asha@example.com", "Asha", "Rao", headline="Backend engineer", location="Pune", skills="Django, Postgres")
+        self.ravi = make_user("ravi@example.com", "Ravi", "Menon", headline="Go developer", location="Bengaluru")
+        self.hana = make_user("hana@example.com", "Hana", "Iyer", role="recruiter", headline="Talent at Acme")
+        for user, slug, languages in [(self.me, "mine", {"Python": 900}), (self.asha, "ledger", {"Python": 800, "SQL": 100}), (self.ravi, "queue", {"Go": 700})]:
+            Repository.objects.create(project=Project.objects.create(owner=user, title=slug), owner=user, slug=slug, languages=languages)
+        Follow.objects.create(follower=self.me, following=self.ravi)
+        Follow.objects.create(follower=self.ravi, following=self.asha)
+        Follow.objects.create(follower=self.asha, following=self.me)
+        self.url = reverse("landing:workspace_section", args=["learning"])
+        self.client.force_login(self.me)
+    def people(self, **params):
+        response = self.client.get(self.url, {"tab": "network", **params})
+        page = response.context["network_page"]
+        return response, [person.user for person in (page.object_list if page else response.context["network_suggestions"])]
+    def test_anyone_can_be_found_by_name_skill_language_place_or_role(self):
+        response, suggested = self.people()
+        self.assertIn(self.asha, suggested)
+        self.assertNotIn(self.me, suggested)
+        self.assertContains(response, "People you may know")
+        self.assertEqual(self.people(q="asha")[1], [self.asha])
+        self.assertEqual(self.people(q="postgres")[1], [self.asha])
+        self.assertEqual(self.people(language="Go")[1], [self.ravi])
+        self.assertEqual(self.people(location="pune")[1], [self.asha])
+        self.assertEqual(self.people(role="recruiter")[1], [self.hana])
+        response, everyone = self.people(q="a")
+        self.assertEqual(everyone[0], self.asha)  # followed by someone Mira follows
+        self.assertContains(response, "Followed by 1 you follow")
+        self.assertContains(response, 'title="You both write Python"')
+    def test_following_followers_and_requests_lists(self):
+        response, following = self.people(view="following")
+        self.assertEqual(following, [self.ravi])
+        self.assertContains(response, 'aria-pressed="true"')
+        response, followers = self.people(view="followers")
+        self.assertEqual(followers, [self.asha])
+        self.assertContains(response, "Follow</button>")
+        response = self.client.get(self.url, {"tab": "network", "view": "requests"})
+        self.assertContains(response, "No recruiter requests yet")
+        self.assertContains(self.client.get(self.url), 'href="?tab=network"')
+    def test_follow_updates_in_place_for_scripts(self):
+        url = reverse("landing:follow", args=[self.asha.profile.handle])
+        response = self.client.post(url, headers={"X-Requested-With": "XMLHttpRequest"})
+        self.assertEqual(response.json(), {"following": True, "followers": 2})
+        self.assertEqual(self.client.post(url, headers={"X-Requested-With": "XMLHttpRequest"}).json(), {"following": False, "followers": 1})

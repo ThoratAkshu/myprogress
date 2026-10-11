@@ -1,0 +1,33 @@
+{% load ui %}<div class="network-layout">
+<aside class="card network-side"><h2>My network</h2><nav class="network-nav" aria-label="My network">
+<a class="{% if network_view == 'discover' %}active{% endif %}" href="?tab=network">{% icon "search" 17 %}<span>Find people</span></a>
+<a class="{% if network_view == 'following' %}active{% endif %}" href="?tab=network&amp;view=following">{% icon "users" 17 %}<span>Following</span><b>{{ network_counts.following }}</b></a>
+<a class="{% if network_view == 'followers' %}active{% endif %}" href="?tab=network&amp;view=followers">{% icon "user" 17 %}<span>Followers</span><b>{{ network_counts.followers }}</b></a>
+<a class="{% if network_view == 'requests' %}active{% endif %}" href="?tab=network&amp;view=requests">{% icon "briefcase" 17 %}<span>Recruiter requests</span>{% if network_counts.requests %}<b class="is-new">{{ network_counts.requests }}</b>{% endif %}</a>
+</nav></aside>
+<div class="network-main">
+{% if network_view == "discover" %}
+<form class="card network-search" method="get" role="search" aria-label="Find people"><input type="hidden" name="tab" value="network">
+<div class="network-search-row"><span class="network-search-box">{% icon "search" 18 %}<input type="search" name="q" value="{{ network_filters.query }}" placeholder="Search developers by name, skill, headline, or city" aria-label="Search people" autocomplete="off"></span><button class="button primary">Search</button></div>
+<div class="network-filters">
+<label>Language<select name="language"><option value="">Any language</option>{% for language in network_languages %}<option{% if language == network_filters.language %} selected{% endif %}>{{ language }}</option>{% endfor %}</select></label>
+<label>Location<input name="location" value="{{ network_filters.location }}" placeholder="e.g. Pune or Remote"></label>
+<label>Show<select name="role">{% for value, label in network_roles.items %}<option value="{{ value }}"{% if value == network_filters.role %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label>Sort by<select name="sort">{% for value, label in network_sorts.items %}<option value="{{ value }}"{% if value == network_filters.sort %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+</div></form>
+{% if network_searching %}
+<header class="network-head"><h2>{{ network_page.paginator.count }} {% if network_page.paginator.count == 1 %}person{% else %}people{% endif %}{% if network_filters.query %} for “{{ network_filters.query }}”{% endif %}</h2><a href="?tab=network">Clear search</a></header>
+{% if network_page.object_list %}<div class="people-grid">{% for person in network_page %}{% include "landing/partials/person_card.html" %}{% endfor %}</div>{% else %}<section class="card empty-state">{% icon "search" 32 %}<h2>No one matches that search</h2><p>Try part of a name, a different skill, or fewer filters.</p></section>{% endif %}
+{% else %}
+<header class="network-head"><h2>People you may know</h2><span class="muted small">Picked from the languages and skills you share</span></header>
+{% if network_suggestions %}<div class="people-grid">{% for person in network_suggestions %}{% include "landing/partials/person_card.html" %}{% endfor %}</div>{% else %}<section class="card empty-state">{% icon "users" 32 %}<h2>No suggestions right now</h2><p>Search above to find anyone on MyProgress by name, skill, or city.</p></section>{% endif %}
+{% endif %}
+{% elif network_view == "requests" %}
+<header class="network-head"><h2>Recruiter requests</h2><span class="muted small">Your email is shared only if you accept.</span></header>
+{% for contact in contact_requests %}<article class="card request-row"><header><div><h3>{{ contact.role_title }}</h3><p>{{ contact.recruiter.get_full_name|default:"A recruiter" }}{% if contact.recruiter.profile.headline %} · {{ contact.recruiter.profile.headline }}{% endif %} · {{ contact.created_at|timesince }} ago {% if contact.recruiter.profile.is_verified_recruiter %}<span class="recruiter-badge verified">✓ Verified · {{ contact.recruiter.profile.email_domain }}</span>{% else %}<span class="recruiter-badge">Unverified recruiter</span>{% endif %}</p></div><span class="request-status status-{{ contact.status }}">{{ contact.get_status_display }}</span></header><p>{{ contact.message|linebreaksbr }}</p>{% if contact.status == "pending" %}<form method="post" action="{% url 'recruiting:respond_contact' contact.pk %}">{% csrf_token %}<button class="button primary" name="action" value="accept">Accept and share email</button> <button class="button soft" name="action" value="decline">Decline</button></form>{% elif contact.status == "accepted" %}<a class="portfolio-link" href="mailto:{{ contact.recruiter.email }}">✉ {{ contact.recruiter.email }}</a>{% endif %}</article>{% empty %}<section class="card empty-state">{% icon "briefcase" 32 %}<h2>No recruiter requests yet</h2><p>Recruiters can contact you when your portfolio shows in their search. Ship projects and push code to stand out.</p></section>{% endfor %}
+{% else %}
+<header class="network-head"><h2>{% if network_view == "following" %}People you follow{% else %}Your followers{% endif %}</h2></header>
+{% if network_page.object_list %}<div class="people-grid">{% for person in network_page %}{% include "landing/partials/person_card.html" %}{% endfor %}</div>{% elif network_view == "following" %}<section class="card empty-state">{% icon "users" 32 %}<h2>You aren't following anyone yet</h2><p>Follow developers to see their projects and posts in your feed.</p><a class="button primary" href="?tab=network">Find people</a></section>{% else %}<section class="card empty-state">{% icon "user" 32 %}<h2>No followers yet</h2><p>Share your profile and post what you build to grow your audience.</p><a class="button primary" href="{% url 'landing:public_profile' profile.handle %}">View your profile</a></section>{% endif %}
+{% endif %}
+{% if network_page.has_other_pages %}<nav class="pager">{% if network_page.has_previous %}<a class="button soft" href="?{{ network_querystring }}&amp;page={{ network_page.previous_page_number }}">← Previous</a>{% endif %}<span>Page {{ network_page.number }} of {{ network_page.paginator.num_pages }}</span>{% if network_page.has_next %}<a class="button soft" href="?{{ network_querystring }}&amp;page={{ network_page.next_page_number }}">Next →</a>{% endif %}</nav>{% endif %}
+</div></div>

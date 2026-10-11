@@ -240,7 +240,7 @@ body.app .post-header h1{font-size:32px}
   .app-search,.app-search:focus-within{width:auto;flex:1}
   .app-nav{display:none}
   .app-main{margin-top:12px;padding:0 12px 84px}
-  .app-tabbar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:grid;grid-template-columns:repeat(5,1fr);height:62px;padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--line)}
+  .app-tabbar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);height:62px;padding-bottom:env(safe-area-inset-bottom);background:#fff;border-top:1px solid var(--line)}
   .app-tabbar a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:11.5px;font-weight:600;text-decoration:none}
   .app-tabbar a.active{color:var(--ink)}
   .app-tabbar .nav-badge{top:6px}
@@ -608,3 +608,48 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 .ig-toc .toc-level-4{margin-left:14px;list-style:circle}
 .ig-toc a{color:var(--violet)}
 @media (hover:none){.code-copy{opacity:1}}
+/* Learn > Network: find people, follow them, followers, recruiter requests */
+.network-layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:16px;align-items:start}
+.network-side{position:sticky;top:80px;padding:14px}
+.network-side h2{margin:0 0 8px 6px;font-size:15px}
+.network-nav{display:grid;gap:2px}
+.network-nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);font-size:14px;font-weight:600;text-decoration:none}
+.network-nav a span{flex:1}
+.network-nav a:hover{background:var(--canvas);color:var(--ink)}
+.network-nav a.active{background:var(--violet-soft);color:var(--violet-dark)}
+.network-nav b{min-width:24px;padding:1px 7px;border-radius:99px;background:var(--canvas);color:var(--ink);font-size:12px;text-align:center}
+.network-nav b.is-new{background:var(--danger);color:#fff}
+.network-main{display:grid;gap:16px;min-width:0}
+.network-search{display:grid;gap:12px;padding:16px}
+.network-search-row{display:flex;gap:10px}
+.network-search-box{display:flex;flex:1;align-items:center;gap:8px;min-width:0;height:44px;padding:0 14px;border:1px solid #cfd5dd;border-radius:99px;background:var(--surface);color:var(--muted)}
+.network-search-box:focus-within{border-color:var(--violet);box-shadow:0 0 0 3px var(--violet-soft)}
+.network-search-box input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--ink);font:inherit;font-size:15px}
+.network-search-row .button{height:44px;padding:0 22px;border-radius:99px}
+.network-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.network-filters label{display:grid;gap:4px;color:var(--muted);font-size:12px;font-weight:700}
+.network-filters select,.network-filters input{width:100%;min-width:0;height:36px;padding:0 10px;border:1px solid #cfd5dd;border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;font-weight:500}
+.network-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 12px;margin:4px 2px 0}
+.network-head h2{margin:0;font-size:17px}
+.network-head a{color:var(--violet);font-size:13px;font-weight:700}
+.people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.people-grid>.card+.card,.network-main>.card+.card{margin-top:0}
+.person-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 14px 14px;overflow:hidden;text-align:center}
+.person-card-cover{display:block;align-self:stretch;height:56px;margin:0 -14px;background:var(--banner,linear-gradient(120deg,#bfdbfe,#c7d2fe))}
+.person-card .avatar-lg{margin-top:-36px;border:3px solid var(--surface);text-decoration:none}
+.person-card-name{margin-top:4px;color:var(--ink);font-size:15px;font-weight:700;text-decoration:none}
+.person-card-name:hover{text-decoration:underline}
+.person-card .recruiter-badge{margin:2px 0}
+.person-card-headline{display:-webkit-box;min-height:2.8em;margin:0;overflow:hidden;color:var(--muted);font-size:13px;line-height:1.4;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.person-card-meta{display:flex;align-items:center;gap:4px;margin:0;color:var(--muted);font-size:12px}
+.person-card-langs{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 8px;margin:4px 0 0;font-size:12px;color:var(--muted)}
+.person-card-langs span{display:inline-flex;align-items:center;gap:4px}
+.person-card-langs span.is-shared{color:var(--ink);font-weight:700}
+.person-card-langs i{width:9px;height:9px;border-radius:50%}
+.person-card-social{display:grid;gap:2px;margin:6px 0 8px;color:var(--muted);font-size:12px}
+.person-card-mutual{display:inline-flex;align-items:center;justify-content:center;gap:4px;color:var(--ink);font-weight:600}
+.person-card form{align-self:stretch;margin-top:auto}
+.person-card .button{border-radius:99px}
+.network-main .request-row{padding:16px}
+@media(max-width:860px){.network-layout{grid-template-columns:minmax(0,1fr)}.network-side{position:static}.network-nav{display:flex;overflow-x:auto}.network-nav a{flex:none}.network-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.network-search-row{flex-direction:column}.people-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}}
