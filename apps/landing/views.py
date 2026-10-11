@@ -26,6 +26,7 @@ from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
+from apps.earnings.models import EarningSettings
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view
@@ -46,6 +47,8 @@ from django.db import connection
 logger = logging.getLogger(__name__)
 GIT_AUTH_FAILURE_LIMIT, GIT_AUTH_FAILURE_WINDOW = 30, 300
 LOGIN_FAILURES_PER_EMAIL, LOGIN_FAILURES_PER_IP, LOGIN_FAILURE_WINDOW = 10, 30, 900
+# Live counts only appear once they're big enough to mean something; until then the page states plain facts.
+LIVE_STATS_MINIMUM = 50
 @method_decorator(never_cache, name="dispatch")
 class LandingPageView(TemplateView):
     template_name = "landing/index.html"
@@ -53,6 +56,27 @@ class LandingPageView(TemplateView):
         if request.user.is_authenticated:
             return redirect("landing:dashboard")
         return super().dispatch(request, *args, **kwargs)
+    def get_context_data(self, **kwargs):
+        """Everything on the home page is real: the earning rules as configured, and live developers and posts."""
+        context = super().get_context_data(**kwargs)
+        top = list(leaderboard(limit=5))
+        for profile in top:
+            languages = Counter()
+            for repository in profile.user.repositories.all():
+                languages.update(repository.languages or {})
+            profile.top_language = languages.most_common(1)[0][0] if languages else ""
+        developers = Profile.objects.filter(role="developer").count()
+        rules = EarningSettings.current()
+        coins_from = max(rules.coins_per_conversion - rules.coins_per_video, 0)
+        context.update({
+            "rules": rules,
+            # Sample numbers for the earnings clip, worked out from the live rules so the clip always matches them.
+            "tour": {"coins_from": coins_from, "ring_from": round(coins_from * 100 / max(rules.coins_per_conversion, 1)), "followers_from": max(rules.follower_goal - 3, 0), "balance_from": 260, "balance_to": 260 + rules.rupees_per_conversion},
+            "top_developers": top,
+            "latest_posts": list(LearningPost.objects.filter(is_public=True).select_related("author__profile").order_by("-published_at")[:3]),
+            "live_stats": {"developers": developers, "repositories": Repository.objects.exclude(languages={}).count(), "posts": LearningPost.objects.filter(is_public=True).count()} if developers >= LIVE_STATS_MINIMUM else None,
+        })
+        return context
 @never_cache
 @rate_limit("register", 10, 3600, per="ip")
 def register_view(request):

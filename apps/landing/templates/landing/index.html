@@ -1,16 +1,17 @@
-{% load static ui %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="MyProgress turns projects into a recruiter-ready developer portfolio."><title>MyProgress · Your work is your resume</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'landing/css/site.css' %}"><link rel="stylesheet" href="{% static 'landing/css/themes.css' %}"></head>
+{% load static ui money %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="MyProgress is where developers host code, record video walkthroughs, write articles, get ranked on real work, and earn for teaching."><title>MyProgress · Your work is your resume</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'landing/css/site.css' %}"><link rel="stylesheet" href="{% static 'landing/css/themes.css' %}"></head>
 <body class="site theme-{{ ui_theme }}"><a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header"><div class="site-wrap site-header-inner"><a class="site-brand" href="{% url 'landing:home' %}" aria-label="MyProgress home"><span class="brand-mark"><i></i><i></i><i></i></span>MyProgress</a>
-<nav class="site-nav" id="site-nav" aria-label="Main"><a href="#features">Features</a><a href="#learning">Learning</a><a href="#rankings">Rankings</a><a href="#recruiters">For recruiters</a></nav>
+<nav class="site-nav" id="site-nav" aria-label="Main"><a href="#tour">Tour</a><a href="#how">How it works</a><a href="#rankings">Rankings</a><a href="#earn">Earn</a><a href="#recruiters">For recruiters</a><a href="#faq">FAQ</a></nav>
 <div class="site-actions"><a class="site-btn ghost" href="#signin">Sign in</a><a class="site-btn accent" href="{% url 'landing:register' %}">Join now</a></div>
 <button class="menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav">{% icon "menu" 22 %}</button></div></header>
 
 <section class="site-hero"><div class="site-wrap hero-grid">
 <div class="hero-copy"><span class="hero-chip">{% icon "shield" 14 %}The proof-of-work network for developers</span>
-<h1>Don't just list your skills. <em>Show your progress.</em></h1>
-<p class="hero-lead">Turn every project, contribution, and lesson into a portfolio recruiters can trust. Build in public, teach what you know, and grow through real work.</p>
-<div class="hero-actions"><a class="site-btn accent large" href="{% url 'landing:register' %}">Start building free {% icon "chevron-right" 18 %}</a><a class="site-btn outline large" href="#features">Explore the platform</a></div>
-<div class="hero-proof"><span class="avatar-stack" aria-hidden="true"><b class="tone-blue">AS</b><b class="tone-green">RK</b><b class="tone-amber">MJ</b></span><span><strong>2,400+ developers</strong> shared progress this week</span></div></div>
+<h1>Build it. Teach it. <em>Get ranked and paid for it.</em></h1>
+<p class="hero-lead">Host your code, record video walkthroughs and write articles, all in your browser. Your rank comes from real work, recruiters see skills measured from your code, and creators earn for teaching.</p>
+<div class="hero-actions"><a class="site-btn accent large" href="{% url 'landing:register' %}">Create your free account {% icon "chevron-right" 18 %}</a><a class="site-btn outline large" href="#tour">{% icon "play" 18 %}Watch the tour</a></div>
+<ul class="hero-pills" aria-label="What's included"><li>{% icon "git-branch" 14 %}Git hosting</li><li>{% icon "video" 14 %}Video studio</li><li>{% icon "file-text" 14 %}Article studio</li><li>{% icon "award" 14 %}Rankings</li><li>{% icon "dollar" 14 %}Creator earnings</li></ul>
+<p class="hero-proof">{% if live_stats %}{% icon "users" 16 %}<span><strong>{{ live_stats.developers }} developers</strong> are already building on MyProgress</span>{% else %}{% icon "check-circle" 16 %}<span><strong>Free for developers.</strong> Nothing to install.</span>{% endif %}</p></div>
 <aside class="signin-card" id="signin"><h2>Sign in</h2><p class="card-sub">Welcome back. Continue building your developer story.</p>
 {% if messages %}<div class="site-messages" role="alert">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
 <form action="{% url 'landing:login' %}" method="post">{% csrf_token %}
@@ -22,25 +23,187 @@
 </div></section>
 
 <main id="main">
-<section class="site-wrap stats" aria-label="MyProgress in numbers"><div><b>25k+</b><span>Developer portfolios</span></div><div><b>140k</b><span>Verified contributions</span></div><div><b>8.4k</b><span>Recruiter searches</span></div><div><b>92%</b><span>More portfolio visibility</span></div></section>
+{% if live_stats %}<section class="site-wrap stats" aria-label="MyProgress today"><div><b>{{ live_stats.developers }}</b><span>Developers</span></div><div><b>{{ live_stats.repositories }}</b><span>Repositories with code</span></div><div><b>{{ live_stats.posts }}</b><span>Videos and articles</span></div></section>
+{% else %}<section class="site-wrap facts" aria-label="What you get">
+<div><span class="fact-icon">{% icon "git-branch" 18 %}</span><b>Git hosting built in</b><span>Clone and push over HTTPS with a personal access token.</span></div>
+<div><span class="fact-icon green">{% icon "video" 18 %}</span><b>A studio in your browser</b><span>Screen, camera, captions and chapters. Nothing to install.</span></div>
+<div><span class="fact-icon amber">{% icon "award" 18 %}</span><b>Ranked on evidence</b><span>Scores count pushed code and published work, never logins.</span></div>
+<div><span class="fact-icon violet">{% icon "dollar" 18 %}</span><b>Paid every month</b><span>Earnings go to your UPI ID or bank around the {{ rules.payout_day|ordinal }}.</span></div>
+</section>{% endif %}
 
-<section class="section" id="features"><div class="site-wrap"><header class="section-head"><span class="kicker">Built around real progress</span><h2>Everything your resume cannot show.</h2><p>One place for your work, your learning, your reputation, and your next opportunity.</p></header>
-<div class="feature-grid">
-<article class="feature"><span class="feature-icon">{% icon "box" 22 %}</span><h3>Projects become proof</h3><p>Show the stack, time invested, decisions, live demos, branches, and your exact contribution.</p><div class="project-preview" aria-label="Example project"><div class="row"><b>AI Interview Coach</b><span>86% complete</span></div><div class="progress"><i style="width:86%"></i></div><small>React · Django · PostgreSQL</small></div></article>
-<article class="feature" id="learning"><span class="feature-icon green">{% icon "play" 22 %}</span><h3>Teach what you learn</h3><p>Publish videos, notes, guides, and project breakdowns. Build authority while helping others.</p><a class="more" href="{% url 'landing:register' %}">Open your learning studio {% icon "chevron-right" 16 %}</a></article>
-<article class="feature" id="rankings"><span class="feature-icon amber">{% icon "award" 22 %}</span><h3>Progress you can measure</h3><p>Rise through skill, consistency, verified work, collaboration, and community impact.</p><a class="more" href="{% url 'landing:register' %}">See how ranking works {% icon "chevron-right" 16 %}</a></article>
-</div></div></section>
+<section class="section tour-section" id="tour"><div class="site-wrap">
+<header class="section-head"><span class="kicker">Product tour</span><h2>See what you can do on day one.</h2><p>Each clip replays the real interface with sample data, so you know exactly what you get after signing up.</p></header>
+<div class="tour" data-tour>
+<div class="tour-tabs" role="tablist" aria-label="Features">
+<button class="tour-tab" role="tab" type="button" id="tab-code" aria-controls="scene-code" aria-selected="true"><span class="tour-tab-icon">{% icon "git-branch" 18 %}</span><span class="tour-tab-text"><b>Host code, prove your work</b><small>Push with Git. Languages and activity come from your commits.</small></span><span class="tour-progress"><i></i></span></button>
+<button class="tour-tab" role="tab" type="button" id="tab-video" aria-controls="scene-video" aria-selected="false" tabindex="-1"><span class="tour-tab-icon green">{% icon "video" 18 %}</span><span class="tour-tab-text"><b>Record videos in your browser</b><small>Screen and camera, layouts, live captions and chapters.</small></span><span class="tour-progress"><i></i></span></button>
+<button class="tour-tab" role="tab" type="button" id="tab-article" aria-controls="scene-article" aria-selected="false" tabindex="-1"><span class="tour-tab-icon violet">{% icon "file-text" 18 %}</span><span class="tour-tab-text"><b>Write articles faster</b><small>Voice typing, code from your repository, and AI help.</small></span><span class="tour-progress"><i></i></span></button>
+<button class="tour-tab" role="tab" type="button" id="tab-rank" aria-controls="scene-rank" aria-selected="false" tabindex="-1"><span class="tour-tab-icon amber">{% icon "award" 18 %}</span><span class="tour-tab-text"><b>Climb the rankings</b><small>A score out of 100, built only from real work.</small></span><span class="tour-progress"><i></i></span></button>
+<button class="tour-tab" role="tab" type="button" id="tab-earn" aria-controls="scene-earn" aria-selected="false" tabindex="-1"><span class="tour-tab-icon gold">{% icon "dollar" 18 %}</span><span class="tour-tab-text"><b>Earn for teaching</b><small>Coins for every post, paid out every month.</small></span><span class="tour-progress"><i></i></span></button>
+</div>
 
-<section class="section alt" id="recruiters"><div class="site-wrap recruiter">
-<div class="recruiter-copy"><span class="kicker">Recruiter view</span><h2>Be discovered for what you can actually build.</h2><p>Give verified recruiters a focused view of your strongest projects, skills, availability, and contribution history, with privacy controls in your hands.</p>
-<ul class="check-list"><li>{% icon "check-circle" 18 %}<span>Languages measured from the code you push, not self-reported</span></li><li>{% icon "check-circle" 18 %}<span>Only verified recruiters can contact you</span></li><li>{% icon "check-circle" 18 %}<span>You choose which projects are public</span></li></ul></div>
-<div class="candidate" aria-label="Example candidate card"><div class="candidate-top"><span class="candidate-avatar tone-blue">AS</span><div><strong>Aarav Sharma {% icon "check-circle" 16 "Verified" %}</strong><small>Full-stack developer · Pune</small></div><span class="match">94% match</span></div>
-<div class="chips"><span>React</span><span>Django</span><span>AWS</span></div>
-<div><span class="candidate-label">Verified languages</span><div class="lang-bar"><i style="width:48%;background:#3572A5"></i><i style="width:34%;background:#3178c6"></i><i style="width:18%;background:#00ADD8"></i></div></div>
-<ul class="lang-list"><li><i style="background:#3572A5"></i>Python 48%</li><li><i style="background:#3178c6"></i>TypeScript 34%</li><li><i style="background:#00ADD8"></i>Go 18%</li></ul></div>
+<div class="tour-player">
+<div class="tour-window">
+<div class="tour-chrome"><span class="tour-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="tour-url" data-tour-url>myprogress / projects / ledger-service</span><span class="tour-sample">Sample data</span></div>
+<div class="tour-stage">
+
+<div class="tour-scene" id="scene-code" role="tabpanel" aria-labelledby="tab-code" data-url="myprogress / projects / ledger-service" data-steps="0,1500,1950,2400,2900,3300,3800,4300" data-length="9000" data-caption="You push code with Git. The project picks up its languages and commits, and its milestones show your progress.">
+<div class="sc-code">
+<div class="sc-term" aria-hidden="true">
+<p><span class="sc-prompt">~/ledger-service $</span> <span data-at="0" data-do="type" data-text="git push origin main"></span><span class="sc-caret"></span></p>
+<p class="sc-dim" data-at="1">Enumerating objects: 42, done.</p>
+<p class="sc-dim" data-at="2">Writing objects: 100% (42/42), 18.4 KiB</p>
+<p class="sc-ok" data-at="3">To myprogress …/ledger-service.git</p>
+<p class="sc-ok" data-at="3">&nbsp;&nbsp;3f9c2e1..8a71d04&nbsp; main → main</p>
+</div>
+<div class="sc-card">
+<div class="sc-row"><b>Ledger service</b><em class="sc-pill" data-at="4" data-do="swap" data-text="Code verified">Planning</em></div>
+<small class="sc-muted">A double-entry ledger API</small>
+<div class="sc-langbar"><i data-at="4" style="--w:64%;background:#00ADD8"></i><i data-at="4" style="--w:22%;background:#89e051"></i><i data-at="4" style="--w:14%;background:#384d54"></i></div>
+<div class="sc-legend"><span><i style="background:#00ADD8"></i>Go 64%</span><span><i style="background:#89e051"></i>Shell 22%</span><span><i style="background:#384d54"></i>Dockerfile 14%</span></div>
+<ul class="sc-milestones"><li data-at="5">Plan the solution</li><li data-at="6">Build the core</li><li data-at="7">Document the work</li><li>Publish a demo</li></ul>
+<div class="sc-stats"><span>Commits <b data-at="4" data-do="count" data-from="0" data-to="24">0</b></span><span>Coding days <b data-at="4" data-do="count" data-from="0" data-to="9">0</b></span><span>Score <b data-at="6" data-do="count" data-from="12" data-to="31">12</b></span></div>
+</div>
+<div class="sc-calendar" aria-hidden="true">{% for level in "0102010300120203010230102031" %}<i class="l{{ level }}"{% if forloop.counter > 22 %} data-at="7"{% endif %}></i>{% endfor %}</div>
+</div>
+</div>
+
+<div class="tour-scene" id="scene-video" role="tabpanel" aria-labelledby="tab-video" data-url="myprogress / learn / new video" data-steps="0,900,1700,2600,3800,5000,6000,7000" data-length="9500" data-caption="You record your screen with your camera in the corner, switch layouts, and captions and chapters are made as you talk. When you stop, it uploads and publishes." hidden>
+<div class="sc-rec">
+<div class="sc-rec-top"><span class="sc-rec-live"><i></i>REC <b data-at="0" data-do="count" data-from="0" data-to="38" data-ms="7600" data-format="clock">00:00</b></span><span class="sc-chips"><em class="on">Full</em><em data-at="3" data-do="activate">Framed</em><em>Side by side</em></span></div>
+<div class="sc-rec-body">
+<div class="sc-canvas" data-at="3">
+<div class="sc-screen"><p><i style="--w:38%" class="k"></i><i style="--w:26%"></i></p><p class="in"><i style="--w:22%" class="k"></i><i style="--w:44%"></i></p><p class="in"><i style="--w:30%"></i><i style="--w:18%" class="s"></i></p><p class="hl"><i style="--w:16%" class="k"></i><i style="--w:52%"></i></p><p class="in"><i style="--w:40%" class="s"></i></p><p><i style="--w:12%" class="k"></i></p></div>
+<span class="sc-cam" aria-hidden="true">{% icon "user" 30 %}</span>
+<p class="sc-captions"><span data-at="2" data-do="type" data-text="This is how the ledger keeps every balance in sync." data-speed="45"></span></p>
+</div>
+<aside class="sc-chapters"><small>Chapters</small><p data-at="1"><b>0:00</b>Intro</p><p data-at="4"><b>0:12</b>The data model</p><p data-at="5"><b>0:31</b>Testing payments</p></aside>
+</div>
+<div class="sc-upload" data-at="6"><span>Uploading</span><span class="sc-meter"><i></i></span></div>
+<div class="sc-toast" data-at="7">{% icon "check-circle" 16 %}Published · +{{ rules.coins_per_video }} coins</div>
+</div>
+</div>
+
+<div class="tour-scene" id="scene-article" role="tabpanel" aria-labelledby="tab-article" data-url="myprogress / learn / new article" data-steps="0,700,3400,4300,6300,6900,7900" data-length="9500" data-caption="You dictate with voice typing, drop in code straight from your repository, and let AI help tighten a sentence before you publish." hidden>
+<div class="sc-article">
+<div class="sc-toolbar" aria-hidden="true"><b>B</b><i>I</i><span>H2</span><span>{% icon "list" 14 %}</span><span>{% icon "code" 14 %}</span><span>{% icon "image" 14 %}</span><span class="sc-mic" data-at="0">{% icon "mic" 14 %}Listening</span><span class="sc-ai" data-at="4">{% icon "zap" 14 %}AI: make it clearer</span></div>
+<div class="sc-doc">
+<h4>Moving the ledger to PostgreSQL</h4>
+<p><span data-at="1" data-do="type" data-text="Today I moved the ledger service from SQLite to PostgreSQL." data-speed="38"></span></p>
+<div class="sc-snippet" data-at="2"><small>{% icon "git-branch" 12 %}From your repository · ledger/models.py</small><pre><code><span class="k">class</span> Entry(models.Model):
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    account = models.ForeignKey(Account, on_delete=models.PROTECT)</code></pre></div>
+<p><span class="sc-rewrite" data-at="3" data-do="type" data-text="the hard bit was two payments at once." data-speed="40"></span><span class="sc-rewrite-new" data-at="5" data-do="swap" data-text="The tricky part: locking each row, so two payments can never change one balance at the same time."></span></p>
+</div>
+<aside class="sc-outline"><small>Outline</small><p data-at="1">Why PostgreSQL</p><p data-at="2">The data model</p><p data-at="5">Locking rows</p></aside>
+<div class="sc-toast" data-at="6">{% icon "check-circle" 16 %}Published · +{{ rules.coins_per_article }} coins</div>
+</div>
+</div>
+
+<div class="tour-scene" id="scene-rank" role="tabpanel" aria-labelledby="tab-rank" data-url="myprogress / rankings" data-steps="0,500,1000,1500,2000,2500,3600,4600" data-length="8500" data-caption="Your score out of 100 comes from verified shipped work, coding consistency, teaching, community and a complete profile, and your rank moves with it." hidden>
+<div class="sc-rank">
+<div class="sc-standing">
+<small>Your global rank</small>
+<b class="sc-rank-num"><span data-at="0" data-do="count" data-from="48" data-to="9" data-ms="3200" data-format="rank">#48</span></b>
+<span class="sc-move" data-at="6">{% icon "trending-up" 14 %}Up 39 places this week</span>
+<div class="sc-score"><span data-at="0" data-do="count" data-from="31" data-to="77" data-ms="3200">31</span><small>/ 100 score</small></div>
+</div>
+<div class="sc-breakdown">
+<div class="sc-part"><span>Verified shipped work</span><b>28 / 35</b><i class="sc-bar"><i data-at="1" style="--w:80%"></i></i></div>
+<div class="sc-part"><span>Coding consistency</span><b>19 / 25</b><i class="sc-bar"><i data-at="2" style="--w:76%"></i></i></div>
+<div class="sc-part"><span>Teaching</span><b>14 / 20</b><i class="sc-bar"><i data-at="3" style="--w:70%"></i></i></div>
+<div class="sc-part"><span>Community</span><b>6 / 10</b><i class="sc-bar"><i data-at="4" style="--w:60%"></i></i></div>
+<div class="sc-part"><span>Profile completeness</span><b>10 / 10</b><i class="sc-bar"><i data-at="5" style="--w:100%"></i></i></div>
+</div>
+<div class="sc-badge" data-at="7">{% icon "zap" 16 %}Achievement unlocked · 7-day coding streak</div>
+</div>
+</div>
+
+<div class="tour-scene" id="scene-earn" role="tabpanel" aria-labelledby="tab-earn" data-url="myprogress / earnings" data-steps="0,800,2200,3200,4400,5600" data-length="9000" data-caption="Each post earns coins. At {{ rules.follower_goal }} followers your earnings unlock with a bonus, every {{ rules.coins_per_conversion }} coins become {{ rules.rupees_per_conversion|inr }}, and you're paid every month." hidden>
+<div class="sc-earn">
+<div class="sc-earn-hero">
+<div class="sc-balance"><small>Balance</small><b><span data-at="3" data-do="count" data-from="{{ tour.balance_from }}" data-to="{{ tour.balance_to }}" data-format="inr">{{ tour.balance_from|inr }}</span></b><span class="sc-muted-light">This month (estimated)</span></div>
+<div class="sc-ring" style="--from:{{ tour.ring_from }};--to:100"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="sc-ring-track" cx="60" cy="60" r="50"/><circle class="sc-ring-fill" data-at="1" cx="60" cy="60" r="50" pathLength="100"/></svg><div><b><span data-at="1" data-do="count" data-from="{{ tour.coins_from }}" data-to="{{ rules.coins_per_conversion }}">{{ tour.coins_from }}</span></b><small>of {{ rules.coins_per_conversion }} coins</small></div></div>
+<div class="sc-followers"><small>Followers</small><b><span data-at="2" data-do="count" data-from="{{ tour.followers_from }}" data-to="{{ rules.follower_goal }}">{{ tour.followers_from }}</span> / {{ rules.follower_goal }}</b><i class="sc-bar light"><i data-at="2" style="--w:100%"></i></i><span class="sc-unlocked" data-at="2">{% icon "unlock" 14 %}Earnings unlocked · {{ rules.follower_bonus|inr }} bonus</span></div>
+</div>
+<div class="sc-toast" data-at="3">{% icon "zap" 16 %}{{ rules.coins_per_conversion }} coins became {{ rules.rupees_per_conversion|inr }}</div>
+<div class="sc-pay" data-at="4"><span class="sc-pay-icon">{% icon "calendar" 18 %}</span><div><b>Next payment around the {{ rules.payout_day|ordinal }}</b><small>Paid to your UPI ID or bank once your balance is {{ rules.minimum_payout|inr }} or more</small></div><em data-at="5">Scheduled</em></div>
+</div>
+</div>
+
+</div>
+</div>
+<div class="tour-controls"><button class="tour-toggle" type="button" data-tour-toggle aria-label="Pause the tour">{% icon "pause" 16 %}{% icon "play" 16 %}</button><p class="tour-caption" data-tour-caption aria-live="polite">You push code with Git. The project picks up its languages and commits, and its milestones show your progress.</p></div>
+</div>
+</div>
 </div></section>
 
-<section class="section"><div class="site-wrap"><div class="cta"><h2>Build something worth showing.</h2><p>Join developers turning everyday learning into visible career momentum.</p><a class="site-btn light large" href="{% url 'landing:register' %}">Create your free portfolio</a></div></div></section>
+<section class="section alt" id="how"><div class="site-wrap">
+<header class="section-head"><span class="kicker">How it works</span><h2>From first commit to first payment.</h2><p>Four steps, all on one platform.</p></header>
+<ol class="steps">
+<li><span class="step-num">1</span><b>Create your profile</b><p>Add a headline, skills and location. A complete profile is worth 10 points of your score.</p></li>
+<li><span class="step-num">2</span><b>Push your projects</b><p>Create a Git repository for any project in one click. Push code and your languages and coding days are measured for you.</p></li>
+<li><span class="step-num">3</span><b>Teach what you built</b><p>Record a walkthrough or write an article from a branch. AI can draft one for you to edit.</p></li>
+<li><span class="step-num">4</span><b>Get ranked, found and paid</b><p>Climb the leaderboard, show recruiters real skills, and earn coins that turn into money.</p></li>
+</ol>
+</div></section>
+
+<section class="section" id="rankings"><div class="site-wrap rank-split">
+<div><span class="kicker">Rankings</span><h2>A score you earn, not one you claim.</h2><p class="section-lead">Your score is out of 100 and only counts work that leaves evidence. Signing in or clicking around never adds a point.</p>
+<ul class="score-parts">
+<li><span>Verified shipped work</span><b>35</b><i style="--w:100%"></i></li>
+<li><span>Coding consistency (last 90 days)</span><b>25</b><i style="--w:71%"></i></li>
+<li><span>Teaching: posts and readers</span><b>20</b><i style="--w:57%"></i></li>
+<li><span>Community: followers</span><b>10</b><i style="--w:29%"></i></li>
+<li><span>Profile completeness</span><b>10</b><i style="--w:29%"></i></li>
+</ul></div>
+<div class="live-board">
+<div class="live-head"><b>{% icon "award" 18 %}Top developers right now</b><span class="live-dot">Live</span></div>
+{% for profile in top_developers %}<a class="live-row" href="{% url 'landing:public_profile' profile.handle %}"><span class="live-rank">#{{ forloop.counter }}</span><span class="live-avatar {{ profile.user|avatar_tone }}">{{ profile.user|initials }}</span><span class="live-who"><b>{{ profile.user.get_full_name|default:profile.handle }}</b><small>{{ profile.headline|default:"Developer"|truncatechars:48 }}{% if profile.top_language %} · {{ profile.top_language }}{% endif %}</small></span><span class="live-score">{{ profile.score }}</span></a>
+{% empty %}<div class="live-empty">{% icon "award" 22 %}<b>The leaderboard is waiting for its first names.</b><span>Push your first commit and you could be number one.</span><a class="site-btn primary" href="{% url 'landing:register' %}">Claim a spot</a></div>{% endfor %}
+</div>
+</div></section>
+
+{% if latest_posts %}<section class="section alt" id="learning"><div class="site-wrap">
+<header class="section-head"><span class="kicker">Fresh from the community</span><h2>Learn from what developers are building.</h2></header>
+<div class="post-row">{% for post in latest_posts %}<a class="post-tile" href="{% url 'learning:detail' post.pk %}"><span class="post-kind {{ post.kind }}">{% if post.kind == 'video' %}{% icon "play" 14 %}Video{% else %}{% icon "file-text" 14 %}Article{% endif %}</span><b>{{ post.title|truncatechars:80 }}</b><small>{{ post.author.get_full_name|default:post.author.profile.handle }} · {{ post.published_at|date:"M j" }}</small></a>{% endfor %}</div>
+</div></section>{% endif %}
+
+<section class="section" id="earn"><div class="site-wrap">
+<header class="section-head"><span class="kicker">Creator earnings</span><h2>Get paid for helping other developers.</h2><p>These are the current rules, shown here exactly as MyProgress applies them.</p></header>
+<div class="earn-rules-grid">
+<div><span class="rule-coin">+{{ rules.coins_per_article }}</span><b>coins per article</b><small>Every public article you publish</small></div>
+<div><span class="rule-coin">+{{ rules.coins_per_video }}</span><b>coins per video</b><small>Every public video you publish</small></div>
+<div><span class="rule-coin green">{{ rules.follower_goal }}</span><b>followers unlock earnings</b><small>Plus a one-time {{ rules.follower_bonus|inr }} bonus. Coins you earn before then are saved.</small></div>
+<div><span class="rule-coin">{{ rules.coins_per_conversion }}</span><b>coins = {{ rules.rupees_per_conversion|inr }}</b><small>Converted into your balance automatically</small></div>
+<div><span class="rule-coin violet">{{ rules.payout_day|ordinal }}</span><b>paid every month</b><small>To your UPI ID or bank, once your balance is {{ rules.minimum_payout|inr }} or more</small></div>
+</div>
+<p class="fine-print">Up to {{ rules.daily_post_limit }} posts a day earn coins, and unpublishing or deleting a post removes its coins. A PAN is needed before payments are sent.</p>
+</div></section>
+
+<section class="section alt" id="recruiters"><div class="site-wrap recruiter">
+<div class="recruiter-copy"><span class="kicker">For recruiters</span><h2>Hire for what developers can actually build.</h2><p>Search developers by skill and language, see the projects behind their score, and reach out directly.</p>
+<ul class="check-list"><li>{% icon "check-circle" 18 %}<span>Languages are measured from the code each developer pushes, not typed in</span></li><li>{% icon "check-circle" 18 %}<span>Search only shows developers who turned on recruiter visibility</span></li><li>{% icon "check-circle" 18 %}<span>You reach developers with a contact request they can accept or decline</span></li><li>{% icon "check-circle" 18 %}<span>Confirm a company email to become a verified recruiter</span></li></ul>
+<a class="site-btn primary large" href="{% url 'landing:register' %}">Create a recruiter account</a></div>
+<div class="candidate" aria-label="Example developer card"><span class="example-tag">Example</span><div class="candidate-top"><span class="candidate-avatar tone-blue">YN</span><div><strong>Your name</strong><small>Backend developer · Pune</small></div><span class="match">Score 77</span></div>
+<div class="chips"><span>Go</span><span>PostgreSQL</span><span>Docker</span></div>
+<div><span class="candidate-label">Languages from pushed code</span><div class="lang-bar"><i style="width:64%;background:#00ADD8"></i><i style="width:22%;background:#89e051"></i><i style="width:14%;background:#384d54"></i></div></div>
+<ul class="lang-list"><li><i style="background:#00ADD8"></i>Go 64%</li><li><i style="background:#89e051"></i>Shell 22%</li><li><i style="background:#384d54"></i>Dockerfile 14%</li></ul></div>
+</div></section>
+
+<section class="section" id="faq"><div class="site-wrap faq-wrap">
+<header class="section-head"><span class="kicker">Questions</span><h2>Good to know before you join.</h2></header>
+<div class="faq">
+<details><summary>Is MyProgress free?</summary><p>Yes. Creating an account, hosting code, publishing videos and articles, and appearing in the rankings are free for developers.</p></details>
+<details><summary>Do I need any software to record videos?</summary><p>No. The video studio runs in a modern desktop browser such as Chrome or Edge. It records your screen, your camera or both, adds live captions and chapters, and uploads when you stop.</p></details>
+<details><summary>How is my rank calculated?</summary><p>Your score is out of 100: verified shipped work (35), coding consistency over the last 90 days (25), teaching (20), followers (10) and a complete profile (10). Ranks compare scores across developers. Logins and clicks never count.</p></details>
+<details><summary>How do I earn money?</summary><p>Articles earn {{ rules.coins_per_article }} coins and videos {{ rules.coins_per_video }}. Once you reach {{ rules.follower_goal }} followers, earnings unlock with a {{ rules.follower_bonus|inr }} bonus and every {{ rules.coins_per_conversion }} coins become {{ rules.rupees_per_conversion|inr }}. Each month closes on the 1st and is paid around the {{ rules.payout_day|ordinal }} to your UPI ID or bank, once your balance is {{ rules.minimum_payout|inr }} or more.</p></details>
+<details><summary>Can I keep projects private?</summary><p>Yes. Each repository is private or public, and you choose which projects show on your public profile. You can also turn off recruiter visibility at any time.</p></details>
+<details><summary>Who can see my email?</summary><p>Nobody, unless you choose to show it on your profile. If you accept a recruiter's contact request, that recruiter sees it so they can reply.</p></details>
+</div>
+</div></section>
+
+<section class="section"><div class="site-wrap"><div class="cta"><h2>Build something worth showing.</h2><p>Create your account in under a minute, then add your first project.</p><a class="site-btn light large" href="{% url 'landing:register' %}">Create your free account</a></div></div></section>
 </main>
-<footer class="site-footer"><div class="site-wrap"><span>© 2026 MyProgress. Built for builders.</span><nav aria-label="Footer"><a href="#signin">Sign in</a><a href="{% url 'landing:register' %}">Create account</a></nav></div></footer>
-<script src="{% static 'landing/js/site.js' %}"></script></body></html>
+<footer class="site-footer"><div class="site-wrap"><span>© 2026 MyProgress. Built for builders.</span><nav aria-label="Footer"><a href="#tour">Tour</a><a href="#faq">FAQ</a><a href="#signin">Sign in</a><a href="{% url 'landing:register' %}">Create account</a></nav></div></footer>
+<script src="{% static 'landing/js/site.js' %}"></script><script src="{% static 'landing/js/site-tour.js' %}" defer></script></body></html>
