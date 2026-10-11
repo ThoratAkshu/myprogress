@@ -8,7 +8,7 @@
 <div class="org-copy"><input value="{{ invite_url }}" readonly aria-label="Invite link"><button class="button primary" type="button" data-copy-link>Copy link</button></div>
 {% if member.role == 'owner' %}<form method="post" action="{% url 'organizations:settings' organization.slug %}" data-confirm="Make a new link? The current one stops working.">{% csrf_token %}<input type="hidden" name="action" value="new_code"><button class="button soft">{% icon "rotate-ccw" 16 %}Make a new link</button></form>{% endif %}
 </section>
-<section class="card"><div class="card-heading"><h2>Invite by email</h2></div>
+<section class="card"><div class="card-heading"><h2>Invite by email</h2><a href="{% url 'organizations:import' organization.slug %}">{% icon "download" 14 %} Import a spreadsheet</a></div>
 <form method="post" class="org-form">{% csrf_token %}
 {% for field in form %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
 <button class="button primary">Send invites</button>
@@ -17,8 +17,8 @@
 </section>
 </div>
 <section class="card org-table-card"><div class="card-heading pad"><h2>Sent invites</h2></div>
-<div class="org-table" role="table" aria-label="Invites"><div class="org-tr head invites" role="row"><span role="columnheader">Email</span><span role="columnheader">Role</span><span role="columnheader">Batch</span><span role="columnheader">Sent</span><span role="columnheader">Status</span></div>
-{% for invite in invites %}<div class="org-tr invites" role="row"><span role="cell">{{ invite.email }}</span><span role="cell">{{ invite.get_role_display }}</span><span role="cell">{{ invite.group|default:"—" }}</span><span role="cell">{{ invite.created_at|date:"M j" }}</span><span role="cell">{% if invite.accepted_at %}<em class="org-pill approved">Joined</em>{% else %}<em class="org-pill">Not yet</em>{% endif %}</span></div>
+<div class="org-table" role="table" aria-label="Invites"><div class="org-tr head invites" role="row"><span role="columnheader">Person</span><span role="columnheader">Role</span><span role="columnheader">Batch</span><span role="columnheader">Sent</span><span role="columnheader">Status</span></div>
+{% for invite in invites %}<div class="org-tr invites" role="row"><span role="cell"><b>{{ invite.name|default:invite.email }}</b>{% if invite.name %}<small>{{ invite.email }}</small>{% endif %}</span><span role="cell">{{ invite.get_role_display }}</span><span role="cell">{{ invite.group|default:"—" }}</span><span role="cell">{{ invite.created_at|date:"M j" }}</span><span role="cell">{% if invite.accepted_at %}<em class="org-pill approved">Joined</em>{% else %}<em class="org-pill">Not yet</em>{% endif %}</span></div>
 {% empty %}<p class="org-empty-line pad">No email invites yet.</p>{% endfor %}
 </div></section>
 </div>{% endblock %}

@@ -1,7 +1,11 @@
 """Organization rules: who can see what, joining, invites, and the growth numbers teachers see."""
+import csv
+import io
 from collections import defaultdict
 from datetime import timedelta
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.urls import reverse
@@ -259,3 +263,69 @@ def progress_report(member):
         "classes": [{"live": live, "status": marks.get(live.pk, "absent")} for live in held],
         "certificates": Certificate.objects.filter(organization=organization, student=member.user, revoked_at__isnull=True),
     }
+IMPORT_LIMIT = 500
+IMPORT_COLUMNS = {"email": "email", "e-mail": "email", "email address": "email", "name": "name", "full name": "name", "student name": "name", "batch": "group", "group": "group", "class": "group", "section": "group", "role": "role", "type": "role"}
+def parse_member_csv(organization, data):
+    """Read an uploaded spreadsheet of people to invite and say what will happen to each row, before anything is sent."""
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = data.decode("latin-1")
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = [row for row in csv.reader(io.StringIO(text), dialect) if any(cell.strip() for cell in row)]
+    if not rows:
+        return [], "The file is empty."
+    header = [cell.strip().lower() for cell in rows[0]]
+    if any(IMPORT_COLUMNS.get(cell) == "email" for cell in header):
+        columns = [IMPORT_COLUMNS.get(cell) for cell in header]
+        rows = rows[1:]
+    else:
+        columns = ["email", "name", "group", "role"]
+    if len(rows) > IMPORT_LIMIT:
+        return [], f"Import up to {IMPORT_LIMIT} people at a time; this file has {len(rows)}."
+    members = {email.lower() for email in Membership.objects.filter(organization=organization).values_list("user__email", flat=True)}
+    invited = {email.lower() for email in Invite.objects.filter(organization=organization, accepted_at__isnull=True).values_list("email", flat=True)}
+    seen, parsed = set(), []
+    first_line = 2 if header and any(IMPORT_COLUMNS.get(cell) == "email" for cell in header) else 1
+    for number, cells in enumerate(rows, start=first_line):
+        record = {"line": number, "email": "", "name": "", "group": "", "role": "student"}
+        for column, cell in zip(columns, cells):
+            if column:
+                record[column] = cell.strip()
+        record["email"] = record["email"].lower()
+        record["name"], record["group"] = record["name"][:120], record["group"][:60]
+        record["role"] = "teacher" if record["role"].strip().lower() == "teacher" else "student"
+        try:
+            validate_email(record["email"])
+            valid = True
+        except ValidationError:
+            valid = False
+        if not valid:
+            record["status"] = "Invalid email"
+        elif record["email"] in seen:
+            record["status"] = "Listed twice"
+        elif record["email"] in members:
+            record["status"] = "Already a member"
+        elif record["email"] in invited:
+            record["status"] = "Already invited"
+        else:
+            record["status"] = "ok"
+        seen.add(record["email"])
+        parsed.append(record)
+    return parsed, ""
+def invite_rows(organization, actor, rows, send):
+    """Create and send an invite for each new row from an import. Returns the invites created."""
+    created = []
+    members = {email.lower() for email in Membership.objects.filter(organization=organization).values_list("user__email", flat=True)}
+    invited = {email.lower() for email in Invite.objects.filter(organization=organization, accepted_at__isnull=True).values_list("email", flat=True)}
+    for row in rows:
+        if row["email"] in members or row["email"] in invited:
+            continue
+        invite = Invite.objects.create(organization=organization, email=row["email"], name=row["name"], role=row["role"], group=row["group"], created_by=actor)
+        send(invite)
+        created.append(invite)
+        invited.add(row["email"])
+    return created

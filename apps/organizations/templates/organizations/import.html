@@ -1,0 +1,28 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Import students · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<a class="org-back" href="{% url 'organizations:invite' organization.slug %}">{% icon "chevron-right" 14 %}Invite</a>
+{% if not rows %}<div class="org-grid">
+<form method="post" enctype="multipart/form-data" class="card org-form">{% csrf_token %}<input type="hidden" name="action" value="preview">
+<h2>Import a spreadsheet</h2>
+<p class="muted">Upload a CSV with one person per row. You'll see exactly who will be invited before anything is sent.</p>
+<label class="org-drop">{% icon "folder" 24 %}<span><b>Choose a CSV file</b><small>Up to {{ limit }} people, 1 MB</small></span><input type="file" name="file" accept=".csv,text/csv" required></label>
+{% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+<button class="button primary">Check the file</button>
+</form>
+<section class="card"><h2>Columns</h2>
+<table class="org-columns"><tr><th>email</th><td>Required.</td></tr><tr><th>name</th><td>Optional, used to greet them.</td></tr><tr><th>batch</th><td>Optional, like Batch A 2026.</td></tr><tr><th>role</th><td>Optional: student (default) or teacher.</td></tr></table>
+<p class="muted small">Column names can be in any order; files without a header row are read as email, name, batch, role. Exports from Excel and Google Sheets work as they are.</p>
+<a class="button soft" href="{% url 'organizations:import_template' organization.slug %}">{% icon "download" 16 %}Download a template</a>
+</section>
+</div>
+{% else %}
+<section class="card"><div class="card-heading"><h2>Check before sending</h2><span class="muted">{{ ready|length }} to invite{% if skipped %} · {{ skipped }} skipped{% endif %}</span></div>
+<div class="org-table" role="table" aria-label="Rows in the file"><div class="org-tr head import" role="row"><span role="columnheader">Row</span><span role="columnheader">Email</span><span role="columnheader">Name</span><span role="columnheader">Batch</span><span role="columnheader">Role</span><span role="columnheader">Result</span></div>
+{% for row in rows %}<div class="org-tr import" role="row"><span role="cell">{{ row.line }}</span><span role="cell">{{ row.email|default:"—" }}</span><span role="cell">{{ row.name|default:"—" }}</span><span role="cell">{{ row.group|default:"—" }}</span><span role="cell">{{ row.role|capfirst }}</span><span role="cell">{% if row.status == 'ok' %}<em class="org-pill approved">Will invite</em>{% elif row.status == 'Invalid email' %}<em class="org-pill missed">{{ row.status }}</em>{% else %}<em class="org-pill">{{ row.status }}</em>{% endif %}</span></div>{% endfor %}
+</div>
+<div class="org-form-actions org-import-actions">{% if ready %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="confirm"><button class="button primary">Send {{ ready|length }} invite{{ ready|length|pluralize }}</button></form>{% endif %}<a class="button soft" href="{% url 'organizations:import' organization.slug %}">Upload a different file</a></div>
+</section>
+{% endif %}
+</div>{% endblock %}

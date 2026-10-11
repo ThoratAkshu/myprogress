@@ -384,3 +384,27 @@ class OrganizationTests(TestCase):
         self.assertEqual(gone.status_code, 404)
         self.assertContains(gone, "This link no longer works", status_code=404)
         self.assertEqual(self.client_class().get(reverse("organizations:parent_report", args=["guess"])).status_code, 404)
+    def test_importing_students_from_a_spreadsheet(self):
+        self.join(self.student)
+        Invite.objects.create(organization=self.organization, email="pending@example.com", created_by=self.owner)
+        self.client.force_login(self.owner)
+        template = self.client.get(reverse("organizations:import_template", args=[self.organization.slug]))
+        self.assertTrue(template.content.decode().startswith("email,name,batch,role"))
+        sheet = "﻿Name;Batch;E-mail;Role\nRavi Kumar;Batch A 2026;ravi@example.com;student\nMeera Joshi;;meera@example.com;Teacher\nAsha Rao;;asha@example.com;\nDup;;RAVI@example.com;\nBroken;;not-an-email;\nPend;;pending@example.com;\n".encode("utf-8")
+        preview = self.client.post(reverse("organizations:import", args=[self.organization.slug]), {"action": "preview", "file": SimpleUploadedFile("students.csv", sheet, content_type="text/csv")})
+        for text in ["2 to invite", "4 skipped", "Will invite", "Already a member", "Listed twice", "Invalid email", "Already invited"]:
+            self.assertContains(preview, text)
+        self.assertEqual(Invite.objects.count(), 1)  # nothing sent yet
+        response = self.client.post(reverse("organizations:import", args=[self.organization.slug]), {"action": "confirm"}, follow=True)
+        self.assertContains(response, "Sent 2 invites.")
+        ravi = Invite.objects.get(email="ravi@example.com")
+        self.assertEqual((ravi.name, ravi.group, ravi.role), ("Ravi Kumar", "Batch A 2026", "student"))
+        self.assertEqual(Invite.objects.get(email="meera@example.com").role, "teacher")
+        greeting = [message for message in mail.outbox if message.to == ["ravi@example.com"]][0].body
+        self.assertTrue(greeting.startswith("Hi Ravi,"))
+        self.assertIn("in Batch A 2026", greeting)
+        again = self.client.post(reverse("organizations:import", args=[self.organization.slug]), {"action": "confirm"}, follow=True)
+        self.assertContains(again, "That import expired.")
+        self.assertContains(self.client.post(reverse("organizations:import", args=[self.organization.slug]), {"action": "preview", "file": SimpleUploadedFile("students.xlsx", b"PK", content_type="application/octet-stream")}), "Upload a .csv file.")
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(reverse("organizations:import", args=[self.organization.slug])).status_code, 404)

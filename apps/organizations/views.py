@@ -126,19 +126,24 @@ def member_action_view(request, slug, user_id):
         messages.error(request, "You can't do that.")
     return _back(request, reverse("organizations:members", args=[slug]))
 
+def _invite_sender(request, organization):
+    """Emails one invite: a personal greeting when the import gave a name, and what joining means."""
+    def send(invite):
+        link = request.build_absolute_uri(reverse("organizations:accept_invite", args=[invite.token]))
+        greeting = f"Hi {invite.name.split()[0]}," if invite.name.strip() else "Hi,"
+        batch = f" in {invite.group}" if invite.group else ""
+        body = f"{greeting}\n\n{services.display_name(request.user)} invited you to join {organization.name}{batch} on MyProgress as a {invite.get_role_display().lower()}.\n\nJoin here:\n{link}\n\nMembers see the organization's lectures, notes, study material and tasks. Teachers can see each student's progress on MyProgress.\n"
+        try:
+            send_mail(f"Join {organization.name} on MyProgress", body, None, [invite.email])
+        except Exception:
+            logger.exception("Could not send an organization invite to %s", invite.email)
+    return send
 @login_required(login_url="landing:home")
 def invite_view(request, slug):
     organization, member = _organization(request, slug, staff=True)
     form = InviteForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        def send(invite):
-            link = request.build_absolute_uri(reverse("organizations:accept_invite", args=[invite.token]))
-            body = f"Hi,\n\n{services.display_name(request.user)} invited you to join {organization.name} on MyProgress as a {invite.get_role_display().lower()}.\n\nJoin here:\n{link}\n\nMembers see the organization's lectures, notes, study material and tasks. Teachers can see each student's progress on MyProgress.\n"
-            try:
-                send_mail(f"Join {organization.name} on MyProgress", body, None, [invite.email])
-            except Exception:
-                logger.exception("Could not send an organization invite to %s", invite.email)
-        created, skipped = services.invite_by_email(organization, request.user, form.cleaned_data["emails"], form.cleaned_data["role"], form.cleaned_data["group"].strip(), send)
+        created, skipped = services.invite_by_email(organization, request.user, form.cleaned_data["emails"], form.cleaned_data["role"], form.cleaned_data["group"].strip(), _invite_sender(request, organization))
         messages.success(request, f"Invited {len(created)} {'person' if len(created) == 1 else 'people'}." + (f" {len(skipped)} already invited or a member." if skipped else ""))
         return redirect("organizations:invite", slug=slug)
     invites = Paginator(Invite.objects.filter(organization=organization).select_related("accepted_by"), 25).get_page(request.GET.get("page"))
@@ -548,4 +553,40 @@ def parent_report_view(request, token):
     response = render(request, "organizations/parent_report.html", {"access": access, "member": access.member, "organization": access.member.organization, "report": services.progress_report(access.member), "now": timezone.now()})
     response["Cache-Control"] = "private, no-store"
     response["Referrer-Policy"] = "no-referrer"
+    return response
+
+IMPORT_SESSION_KEY = "organization_import"
+@login_required(login_url="landing:home")
+def import_view(request, slug):
+    """Upload a spreadsheet of students, check every row, then send the invites."""
+    organization, member = _organization(request, slug, staff=True)
+    action = request.POST.get("action") if request.method == "POST" else ""
+    if action == "confirm":
+        saved = request.session.pop(IMPORT_SESSION_KEY, None)
+        if not saved or saved.get("organization") != organization.pk:
+            messages.error(request, "That import expired. Upload the file again.")
+            return redirect("organizations:import", slug=slug)
+        created = services.invite_rows(organization, request.user, saved["rows"], _invite_sender(request, organization))
+        messages.success(request, f"Sent {len(created)} invite{'' if len(created) == 1 else 's'}. They show below as they join.")
+        return redirect("organizations:invite", slug=slug)
+    rows, error = [], ""
+    if action == "preview":
+        upload = request.FILES.get("file")
+        if not upload:
+            error = "Choose a CSV file."
+        elif upload.size > 1024 * 1024:
+            error = "The file is too big; keep it under 1 MB."
+        elif not upload.name.lower().endswith((".csv", ".txt")):
+            error = "Upload a .csv file. In Excel or Google Sheets, use File, then Download or Save as, then CSV."
+        else:
+            rows, error = services.parse_member_csv(organization, upload.read())
+            ready = [row for row in rows if row["status"] == "ok"]
+            request.session[IMPORT_SESSION_KEY] = {"organization": organization.pk, "rows": ready}
+    ready = [row for row in rows if row["status"] == "ok"]
+    return _render(request, "import.html", organization, member, "invite", {"rows": rows, "ready": ready, "skipped": len(rows) - len(ready), "error": error, "limit": services.IMPORT_LIMIT})
+@login_required(login_url="landing:home")
+def import_template_view(request, slug):
+    _organization(request, slug, staff=True)
+    response = HttpResponse("email,name,batch,role\nasha@example.com,Asha Rao,Batch A 2026,student\nravi@example.com,Ravi Kumar,Batch A 2026,student\nteacher@example.com,Meera Joshi,,teacher\n", content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="students-template.csv"'
     return response

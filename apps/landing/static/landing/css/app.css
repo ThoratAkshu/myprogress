@@ -1252,3 +1252,18 @@ a.org-item-title:hover{color:var(--violet)}
 .profile-certificate span{display:grid}
 .profile-certificate small{color:var(--muted);font-size:12.5px}
 @media(max-width:860px){.org-tr.certs{grid-template-columns:1fr 1fr}.org-cert-facts{display:none}}
+/* Organizations: spreadsheet import */
+.org-drop{position:relative;display:flex!important;align-items:center;gap:14px;padding:22px!important;border:2px dashed var(--line);border-radius:14px;background:var(--canvas);cursor:pointer}
+.org-drop:hover,.org-drop:focus-within{border-color:var(--violet)}
+.org-drop>svg{color:var(--violet)}
+.org-drop span{display:grid}
+.org-drop small{color:var(--muted);font-weight:500}
+.org-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;min-height:0!important}
+.org-columns{width:100%;margin:6px 0 12px;border-collapse:collapse;font-size:14px}
+.org-columns th{width:90px;padding:6px 0;text-align:left;font-family:ui-monospace,Consolas,monospace;color:var(--violet)}
+.org-columns td{padding:6px 0;color:var(--muted);border-bottom:1px solid var(--line)}
+.org-tr.import{grid-template-columns:50px minmax(0,1.6fr) minmax(0,1.2fr) minmax(0,1fr) .7fr 1fr}
+.org-tr .org-pill{justify-self:start}
+.org-import-actions{margin-top:14px}
+.org-import-actions form{margin:0}
+@media(max-width:860px){.org-tr.import{grid-template-columns:40px 1fr 1fr}.org-tr.import>span:nth-child(3),.org-tr.import>span:nth-child(4){display:none}}

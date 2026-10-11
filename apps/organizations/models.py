@@ -55,6 +55,7 @@ class Invite(models.Model):
     """An email invitation. The shared invite link works without one; this adds a role, a group, and tracking."""
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="invites")
     email = models.EmailField()
+    name = models.CharField(max_length=120, blank=True)
     role = models.CharField(max_length=10, choices=[("student", "Student"), ("teacher", "Teacher")], default="student")
     group = models.CharField(max_length=60, blank=True)
     token = models.CharField(max_length=40, unique=True, default=secrets.token_urlsafe)
