@@ -190,3 +190,19 @@ class Certificate(models.Model):
         ordering = ["-issued_at"]
     def __str__(self):
         return f"{self.title} for {self.student}"
+def parent_token():
+    return secrets.token_urlsafe(24)
+class ParentAccess(models.Model):
+    """A private, read-only progress report link for a student's parent or guardian. No account needed."""
+    RELATIONS = [("parent", "Parent"), ("guardian", "Guardian")]
+    member = models.ForeignKey(Membership, on_delete=models.CASCADE, related_name="parents")
+    name = models.CharField(max_length=120)
+    email = models.EmailField()
+    relation = models.CharField(max_length=10, choices=RELATIONS, default="parent")
+    token = models.CharField(max_length=64, unique=True, default=parent_token)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_viewed_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        ordering = ["-created_at"]

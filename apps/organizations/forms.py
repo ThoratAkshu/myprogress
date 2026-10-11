@@ -3,7 +3,7 @@ from django import forms
 from django.utils import timezone
 from django.core.validators import validate_email
 from apps.core.models import Repository
-from .models import MAX_FILE_BYTES, Certificate, ChannelPost, LiveClass, Membership, Organization, Submission, Task
+from .models import MAX_FILE_BYTES, Certificate, ParentAccess, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
@@ -132,3 +132,8 @@ class CertificateForm(forms.Form):
     def __init__(self, *args, choices=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["students"].choices = choices
+class ParentForm(forms.ModelForm):
+    class Meta:
+        model = ParentAccess
+        fields = ["name", "email", "relation"]
+        labels = {"name": "Parent or guardian's name", "relation": "Relation"}

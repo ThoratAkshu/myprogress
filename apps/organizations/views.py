@@ -21,8 +21,8 @@ from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
 from apps.notifications.services import notify
 from . import services
-from .forms import CertificateForm, ChannelPostForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, Certificate, ChannelPost, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
+from .models import Attendance, Certificate, ChannelPost, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -104,6 +104,7 @@ def member_detail_view(request, slug, user_id):
         "student": student, "row": row, "form": form, "breakdown": score_breakdown(student.user, progress_facts(student.user)),
         "task_rows": [{"task": task, "submission": submissions.get(task.pk)} for task in tasks], "now": timezone.now(),
         "recent_posts": student.user.learning_posts.filter(is_public=True).order_by("-published_at")[:4],
+        "parents": student.parents.all(), "parent_form": ParentForm(),
     })
 @login_required(login_url="landing:home")
 @require_POST
@@ -219,6 +220,7 @@ def channel_view(request, slug):
     lesson_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "lesson"]
     watched = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
     return _render(request, "channel.html", organization, member, "channel", {
+        "shared_with": member.parents.filter(revoked_at__isnull=True) if not member.is_staff else [],
         "next_class": services.next_class(organization, member), "now": timezone.now(), "form": form, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
         "member_count": Membership.objects.filter(organization=organization, status="active").count(),
     })
@@ -499,3 +501,51 @@ def certificate_view(request, code):
     """The public page that proves a certificate is real. No sign-in needed."""
     certificate = get_object_or_404(Certificate.objects.select_related("organization", "student__profile", "issued_by"), code=code.upper())
     return render(request, "organizations/certificate.html", {"certificate": certificate, "verify_url": request.build_absolute_uri(reverse("organizations:certificate", args=[certificate.code]))})
+def _send_parent_link(request, access):
+    link = request.build_absolute_uri(reverse("organizations:parent_report", args=[access.token]))
+    student = services.display_name(access.member.user)
+    organization = access.member.organization
+    body = f"Hello {access.name},\n\n{organization.name} has shared {student}'s progress report with you on MyProgress.\n\nOpen it any time:\n{link}\n\nIt shows attendance at live classes, task results, upcoming deadlines and certificates. You don't need an account. Please keep this link private; the institute can turn it off whenever you ask.\n"
+    try:
+        send_mail(f"{student}'s progress at {organization.name}", body, None, [access.email])
+    except Exception:
+        logger.exception("Could not send a parent report link to %s", access.email)
+@login_required(login_url="landing:home")
+@require_POST
+def parent_access_view(request, slug, user_id):
+    """Add, resend or turn off a parent's report link, from the student's page."""
+    organization, member = _organization(request, slug, staff=True)
+    student = get_object_or_404(Membership, organization=organization, user_id=user_id, status="active", role="student")
+    action = request.POST.get("action", "add")
+    if action == "add":
+        form = ParentForm(request.POST)
+        if form.is_valid():
+            access = form.save(commit=False)
+            access.member, access.created_by = student, request.user
+            access.save()
+            _send_parent_link(request, access)
+            notify(student.user, request.user, "organization", f"{organization.name} shared your progress report with {access.name} ({access.get_relation_display().lower()})", services.channel_url(organization))
+            messages.success(request, f"Sent the progress report link to {access.email}.")
+        else:
+            messages.error(request, " ".join(error for errors in form.errors.values() for error in errors))
+    else:
+        access = get_object_or_404(ParentAccess, pk=request.POST.get("access") or 0, member=student)
+        if action == "resend" and not access.revoked_at:
+            _send_parent_link(request, access)
+            messages.success(request, f"Sent the link to {access.email} again.")
+        elif action == "revoke":
+            access.revoked_at = timezone.now()
+            access.save(update_fields=["revoked_at"])
+            messages.success(request, f"{access.name}'s link no longer works.")
+    return redirect(f'{reverse("organizations:member", args=[slug, user_id])}#parents')
+def parent_report_view(request, token):
+    """The parent's read-only report. The link is the key, so it can be turned off at any time."""
+    access = ParentAccess.objects.select_related("member__organization", "member__user__profile").filter(token=token).first()
+    if access is None or access.revoked_at:
+        return render(request, "organizations/parent_report.html", {"gone": True}, status=404)
+    access.last_viewed_at = timezone.now()
+    access.save(update_fields=["last_viewed_at"])
+    response = render(request, "organizations/parent_report.html", {"access": access, "member": access.member, "organization": access.member.organization, "report": services.progress_report(access.member), "now": timezone.now()})
+    response["Cache-Control"] = "private, no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response

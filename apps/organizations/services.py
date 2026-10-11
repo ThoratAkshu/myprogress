@@ -11,12 +11,12 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
-from .models import Attendance, Certificate, ChannelPost, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, Certificate, ChannelPost, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
 # Class points: task points earned, plus these for each class attended and each coding day in the last 30.
 POINTS_PER_CLASS = 5
 POINTS_PER_CODING_DAY = 1
 # What teachers can see about a student, shown to students before they join.
-SHARED_WITH_TEACHERS = ["Your score, rank and coding days", "How many projects and public posts you have", "Your task submissions and scores", "When you were last active"]
+SHARED_WITH_TEACHERS = ["Your score, rank and coding days", "How many projects and public posts you have", "Your task submissions and scores", "Your attendance at live classes", "When you were last active", "Teachers can share a progress report with your parent or guardian, and you can see who has it"]
 def membership(organization, user):
     if not user.is_authenticated:
         return None
@@ -35,7 +35,7 @@ def visible_to(queryset, member):
     if member.is_staff:
         return queryset
     return queryset.filter(Q(group="") | Q(group__iexact=member.group))
-RESERVED_SLUGS = {"new", "join", "invite", "certificates"}
+RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent"}
 def unique_slug(name):
     base = slugify(name)[:50] or "organization"
     if base in RESERVED_SLUGS:
@@ -105,9 +105,11 @@ def task_load(organization, member, tasks=None):
     """The tasks a student has been given so far."""
     tasks = tasks if tasks is not None else list(Task.objects.filter(organization=organization))
     return [task for task in tasks if not task.group or task.group.lower() == member.group.lower()]
-def student_growth(organization, group="", query="", sort="score"):
+def student_growth(organization, group="", query="", sort="score", users=None):
     """One row per student with their growth: built in a handful of queries, so it stays quick for hundreds of students."""
     members = list(students_of(organization, group))
+    if users is not None:
+        members = [member for member in members if member.user_id in users]
     if query:
         needle = query.lower()
         members = [member for member in members if needle in display_name(member.user).lower() or needle in member.user.email.lower() or needle in (getattr(getattr(member.user, "profile", None), "handle", "") or "").lower()]
@@ -242,3 +244,18 @@ def issue_certificates(organization, actor, students, title, description):
         notify(student, actor, "organization", f"{organization.name} awarded you a certificate: {title}", reverse("organizations:certificate", args=[certificate.code]))
         created.append(certificate)
     return created
+def progress_report(member):
+    """What a parent sees: the student's attendance, tasks, coding and certificates in this organization."""
+    organization, now = member.organization, timezone.now()
+    row = (student_growth(organization, users={member.user_id}) or [None])[0]
+    given = task_load(organization, member)
+    submissions = {submission.task_id: submission for submission in Submission.objects.filter(task__organization=organization, student=member.user)}
+    tasks = [{"task": task, "submission": submissions.get(task.pk), "missed": task.due_at and task.due_at < now and task.pk not in submissions} for task in given]
+    held = [live for live in classes_for(organization, member).filter(starts_at__lt=now).order_by("-starts_at")[:20] if live.ends_at <= now][:10]
+    marks = dict(Attendance.objects.filter(live_class__in=held, student=member.user).values_list("live_class_id", "status"))
+    return {
+        "row": row, "upcoming": [item for item in tasks if not item["submission"] and item["task"].due_at and item["task"].due_at >= now][:5],
+        "recent_tasks": sorted([item for item in tasks if item["submission"] or item["missed"]], key=lambda item: item["task"].due_at or item["task"].created_at, reverse=True)[:8],
+        "classes": [{"live": live, "status": marks.get(live.pk, "absent")} for live in held],
+        "certificates": Certificate.objects.filter(organization=organization, student=member.user, revoked_at__isnull=True),
+    }
