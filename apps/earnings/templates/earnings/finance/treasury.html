@@ -3,10 +3,11 @@
 {% block heading %}Master account{% endblock %}
 {% block subheading %}The company money that pays creators. Record every top-up and withdrawal so this matches your bank.{% endblock %}
 {% block content %}
-<section class="fin-kpis three">
-<article class="fin-kpi feature"><span class="fin-kpi-icon">{% icon "database" 18 %}</span><small>Balance</small><strong>{{ balance|inr }}</strong><p>Added {{ totals.deposit|default:0|inr }} · taken out {{ totals.withdrawal|default:0|inr }} · paid {{ totals.payout|default:0|inr }}</p></article>
+<section class="fin-kpis">
+<article class="fin-kpi feature"><span class="fin-kpi-icon">{% icon "database" 18 %}</span><small>Balance</small><strong>{{ balance|inr }}</strong><p>Added {{ totals.deposit|default:0|inr }} · taken out {{ totals.withdrawal|default:0|inr }} · paid {{ totals.payout|default:0|inr }} · tax {{ totals.tax|default:0|inr }}</p></article>
 <article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "credit-card" 18 %}</span><small>Owed to creators</small><strong>{{ owed|inr }}</strong><p>What creators could withdraw today</p></article>
-<article class="fin-kpi"><span class="fin-kpi-icon {% if balance >= owed %}green{% else %}red{% endif %}">{% icon "shield" 18 %}</span><small>{% if balance >= owed %}Covered{% else %}Short{% endif %}</small><strong>{% if balance >= owed %}Yes{% else %}{{ shortfall|inr }}{% endif %}</strong><p>{% if balance >= owed %}The balance covers everything owed.{% else %}Add money to cover every wallet.{% endif %}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon {% if balance >= owed %}green{% else %}red{% endif %}">{% icon "shield" 18 %}</span><small>{% if balance >= owed %}Covered{% else %}Short{% endif %}</small><strong>{% if balance >= owed %}Yes{% else %}{{ shortfall|inr }}{% endif %}</strong><p>{% if balance >= owed %}The balance covers everything owed.{% else %}Add money to cover every balance.{% endif %}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "file-text" 18 %}</span><small>Tax to pay the government</small><strong>{{ tax_due|inr }}</strong><p>Held back from creator payments. Record it here once paid.</p></article>
 </section>
 <div class="fin-grid wide-left">
 <section class="fin-card"><div class="fin-card-head"><h2>Record money in or out</h2></div>
@@ -19,16 +20,16 @@
 <section class="fin-card fin-guide"><div class="fin-card-head"><h2>Setting up the master account</h2></div>
 <ol>
 <li><b>Open a company current account.</b> Keep creator money in a bank account in the business's name, separate from personal money. This is the master account.</li>
-<li><b>Add a payout provider when volume grows.</b> RazorpayX, Cashfree Payouts, and similar services let you top up a payout balance from that account and send money to UPI IDs in bulk. The CSV on the Payouts page fits their bulk upload.</li>
+<li><b>Add a payout provider when volume grows.</b> RazorpayX, Cashfree Payouts, and similar services let you top up a payout balance from that account and send money to UPI IDs in bulk. Add the keys to the server settings and payment day sends everything for you.</li>
 <li><b>Until then, pay by hand.</b> Send each withdrawal from net banking or UPI, then mark it paid here with the UTR.</li>
-<li><b>Check tax rules before going live.</b> Paying creators can mean collecting PAN and deducting tax at source. Ask a chartered accountant what applies to your business.</li>
+<li><b>Check tax rules before going live.</b> Paying creators can mean collecting PAN and deducting tax at source. Set the rate under Earning rules, pay what's held back to the government, and record it here as "Tax paid to government". Ask a chartered accountant what applies to your business.</li>
 <li><b>Reconcile monthly.</b> The balance here should match the bank statement for the money you set aside.</li>
 </ol>
 </section>
 </div>
 <section class="fin-card flush"><div class="fin-card-head pad"><h2>Ledger</h2></div>
 <div class="fin-table" role="table" aria-label="Master account ledger"><div class="fin-tr head" role="row"><span role="columnheader">Date</span><span role="columnheader">Type</span><span role="columnheader">Amount</span><span role="columnheader">Reference</span><span role="columnheader">Note</span><span role="columnheader">By</span></div>
-{% for entry in page %}<div class="fin-tr" role="row"><span role="cell">{{ entry.created_at|date:"M j, Y" }}</span><span role="cell"><em class="fin-pill {% if entry.kind == 'deposit' %}green{% elif entry.kind == 'payout' %}violet{% else %}amber{% endif %}">{{ entry.get_kind_display }}</em></span><span role="cell" class="{% if entry.kind == 'deposit' %}plus{% else %}minus{% endif %}">{% if entry.kind == 'deposit' %}+{% else %}−{% endif %}{{ entry.amount|inr }}</span><span role="cell">{{ entry.reference|default:"—" }}</span><span role="cell">{{ entry.note|default:"—" }}</span><span role="cell">{{ entry.created_by.email|default:"—" }}</span></div>
+{% for entry in page %}<div class="fin-tr" role="row"><span role="cell">{{ entry.created_at|date:"M j, Y" }}</span><span role="cell"><em class="fin-pill {% if entry.kind == 'deposit' %}green{% elif entry.kind == 'payout' %}violet{% elif entry.kind == 'tax' %}red{% else %}amber{% endif %}">{{ entry.get_kind_display }}</em></span><span role="cell" class="{% if entry.kind == 'deposit' %}plus{% else %}minus{% endif %}">{% if entry.kind == 'deposit' %}+{% else %}−{% endif %}{{ entry.amount|inr }}</span><span role="cell">{{ entry.reference|default:"—" }}</span><span role="cell">{{ entry.note|default:"—" }}</span><span role="cell">{{ entry.created_by.email|default:"—" }}</span></div>
 {% empty %}<p class="fin-empty pad">No entries yet. Start by recording the money you've put in the master account.</p>{% endfor %}
 </div></section>
 {% include "earnings/finance/_pager.html" %}

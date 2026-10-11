@@ -17,6 +17,9 @@
     show("video", `${money.format(perCoin * value("coins_per_video"))} (${value("coins_per_video")} coins)`);
     show("month", `up to ${money.format(perCoin * value("coins_per_video") * value("daily_post_limit") * 30)}`);
     show("bonus", `${money.format(value("follower_bonus"))} once, at ${value("follower_goal")} followers`);
+    const day = value("payout_day");
+    const suffix = day % 100 >= 10 && day % 100 <= 20 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[day % 10] || "th";
+    show("payday", `on the ${day}${suffix}, from ${money.format(value("minimum_payout"))}${value("tds_percent") ? `, ${value("tds_percent")}% tax held` : ""}`);
   }
   form.addEventListener("input", update);
   update();

@@ -1,7 +1,7 @@
-"""The earning engine: coins for posts, the follower milestone, coin conversion, payouts, and the master account."""
-import re
-from datetime import date
-from decimal import Decimal, InvalidOperation
+"""The earning engine: coins for posts, the follower milestone, coin conversion, monthly payments, and the master account."""
+from datetime import date, datetime, time
+from decimal import ROUND_HALF_UP, Decimal
+from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.db.models.functions import TruncMonth
@@ -9,12 +9,12 @@ from django.urls import reverse
 from django.utils import timezone
 from apps.core.models import EarningTransaction
 from apps.notifications.services import notify
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PayoutRequest, TreasuryEntry
-UPI_PATTERN = re.compile(r"^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$")
+from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, TreasuryEntry
+from .payouts import ProviderError, RazorpayX, get_provider
 ZERO = Decimal("0")
-PENDING_MESSAGE = "You already have a withdrawal in progress. You can request another once it's paid."
+ADDS = ["credit", "adjustment", "refund"]
 class PayoutError(Exception):
-    """A withdrawal that can't go ahead, with a message safe to show the creator."""
+    """A payment step that can't go ahead, with a message safe to show."""
 def earnings_url():
     return reverse("landing:workspace_section", args=["earnings"])
 def rupees(amount):
@@ -34,11 +34,12 @@ def log(actor, action, details):
     FinanceAuditLog.objects.create(actor=actor, action=action, details=details[:300])
 def coin_balance(user):
     return CoinTransaction.objects.filter(user=user).aggregate(total=Sum("amount"))["total"] or 0
-def rupee_balance(user):
-    """Money in the creator's wallet: credits and adjustments, minus withdrawals (pending ones included)."""
-    totals = EarningTransaction.objects.filter(user=user).aggregate(
-        added=Sum("amount", filter=Q(transaction_type__in=["credit", "adjustment"])), taken=Sum("amount", filter=Q(transaction_type="payout")))
+def _balance(entries):
+    totals = entries.aggregate(added=Sum("amount", filter=Q(transaction_type__in=ADDS)), taken=Sum("amount", filter=Q(transaction_type="payout")))
     return (totals["added"] or ZERO) - (totals["taken"] or ZERO)
+def rupee_balance(user):
+    """Money in the creator's balance: credits, adjustments and returned payments, minus payments."""
+    return _balance(EarningTransaction.objects.filter(user=user))
 def follower_count(user, rules=None):
     rules = rules or EarningSettings.current()
     followers = user.follower_relationships.all()
@@ -111,57 +112,226 @@ def reverse_post_coins(post):
     if net > 0:
         CoinTransaction.objects.create(user=post.author, amount=-net, kind="reversal", post=post, description=f"Deleted: {post.title}"[:200])
 
-def request_payout(user, amount, upi_id, payout_name):
-    """Reserve money from the wallet for a withdrawal the finance team will send."""
+def next_month(first):
+    year, month = divmod(first.year * 12 + first.month, 12)
+    return date(year, month + 1, 1)
+def previous_month(first):
+    year, month = divmod(first.year * 12 + first.month - 2, 12)
+    return date(year, month + 1, 1)
+def payment_date(month, rules):
+    """Earnings for a month are paid on payment day of the month after, like YouTube's payment around the 21st."""
+    return next_month(month).replace(day=min(max(rules.payout_day, 1), 28))
+def _midnight(day):
+    return timezone.make_aware(datetime.combine(day, time.min))
+def closed_balance(user, cutoff):
+    """What a creator can be paid for months that ended before `cutoff`: their balance then, never more than now."""
+    then = _balance(EarningTransaction.objects.filter(user=user, created_at__lt=_midnight(cutoff)))
+    return max(min(then, rupee_balance(user)), ZERO)
+def tax_for(amount, rules):
+    return (amount * rules.tds_percent / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+def payment_holds(account, rules):
+    """Why a creator wouldn't be paid, each with what they can do about it. An empty list means they will be paid."""
+    holds = []
+    if not rules.program_enabled:
+        holds.append({"code": "paused", "text": "The creator program is paused. Your balance is safe."})
+    if account.eligible_since is None:
+        holds.append({"code": "locked", "text": f"Payments start once you reach {rules.follower_goal} followers."})
+    if account.suspended:
+        holds.append({"code": "suspended", "text": "Payments are paused on your account. Contact support."})
+    if account.hold_payments:
+        holds.append({"code": "creator_hold", "text": "You chose to hold payments. Your balance keeps adding up until you turn this off."})
+    if not account.payout_name or not account.destination:
+        holds.append({"code": "details", "text": "Add your payment details: your legal name and a UPI ID or bank account."})
+    if rules.require_pan and not account.pan:
+        holds.append({"code": "pan", "text": "Add your PAN. It's needed for tax before we can pay you."})
+    last = PayoutRequest.objects.filter(user=account.user).first()
+    if last and last.status == "rejected" and (account.details_updated_at is None or account.details_updated_at < (last.processed_at or last.requested_at)):
+        holds.append({"code": "failed", "text": f"Your last payment didn't go through{': ' + last.note if last.note else ''}. Check your payment details."})
+    return holds
+HOLD_LABELS = {"paused": "Program paused", "locked": "Not unlocked", "suspended": "Paused by finance", "creator_hold": "Creator is holding", "details": "No payment details", "pan": "No PAN", "failed": "Last payment failed"}
+def payment_candidates(month, rules=None):
+    """For a finished month: who would be paid and how much, who is on hold and why, and who is under the threshold."""
+    rules = rules or EarningSettings.current()
+    cutoff = next_month(month)
+    already = set(PayoutRequest.objects.filter(run__month=month).values_list("user_id", flat=True))
+    result = {"to_pay": [], "held": [], "below": []}
+    for user in User.objects.filter(earning_transactions__created_at__lt=_midnight(cutoff)).exclude(pk__in=already).distinct().select_related("creator_account", "profile"):
+        amount = closed_balance(user, cutoff)
+        if amount <= 0:
+            continue
+        account = account_for(user)
+        holds = payment_holds(account, rules)
+        row = {"user": user, "account": account, "amount": amount, "tds": tax_for(amount, rules), "holds": holds, "hold_labels": [HOLD_LABELS[hold["code"]] for hold in holds]}
+        row["net"] = amount - row["tds"]
+        result["held" if holds else "below" if amount < rules.minimum_payout else "to_pay"].append(row)
+    for key in result:
+        result[key].sort(key=lambda row: -row["amount"])
+    result["total"] = sum((row["amount"] for row in result["to_pay"]), ZERO)
+    result["total_tds"] = sum((row["tds"] for row in result["to_pay"]), ZERO)
+    result["total_net"] = result["total"] - result["total_tds"]
+    return result
+
+def close_month(month, actor=None, today=None):
+    """Close a finished month: schedule its payment run and tell each creator what they earned. Safe to call again."""
     rules = EarningSettings.current()
-    account = account_for(user)
-    if not is_earning(account, rules):
-        raise PayoutError("Withdrawals open once your earnings are unlocked." if not account.suspended else "Withdrawals are paused on your account. Contact support.")
-    try:
-        amount = Decimal(str(amount)).quantize(Decimal("0.01"))
-    except (InvalidOperation, ValueError):
-        raise PayoutError("Enter an amount in rupees, like 100.")
-    upi_id, payout_name = upi_id.strip(), payout_name.strip()
-    if PayoutRequest.objects.filter(user=user, status="pending").exists():
-        raise PayoutError(PENDING_MESSAGE)
-    if amount < rules.minimum_payout:
-        raise PayoutError(f"The smallest withdrawal is {rupees(rules.minimum_payout)}.")
-    if amount > rupee_balance(user):
-        raise PayoutError("That's more than your wallet balance.")
-    if not UPI_PATTERN.match(upi_id):
-        raise PayoutError("Enter a UPI ID like name@okbank.")
-    if not payout_name:
-        raise PayoutError("Enter the name on your bank account.")
+    if next_month(month) > (today or timezone.localdate()):
+        raise PayoutError("A month can only be closed after it ends.")
+    run, created = PaymentRun.objects.get_or_create(month=month, defaults={"scheduled_for": payment_date(month, rules)})
+    if not created:
+        return run, False
+    log(actor, "month_closed", f"{month:%B %Y} closed. Payments go out on {run.scheduled_for:%B} {run.scheduled_for.day}.")
+    earned = EarningTransaction.objects.filter(created_at__gte=_midnight(month), created_at__lt=_midnight(next_month(month))).filter(Q(transaction_type="credit") | Q(transaction_type="adjustment", amount__gt=0)).values("user").annotate(total=Sum("amount"))
+    for row in earned:
+        user = User.objects.get(pk=row["user"])
+        balance = closed_balance(user, next_month(month))
+        holds = payment_holds(account_for(user), rules)
+        if holds:
+            then = f" To get paid: {holds[0]['text'][0].lower()}{holds[0]['text'][1:]}"
+        elif balance >= rules.minimum_payout:
+            then = f" {rupees(balance)} will be paid around {run.scheduled_for:%B} {run.scheduled_for.day}."
+        else:
+            then = f" We pay once your balance reaches {rupees(rules.minimum_payout)}; it carries over until then."
+        notify(user, None, "earnings", f"Your {month:%B} earnings are final: {rupees(row['total'])}.{then}", earnings_url())
+    return run, True
+def prepare_run(run, actor=None):
+    """Payment day: move each eligible creator's closed balance out of their wallet into a payment."""
+    rules = EarningSettings.current()
     with transaction.atomic():
-        if PayoutRequest.objects.select_for_update().filter(user=user, status="pending").exists():
-            raise PayoutError(PENDING_MESSAGE)
-        payout = PayoutRequest.objects.create(user=user, amount=amount, upi_id=upi_id, payout_name=payout_name[:120])
-        EarningTransaction.objects.create(user=user, transaction_type="payout", amount=amount, description=f"Withdrawal to {upi_id}")
-        account.upi_id, account.payout_name = upi_id, payout_name[:120]
-        account.save(update_fields=["upi_id", "payout_name"])
-    return payout
+        run = PaymentRun.objects.select_for_update().get(pk=run.pk)
+        if run.status != "scheduled":
+            raise PayoutError("These payments were already prepared.")
+        candidates = payment_candidates(run.month, rules)
+        payouts = []
+        for row in candidates["to_pay"]:
+            account = row["account"]
+            payouts.append(PayoutRequest.objects.create(run=run, user=row["user"], amount=row["amount"], tds_amount=row["tds"], destination=account.destination, upi_id=account.upi_id if account.payout_method == "upi" else "", payout_name=account.payout_name))
+            EarningTransaction.objects.create(user=row["user"], transaction_type="payout", amount=row["amount"], description=f"Payment for {run.month:%B %Y}")
+        run.status, run.prepared_at = ("ready" if payouts else "completed"), timezone.now()
+        run.save(update_fields=["status", "prepared_at"])
+        log(actor, "payments_prepared", f"{run.month:%B %Y}: {len(payouts)} creators, {rupees(candidates['total'])} including {rupees(candidates['total_tds'])} tax; {len(candidates['held'])} on hold")
+    for payout in payouts:
+        notify(payout.user, None, "earnings", f"Your {run.month:%B} payment of {rupees(payout.net_amount)} is being sent to {payout.destination}.", earnings_url())
+    for row in candidates["held"]:
+        if not {"locked", "paused"} & {hold["code"] for hold in row["holds"]}:
+            notify(row["user"], None, "earnings", f"We couldn't pay your {rupees(row['amount'])} for {run.month:%B}. {row['holds'][0]['text']}", earnings_url())
+    return run, candidates
+def available_to_send():
+    """Master account money not already promised to payments the provider is still sending."""
+    sending = PayoutRequest.objects.filter(status="processing").aggregate(total=Sum("amount"), tax=Sum("tds_amount"))
+    return treasury_balance() - ((sending["total"] or ZERO) - (sending["tax"] or ZERO))
+def send_run(run, actor=None):
+    """Send every waiting payment in a run through the payout provider. Returns (sent, failures)."""
+    provider = get_provider()
+    if provider is None:
+        raise PayoutError("No payout provider is connected. Send each payment from your bank, then mark it paid with its reference.")
+    waiting = list(run.payouts.filter(status="pending").select_related("user"))
+    if not waiting:
+        raise PayoutError("Nothing is waiting to be sent.")
+    needed, available = sum((payout.net_amount for payout in waiting), ZERO), available_to_send()
+    if needed > available:
+        raise PayoutError(f"These payments need {rupees(needed)} but the master account has {rupees(available)} free. Add money first.")
+    run.status, run.approved_at, run.approved_by = "sending", timezone.now(), actor
+    run.save(update_fields=["status", "approved_at", "approved_by"])
+    sent, failures = 0, []
+    for payout in waiting:
+        try:
+            result = provider.send(payout, account_for(payout.user))
+        except ProviderError as error:
+            payout.note = str(error)[:200]
+            payout.save(update_fields=["note"])
+            failures.append((payout, str(error)))
+            continue
+        payout.status, payout.provider_payout_id, payout.note = "processing", result["id"][:40], ""
+        payout.save(update_fields=["status", "provider_payout_id", "note"])
+        sent += 1
+        apply_provider_status(payout, result["status"], result["utr"])
+    log(actor, "payments_sent", f"{run.month:%B %Y}: {sent} sent through {provider.name}, {len(failures)} failed")
+    finish_run(run)
+    return sent, failures
+def apply_provider_status(payout, status, utr="", reason=""):
+    """Record what the provider says happened to a payment."""
+    payout.refresh_from_db()
+    if payout.status not in {"pending", "processing"}:
+        return
+    if status == "processed":
+        mark_payout_paid(payout, None, utr or payout.provider_payout_id)
+    elif status in RazorpayX.FAILED:
+        reject_payout(payout, None, reason or "The bank couldn't complete this payment.")
+def handle_provider_event(payload):
+    """A RazorpayX webhook. Returns True when it matched one of our payments."""
+    entity = ((payload.get("payload") or {}).get("payout") or {}).get("entity") or {}
+    reference = str(entity.get("reference_id") or "")
+    payout = PayoutRequest.objects.filter(provider_payout_id=entity.get("id") or "-").first()
+    if payout is None and reference.startswith("payout-") and reference[7:].isdigit():
+        payout = PayoutRequest.objects.filter(pk=int(reference[7:])).first()
+    if payout is None:
+        return False
+    reason = (entity.get("status_details") or {}).get("description") or entity.get("failure_reason") or ""
+    apply_provider_status(payout, entity.get("status", ""), entity.get("utr") or "", reason)
+    return True
+def sync_sending():
+    """Ask the provider about payments still sending, in case a webhook was missed."""
+    provider = get_provider()
+    if provider is None:
+        return 0
+    checked = 0
+    for payout in PayoutRequest.objects.filter(status="processing").exclude(provider_payout_id=""):
+        try:
+            result = provider.fetch(payout.provider_payout_id)
+        except ProviderError:
+            continue
+        apply_provider_status(payout, result["status"], result["utr"], result["reason"])
+        checked += 1
+    return checked
+def finish_run(run):
+    if run and run.status in {"ready", "sending"} and not run.payouts.filter(status__in=["pending", "processing"]).exists():
+        run.status = "completed"
+        run.save(update_fields=["status"])
+
 def mark_payout_paid(payout, actor, reference):
     with transaction.atomic():
         payout = PayoutRequest.objects.select_for_update().get(pk=payout.pk)
-        if payout.status != "pending":
-            raise PayoutError("This withdrawal was already processed.")
+        if payout.status not in {"pending", "processing"}:
+            raise PayoutError("This payment was already processed.")
         payout.status, payout.processed_at, payout.processed_by, payout.reference = "paid", timezone.now(), actor, reference.strip()[:100]
         payout.save(update_fields=["status", "processed_at", "processed_by", "reference"])
-        TreasuryEntry.objects.create(kind="payout", amount=payout.amount, reference=payout.reference, payout=payout, created_by=actor, note=f"Payout to {payout.user.get_full_name() or payout.user.email}"[:200])
-        log(actor, "payout_paid", f"Paid {rupees(payout.amount)} to {payout.user.email} ({payout.upi_id}), reference {payout.reference or 'none'}")
-    notify(payout.user, None, "earnings", f"{rupees(payout.amount)} was sent to {payout.upi_id}.", earnings_url())
+        TreasuryEntry.objects.create(kind="payout", amount=payout.net_amount, reference=payout.reference, payout=payout, created_by=actor, note=f"Payment to {payout.payout_name or payout.user.email}"[:200])
+        log(actor, "payout_paid", f"Paid {rupees(payout.net_amount)} to {payout.user.email} ({payout.destination}), tax {rupees(payout.tds_amount)}, reference {payout.reference or 'none'}")
+    tax = f" after {rupees(payout.tds_amount)} tax" if payout.tds_amount else ""
+    notify(payout.user, None, "earnings", f"{rupees(payout.net_amount)} was sent to {payout.destination}{tax}.", earnings_url())
+    finish_run(payout.run)
     return payout
 def reject_payout(payout, actor, reason):
+    """Cancel a payment that can't go through and put the money back in the creator's balance."""
     with transaction.atomic():
         payout = PayoutRequest.objects.select_for_update().get(pk=payout.pk)
-        if payout.status != "pending":
-            raise PayoutError("This withdrawal was already processed.")
+        if payout.status not in {"pending", "processing"}:
+            raise PayoutError("This payment was already processed.")
         payout.status, payout.processed_at, payout.processed_by, payout.note = "rejected", timezone.now(), actor, reason.strip()[:200]
         payout.save(update_fields=["status", "processed_at", "processed_by", "note"])
-        EarningTransaction.objects.create(user=payout.user, transaction_type="adjustment", amount=payout.amount, description="Withdrawal returned to your wallet")
-        log(actor, "payout_rejected", f"Returned {rupees(payout.amount)} to {payout.user.email}: {payout.note or 'no reason given'}")
-    notify(payout.user, None, "earnings", f"Your withdrawal of {rupees(payout.amount)} was returned to your wallet. {payout.note}".strip(), earnings_url())
+        EarningTransaction.objects.create(user=payout.user, transaction_type="refund", amount=payout.amount, description="Payment returned to your balance")
+        log(actor, "payout_returned", f"Returned {rupees(payout.amount)} to {payout.user.email}: {payout.note or 'no reason given'}")
+    notify(payout.user, None, "earnings", f"Your payment of {rupees(payout.net_amount)} couldn't be sent and is back in your balance. {payout.note}".strip(), earnings_url())
+    finish_run(payout.run)
     return payout
+def save_payment_details(account, data):
+    """Store the creator's payment profile; new destination details mean a new fund account at the provider."""
+    destination_before = (account.payout_method, account.upi_id, account.bank_account, account.ifsc, account.payout_name)
+    account.payout_name, account.pan, account.payout_method = data["payout_name"], data["pan"], data["payout_method"]
+    account.upi_id, account.bank_account, account.ifsc = data["upi_id"], data["bank_account"], data["ifsc"]
+    account.hold_payments = data["hold_payments"]
+    fields = ["payout_name", "pan", "payout_method", "upi_id", "bank_account", "ifsc", "hold_payments"]
+    if destination_before != (account.payout_method, account.upi_id, account.bank_account, account.ifsc, account.payout_name):
+        account.details_updated_at, account.provider_fund_account_id = timezone.now(), ""
+        fields += ["details_updated_at", "provider_fund_account_id"]
+        log(account.user, "payment_details_changed", f"{account.user.email} now paid to {account.destination}, PAN {account.masked_pan or 'not given'}")
+    elif account.details_updated_at is None:
+        account.details_updated_at = timezone.now()
+        fields.append("details_updated_at")
+    account.save(update_fields=fields)
+    return account
+
 def adjust(user, actor, coins=0, amount=ZERO, reason=""):
     """A manual correction by the finance team: add or remove coins or rupees, with a reason."""
     if coins:
@@ -174,13 +344,17 @@ def adjust(user, actor, coins=0, amount=ZERO, reason=""):
         settle(user)
 
 def treasury_balance():
-    totals = TreasuryEntry.objects.aggregate(added=Sum("amount", filter=Q(kind="deposit")), taken=Sum("amount", filter=Q(kind__in=["withdrawal", "payout"])))
+    totals = TreasuryEntry.objects.aggregate(added=Sum("amount", filter=Q(kind="deposit")), taken=Sum("amount", filter=Q(kind__in=["withdrawal", "payout", "tax"])))
     return (totals["added"] or ZERO) - (totals["taken"] or ZERO)
 def owed_to_creators():
-    """Wallet balances plus withdrawals waiting to be sent: what the master account must be able to cover."""
-    totals = EarningTransaction.objects.aggregate(added=Sum("amount", filter=Q(transaction_type__in=["credit", "adjustment"])), taken=Sum("amount", filter=Q(transaction_type="payout")))
-    pending = PayoutRequest.objects.filter(status="pending").aggregate(total=Sum("amount"))["total"] or ZERO
-    return (totals["added"] or ZERO) - (totals["taken"] or ZERO) + pending
+    """Every creator balance plus payments not yet sent: what the master account must be able to cover."""
+    waiting = PayoutRequest.objects.filter(status__in=["pending", "processing"]).aggregate(total=Sum("amount"))["total"] or ZERO
+    return _balance(EarningTransaction.objects.all()) + waiting
+def tax_to_deposit():
+    """Tax held back from creator payments that hasn't been paid to the government yet."""
+    held = PayoutRequest.objects.filter(status="paid").aggregate(total=Sum("tds_amount"))["total"] or ZERO
+    paid = TreasuryEntry.objects.filter(kind="tax").aggregate(total=Sum("amount"))["total"] or ZERO
+    return held - paid
 
 def _monthly(user, months=6):
     """Coins from posts and rupees credited in each of the last few months, for the chart."""
@@ -224,9 +398,18 @@ def creator_dashboard(user):
         {"title": "Publish your first post", "detail": f"Articles earn {rules.coins_per_article} coins, videos {rules.coins_per_video}.", "done": post_count > 0},
         {"title": f"Collect {per} coins", "detail": f"Every {per} coins becomes {rupees(rules.rupees_per_conversion)}.", "done": coins_earned >= per},
         {"title": f"Reach {rules.follower_goal} followers", "detail": f"Unlocks earnings and a {rupees(rules.follower_bonus)} bonus." if rules.follower_bonus > 0 else "Unlocks earnings.", "done": account.eligible_since is not None},
-        {"title": "Make your first withdrawal", "detail": f"Send your wallet to UPI from {rupees(rules.minimum_payout)}.", "done": paid > 0},
+        {"title": "Get your first payment", "detail": f"Paid monthly to UPI or your bank once your balance reaches {rupees(rules.minimum_payout)}.", "done": paid > 0},
     ]
     next_step = next((index for index, step in enumerate(journey) if not step["done"]), None)
+    today = timezone.localdate()
+    this_month = today.replace(day=1)
+    last_run = PaymentRun.objects.filter(month=previous_month(this_month)).first()
+    if last_run is None or last_run.status == "scheduled":
+        next_date, next_amount, estimated = payment_date(previous_month(this_month), rules), closed_balance(user, this_month), False
+    else:
+        next_date, next_amount, estimated = payment_date(this_month, rules), wallet, True
+    holds = [hold for hold in payment_holds(account, rules) if hold["code"] not in {"locked", "paused"}]
+    this_month_earned = money.filter(created_at__gte=_midnight(this_month)).filter(Q(transaction_type="credit") | Q(transaction_type="adjustment", amount__gt=0)).aggregate(total=Sum("amount"))["total"] or ZERO
     return {
         "rules": rules, "account": account, "earning": earning, "program_paused": not rules.program_enabled,
         "followers": followers, "follower_percent": min(100, round(followers * 100 / max(rules.follower_goal, 1))), "followers_needed": max(rules.follower_goal - followers, 0),
@@ -234,9 +417,11 @@ def creator_dashboard(user):
         "locked_rupees": rules.rupees_per_conversion * (max(coins, 0) // per) if not earning else ZERO,
         "articles_to_next": -(-to_next // rules.coins_per_article) if rules.coins_per_article else None,
         "videos_to_next": -(-to_next // rules.coins_per_video) if rules.coins_per_video else None,
-        "wallet": wallet, "to_minimum": max(rules.minimum_payout - wallet, ZERO), "lifetime": lifetime, "paid_out": paid, "coins_earned": coins_earned,
-        "pending_payout": payouts.filter(status="pending").first(), "can_withdraw": earning and wallet >= rules.minimum_payout,
-        "coin_history": list(CoinTransaction.objects.filter(user=user)[:8]), "money_history": list(money.order_by("-created_at", "-id")[:8]), "payouts": list(payouts[:6]),
+        "wallet": wallet, "lifetime": lifetime, "paid_out": paid, "coins_earned": coins_earned, "this_month_earned": this_month_earned,
+        "sending_payout": payouts.filter(status__in=["pending", "processing"]).first(), "holds": holds,
+        "next_payment": {"date": next_date, "amount": next_amount, "estimated": estimated, "due": next_date <= today, "will_pay": earning and not holds and next_amount >= rules.minimum_payout, "short_by": max(rules.minimum_payout - next_amount, ZERO)},
+        "has_details": bool(account.payout_name and account.destination),
+        "coin_history": list(CoinTransaction.objects.filter(user=user)[:8]), "money_history": list(money.order_by("-created_at", "-id")[:8]), "payouts": list(payouts.select_related("run")[:12]),
         "months": _monthly(user), "post_count": post_count, "video_count": posts.filter(kind="video").count(),
         "journey": journey, "next_step": next_step, "journey_done": sum(step["done"] for step in journey),
     }

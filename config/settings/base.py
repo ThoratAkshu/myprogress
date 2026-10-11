@@ -156,6 +156,11 @@ GIT_EXECUTABLE = config("GIT_EXECUTABLE", default="git")
 ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
 AI_MODEL = config("AI_MODEL", default="claude-opus-5-5")
 AI_TIMEOUT = config("AI_TIMEOUT", default=90, cast=int)
+# Creator payments through RazorpayX Payouts. Leave empty to send payments by hand and record their UTR.
+RAZORPAYX_KEY_ID = config("RAZORPAYX_KEY_ID", default="")
+RAZORPAYX_KEY_SECRET = config("RAZORPAYX_KEY_SECRET", default="")
+RAZORPAYX_ACCOUNT_NUMBER = config("RAZORPAYX_ACCOUNT_NUMBER", default="")
+RAZORPAYX_WEBHOOK_SECRET = config("RAZORPAYX_WEBHOOK_SECRET", default="")
 # Color theme for the app: ocean, emerald, or midnight.
 UI_THEME = config("UI_THEME", default="midnight")
 # Git requests are streamed, so form posts no longer need a large in-memory limit.

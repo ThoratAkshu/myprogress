@@ -7,7 +7,7 @@
 <form method="post" class="fin-card fin-settings" data-rules-form>{% csrf_token %}
 {% if form.non_field_errors %}{% for error in form.non_field_errors %}<p class="fin-flash error">{{ error }}</p>{% endfor %}{% endif %}
 <fieldset><legend>Program</legend>
-<label class="fin-check">{{ form.program_enabled }}<span><b>Creator program is on</b><small>Turn off to pause new coins and withdrawals for everyone. Balances are kept.</small></span></label>
+<label class="fin-check">{{ form.program_enabled }}<span><b>Creator program is on</b><small>Turn off to pause new coins and payments for everyone. Balances are kept.</small></span></label>
 <label class="fin-check">{{ form.confirmed_followers_only }}<span><b>Count only followers with a confirmed email</b><small>Makes fake-account followers count for less.</small></span></label>
 </fieldset>
 <fieldset><legend>Follower milestone</legend><div class="fin-form two">
@@ -19,11 +19,18 @@
 <label>Coins per video{{ form.coins_per_video }}{% for error in form.coins_per_video.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
 <label>Posts per day that earn{{ form.daily_post_limit }}{% for error in form.daily_post_limit.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
 </div></fieldset>
-<fieldset><legend>Conversion and withdrawals</legend><div class="fin-form three">
+<fieldset><legend>Conversion</legend><div class="fin-form two">
 <label>{{ form.coins_per_conversion.label }}{{ form.coins_per_conversion }}{% for error in form.coins_per_conversion.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
 <label>{{ form.rupees_per_conversion.label }}{{ form.rupees_per_conversion }}{% for error in form.rupees_per_conversion.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
-<label>{{ form.minimum_payout.label }}{{ form.minimum_payout }}{% for error in form.minimum_payout.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
 </div></fieldset>
+<fieldset><legend>Monthly payments</legend><div class="fin-form three">
+<label>{{ form.minimum_payout.label }}{{ form.minimum_payout }}<small>Smaller balances carry over to the next month.</small>{% for error in form.minimum_payout.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.payout_day.label }}{{ form.payout_day }}<small>Each month is paid on this day of the next month. YouTube uses the 21st.</small>{% for error in form.payout_day.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.tds_percent.label }}{{ form.tds_percent }}<small>Held back from each payment for tax. Ask your CA for the right rate.</small>{% for error in form.tds_percent.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+</div>
+<label class="fin-check">{{ form.require_pan }}<span><b>Hold payments until the creator adds a PAN</b><small>Needed for tax records in India.</small></span></label>
+<label class="fin-check">{{ form.auto_send }}<span><b>Send payments automatically on payment day</b><small>Only with a payout provider connected. Off means payments wait for you to press Send.</small></span></label>
+</fieldset>
 <div class="fin-form-foot"><button class="fin-btn primary">Save rules</button>{% if rules.updated_by %}<small class="fin-muted">Last changed {{ rules.updated_at|timesince }} ago by {{ rules.updated_by.email }}</small>{% endif %}</div>
 </form>
 <aside class="fin-card fin-preview" aria-live="polite"><div class="fin-card-head"><h2>What this costs</h2></div>
@@ -33,6 +40,7 @@
 <div><dt>One video is worth</dt><dd data-preview="video">—</dd></div>
 <div><dt>A creator posting the daily limit of videos for 30 days</dt><dd data-preview="month">—</dd></div>
 <div><dt>Each creator who unlocks earnings</dt><dd data-preview="bonus">—</dd></div>
+<div><dt>Payments</dt><dd data-preview="payday">—</dd></div>
 </dl>
 <p class="fin-muted small">Only creators who reached the follower goal turn coins into money, so the real cost is usually far lower.</p>
 </aside>

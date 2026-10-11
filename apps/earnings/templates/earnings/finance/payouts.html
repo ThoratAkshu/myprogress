@@ -1,35 +1,90 @@
 {% extends "earnings/finance/base.html" %}{% load ui money %}
-{% block title %}Payouts{% endblock %}
-{% block heading %}Payouts{% endblock %}
-{% block subheading %}Send each withdrawal from your bank or payout provider, then record it here with its reference.{% endblock %}
+{% block title %}Payments{% endblock %}
+{% block heading %}Payments{% endblock %}
+{% block subheading %}Every month closes on the 1st and is paid on the {{ rules.payout_day|ordinal }}, like YouTube's monthly payments.{% endblock %}
 {% block content %}
-<div class="fin-toolbar">
-<nav class="fin-tabs" aria-label="Payout status">
-<a href="?status=pending"{% if status == 'pending' %} aria-current="page"{% endif %}>Waiting <em>{{ counts.pending|default:0 }}</em></a>
-<a href="?status=paid"{% if status == 'paid' %} aria-current="page"{% endif %}>Paid <em>{{ counts.paid|default:0 }}</em></a>
-<a href="?status=rejected"{% if status == 'rejected' %} aria-current="page"{% endif %}>Returned <em>{{ counts.rejected|default:0 }}</em></a>
-<a href="?status=all"{% if status == 'all' %} aria-current="page"{% endif %}>All</a>
-</nav>
-<div class="fin-toolbar-side"><span class="fin-muted">Master account {{ balance|inr }} · waiting {{ pending_total|inr }}</span>{% if counts.pending %}<a class="fin-btn ghost" href="{% url 'finance:payouts_csv' %}">{% icon "download" 16 %}Download CSV</a>{% endif %}</div>
-</div>
-{% if status == 'pending' and pending_total > balance %}<div class="fin-alert danger">{% icon "alert-circle" 18 %}<div><b>Not enough in the master account</b><span>Waiting withdrawals total {{ pending_total|inr }}, but the master account holds {{ balance|inr }}.</span></div><a class="fin-btn primary" href="{% url 'finance:treasury' %}">Add money</a></div>{% endif %}
-<section class="fin-card flush">
-{% for payout in page %}<article class="fin-payout{% if payout.status == 'pending' and payout.amount > balance %} is-over{% endif %}">
-<div class="fin-payout-who"><span class="fin-avatar">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.user.email }}</small><a href="{% url 'finance:creator' payout.user_id %}">View creator</a></div></div>
-<div class="fin-payout-amount"><strong>{{ payout.amount|inr }}</strong><small>to {{ payout.upi_id }}</small></div>
-<div class="fin-payout-when"><small>Requested</small><span>{{ payout.requested_at|date:"M j, Y, g:i a" }}</span></div>
-<div class="fin-payout-act">
-{% if payout.status == 'pending' %}
-<form method="post" action="{% url 'finance:payout_paid' payout.pk %}" class="fin-inline" data-confirm="Mark {{ payout.amount|inr }} to {{ payout.payout_name }} as paid? Do this only after the money has been sent.">{% csrf_token %}<input name="reference" placeholder="UTR / reference" maxlength="100" required aria-label="Payment reference"><button class="fin-btn primary">{% icon "check" 16 %}Mark paid</button></form>
-<details class="fin-reject"><summary>Return to wallet</summary><form method="post" action="{% url 'finance:payout_reject' payout.pk %}" class="fin-inline">{% csrf_token %}<input name="reason" placeholder="Reason the creator will see" maxlength="200" required aria-label="Reason"><button class="fin-btn danger">Return</button></form></details>
+<section class="fin-provider{% if provider %} is-on{% endif %}">
+<span class="fin-provider-mark">{% icon "credit-card" 18 %}</span>
+{% if provider %}<div><b>{{ provider.name }} is connected</b><span>Approved payments go straight to each creator's UPI ID or bank account. Set the webhook URL below in your RazorpayX dashboard so statuses update on their own.</span><code>{{ webhook_url }}</code></div>
+<form method="post" action="{% url 'finance:sync_payments' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="fin-btn ghost">{% icon "rotate-ccw" 16 %}Check statuses</button></form>
+{% else %}<div><b>Manual payments</b><span>No payout provider is connected, so you send each payment from your bank and record its UTR here. To pay automatically, add your RazorpayX keys (RAZORPAYX_KEY_ID, RAZORPAYX_KEY_SECRET, RAZORPAYX_ACCOUNT_NUMBER, RAZORPAYX_WEBHOOK_SECRET) to the server settings.</span></div>{% endif %}
+</section>
+
+{% if not last_month_closed %}<div class="fin-alert">{% icon "calendar" 18 %}<div><b>{{ last_month|date:"F" }} hasn't been closed yet</b><span>This normally happens on the 1st through the daily payment job. Closing it locks in what each creator earned and tells them.</span></div><form method="post" action="{% url 'finance:close_month' %}">{% csrf_token %}<button class="fin-btn primary">Close {{ last_month|date:"F" }}</button></form></div>{% endif %}
+
+{% if run %}
+<section class="fin-card fin-run">
+<div class="fin-card-head"><div><h2>{{ run.month|date:"F Y" }}</h2><span class="fin-muted">Payment day {{ run.scheduled_for|date:"M j, Y" }}</span></div><em class="fin-pill {% if run.status == 'completed' %}green{% elif run.status == 'scheduled' %}{% else %}amber{% endif %}">{{ run.get_status_display }}</em></div>
+<ol class="fin-steps">
+<li class="is-done"><span>{% icon "check" 14 %}</span>Month closed</li>
+<li class="{% if run.status != 'scheduled' %}is-done{% else %}is-current{% endif %}"><span>{% if run.status != 'scheduled' %}{% icon "check" 14 %}{% else %}2{% endif %}</span>Payments prepared</li>
+<li class="{% if run.status == 'completed' %}is-done{% elif run.status == 'ready' or run.status == 'sending' %}is-current{% endif %}"><span>{% if run.status == 'completed' %}{% icon "check" 14 %}{% else %}3{% endif %}</span>Sent and confirmed</li>
+</ol>
+{% if run.status == 'scheduled' %}
+<p class="fin-muted">If payments were prepared now, this is what would happen. Each creator is paid their balance as it stood when {{ run.month|date:"F" }} ended.</p>
+<div class="fin-minis three"><div><b>{{ preview.to_pay|length }}</b><span>Creators to pay</span></div><div><b>{{ preview.total_net|inr }}</b><span>To send{% if preview.total_tds %}, after {{ preview.total_tds|inr }} tax{% endif %}</span></div><div><b>{{ preview.held|length }}</b><span>On hold</span></div></div>
+<form method="post" action="{% url 'finance:prepare_run' run.pk %}" data-confirm="Prepare {{ run.month|date:'F' }} payments now? Each creator's payment comes out of their balance.">{% csrf_token %}<button class="fin-btn primary">{% if today >= run.scheduled_for %}Prepare payments{% else %}Prepare payments early{% endif %}</button></form>
+{% elif run.status == 'ready' or run.status == 'sending' %}
+<div class="fin-minis three"><div><b>{{ waiting_count }}</b><span>Waiting to send</span></div><div><b>{{ waiting_net|inr }}</b><span>To send</span></div><div><b>{{ available|inr }}</b><span>Free in the master account</span></div></div>
+{% if waiting_count %}<div class="fin-run-actions">
+{% if provider %}<form method="post" action="{% url 'finance:send_run' run.pk %}" data-confirm="Send {{ waiting_count }} payment{{ waiting_count|pluralize }} totalling {{ waiting_net|inr }} through {{ provider.name }}?">{% csrf_token %}<button class="fin-btn primary"{% if send_shortfall > 0 %} disabled{% endif %}>{% icon "send" 16 %}Send {{ waiting_count }} payment{{ waiting_count|pluralize }}</button></form>{% endif %}
+<a class="fin-btn ghost" href="{% url 'finance:payouts_csv' run.pk %}">{% icon "download" 16 %}Download CSV</a>
+{% if send_shortfall > 0 %}<span class="fin-error">The master account is short by {{ send_shortfall|inr }}. <a href="{% url 'finance:treasury' %}">Add money</a> first.</span>{% endif %}
+</div>{% endif %}
 {% else %}
-<em class="fin-pill {% if payout.status == 'paid' %}green{% else %}red{% endif %}">{% if payout.status == 'paid' %}Paid{% else %}Returned{% endif %}</em>
-<small>{{ payout.processed_at|date:"M j, Y" }}{% if payout.processed_by %} by {{ payout.processed_by.email }}{% endif %}</small>
+<p class="fin-muted">All of {{ run.month|date:"F" }}'s payments are finished.</p>
+{% endif %}
+</section>
+
+{% if preview %}{% if preview.to_pay %}<section class="fin-card flush"><div class="fin-card-head pad"><h2>Will be paid</h2><span class="fin-muted">{{ preview.total|inr }} from balances</span></div>
+<div class="fin-table" role="table" aria-label="Creators who will be paid"><div class="fin-tr head preview" role="row"><span role="columnheader">Creator</span><span role="columnheader">Paid to</span><span role="columnheader">Balance</span><span role="columnheader">Tax</span><span role="columnheader">To send</span></div>
+{% for row in preview.to_pay %}<div class="fin-tr preview" role="row"><span role="cell" class="fin-who"><span class="fin-avatar sm">{{ row.user|initials }}</span><span><b>{{ row.account.payout_name }}</b><small>{{ row.user.email }}</small></span></span><span role="cell">{{ row.account.destination }}</span><span role="cell">{{ row.amount|inr }}</span><span role="cell">{{ row.tds|inr }}</span><span role="cell"><b>{{ row.net|inr }}</b></span></div>{% endfor %}
+</div></section>{% endif %}
+{% if preview.held or preview.below %}<div class="fin-grid">
+<section class="fin-card"><div class="fin-card-head"><h2>On hold</h2><span class="fin-muted">{{ preview.held|length }}</span></div>
+{% for row in preview.held %}<a class="fin-line link" href="{% url 'finance:creator' row.user.pk %}"><span class="fin-avatar sm">{{ row.user|initials }}</span><div><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.hold_labels|join:", " }}</small></div><strong>{{ row.amount|inr }}</strong></a>{% empty %}<p class="fin-empty">{% icon "check-circle" 18 %}Nobody is on hold.</p>{% endfor %}
+</section>
+<section class="fin-card"><div class="fin-card-head"><h2>Under {{ rules.minimum_payout|inr }}</h2><span class="fin-muted">Carries over</span></div>
+{% for row in preview.below %}<div class="fin-line"><span class="fin-avatar sm">{{ row.user|initials }}</span><div><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>Paid once the balance reaches the threshold</small></div><strong>{{ row.amount|inr }}</strong></div>{% empty %}<p class="fin-empty">Nobody is under the threshold.</p>{% endfor %}
+</section>
+</div>{% endif %}{% endif %}
+
+{% if run.status != 'scheduled' %}
+<div class="fin-toolbar">
+<nav class="fin-tabs" aria-label="Payment status">
+<a href="?run={{ run.pk }}"{% if status == 'all' %} aria-current="page"{% endif %}>All</a>
+<a href="?run={{ run.pk }}&status=pending"{% if status == 'pending' %} aria-current="page"{% endif %}>Waiting <em>{{ counts.pending|default:0 }}</em></a>
+<a href="?run={{ run.pk }}&status=processing"{% if status == 'processing' %} aria-current="page"{% endif %}>Sending <em>{{ counts.processing|default:0 }}</em></a>
+<a href="?run={{ run.pk }}&status=paid"{% if status == 'paid' %} aria-current="page"{% endif %}>Paid <em>{{ counts.paid|default:0 }}</em></a>
+<a href="?run={{ run.pk }}&status=rejected"{% if status == 'rejected' %} aria-current="page"{% endif %}>Returned <em>{{ counts.rejected|default:0 }}</em></a>
+</nav>
+</div>
+<section class="fin-card flush">
+{% for payout in page %}<article class="fin-payout">
+<div class="fin-payout-who"><span class="fin-avatar">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.user.email }}</small><a href="{% url 'finance:creator' payout.user_id %}">View creator</a></div></div>
+<div class="fin-payout-amount"><strong>{{ payout.net_amount|inr }}</strong><small>to {{ payout.destination|default:payout.upi_id }}</small>{% if payout.tds_amount %}<small>{{ payout.amount|inr }} minus {{ payout.tds_amount|inr }} tax</small>{% endif %}</div>
+<div class="fin-payout-when"><small>Status</small><span><em class="fin-pill {% if payout.status == 'paid' %}green{% elif payout.status == 'rejected' %}red{% elif payout.status == 'processing' %}violet{% else %}amber{% endif %}">{{ payout.get_status_display }}</em></span>{% if payout.provider_payout_id %}<small>{{ payout.provider_payout_id }}</small>{% endif %}</div>
+<div class="fin-payout-act">
+{% if payout.status == 'pending' or payout.status == 'processing' %}
+{% if payout.note %}<small class="fin-error">{{ payout.note }}</small>{% endif %}
+<form method="post" action="{% url 'finance:payout_paid' payout.pk %}" class="fin-inline" data-confirm="Mark {{ payout.net_amount|inr }} to {{ payout.payout_name }} as paid? Do this only after the money has been sent.">{% csrf_token %}<input name="reference" placeholder="UTR / reference" maxlength="100" required aria-label="Payment reference"><button class="fin-btn primary">{% icon "check" 16 %}Mark paid</button></form>
+<details class="fin-reject"><summary>Return to balance</summary><form method="post" action="{% url 'finance:payout_reject' payout.pk %}" class="fin-inline">{% csrf_token %}<input name="reason" placeholder="Reason the creator will see" maxlength="200" required aria-label="Reason"><button class="fin-btn danger">Return</button></form></details>
+{% else %}
+<small>{{ payout.processed_at|date:"M j, Y" }}{% if payout.processed_by %} by {{ payout.processed_by.email }}{% else %} automatically{% endif %}</small>
 {% if payout.reference %}<small>Ref {{ payout.reference }}</small>{% endif %}{% if payout.note %}<small>{{ payout.note }}</small>{% endif %}
 {% endif %}
 </div>
 </article>
-{% empty %}<p class="fin-empty pad">{% icon "check-circle" 18 %}{% if status == 'pending' %}No withdrawals waiting. Nice.{% else %}Nothing here yet.{% endif %}</p>{% endfor %}
+{% empty %}<p class="fin-empty pad">{% icon "check-circle" 18 %}Nothing here.</p>{% endfor %}
 </section>
-{% with extra="status="|add:status %}{% include "earnings/finance/_pager.html" %}{% endwith %}
+{% with extra=pager_extra %}{% include "earnings/finance/_pager.html" %}{% endwith %}
+{% endif %}
+{% else %}
+<section class="fin-card"><p class="fin-empty">{% icon "calendar" 18 %}No payment runs yet. The first one starts when a month closes.</p></section>
+{% endif %}
+
+{% if runs %}<section class="fin-card flush"><div class="fin-card-head pad"><h2>All months</h2></div>
+<div class="fin-table" role="table" aria-label="Payment runs"><div class="fin-tr head runs" role="row"><span role="columnheader">Month</span><span role="columnheader">Payment day</span><span role="columnheader">Creators</span><span role="columnheader">Total</span><span role="columnheader">Status</span></div>
+{% for item in runs %}<a class="fin-tr runs" role="row" href="?run={{ item.pk }}"><span role="cell"><b>{{ item.month|date:"F Y" }}</b></span><span role="cell">{{ item.scheduled_for|date:"M j" }}</span><span role="cell">{% if item.status == 'scheduled' %}—{% else %}{{ item.count }}{% endif %}</span><span role="cell">{% if item.status == 'scheduled' %}—{% else %}{{ item.total|default:0|inr }}{% endif %}</span><span role="cell"><em class="fin-pill {% if item.status == 'completed' %}green{% elif item.status == 'scheduled' %}{% else %}amber{% endif %}">{{ item.get_status_display }}</em></span></a>{% endfor %}
+</div></section>{% endif %}
 {% endblock %}

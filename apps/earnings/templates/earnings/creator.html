@@ -1,17 +1,18 @@
 {% load static ui money %}<div class="earn-page">
 <header class="page-head"><div><span class="kicker">CREATOR EARNINGS</span><h1>Earnings</h1><p class="muted">Teach what you build. Every article and video earns coins, and coins turn into real money.</p></div><a class="button soft" href="#earn-rules">{% icon "info" 16 %}How it works</a></header>
-{% if program_paused %}<div class="earn-alert">{% icon "alert-circle" 18 %}<div><b>The creator program is paused</b><span>Your coins and wallet are safe. New coins and withdrawals start again when it's back.</span></div></div>
-{% elif account.suspended %}<div class="earn-alert danger">{% icon "alert-circle" 18 %}<div><b>Earnings are paused on your account</b><span>{{ account.suspended_reason|default:"Your coins and wallet are safe while we review your account." }} Contact support if you think this is a mistake.</span></div></div>{% endif %}
+{% if program_paused %}<div class="earn-alert">{% icon "alert-circle" 18 %}<div><b>The creator program is paused</b><span>Your coins and balance are safe. New coins and payments start again when it's back.</span></div></div>
+{% elif account.suspended %}<div class="earn-alert danger">{% icon "alert-circle" 18 %}<div><b>Earnings are paused on your account</b><span>{{ account.suspended_reason|default:"Your coins and balance are safe while we review your account." }} Contact support if you think this is a mistake.</span></div></div>{% endif %}
 
 <section class="earn-hero">
 <div class="earn-wallet">
-<span class="earn-label">Wallet balance</span>
+<span class="earn-label">Balance</span>
 <strong class="earn-amount" data-count-to="{{ wallet }}">{{ wallet|inr }}</strong>
-<div class="earn-wallet-meta"><span>{% icon "trending-up" 14 %}Lifetime {{ lifetime|inr }}</span><span>{% icon "send" 14 %}Paid out {{ paid_out|inr }}</span></div>
-{% if pending_payout %}<p class="earn-note">{% icon "clock" 14 %}{{ pending_payout.amount|inr }} is on its way to {{ pending_payout.upi_id }}</p>
-{% elif can_withdraw %}<button class="button earn-withdraw" type="button" data-open-dialog="withdraw-dialog">{% icon "send" 16 %}Withdraw to UPI</button>
-{% elif earning %}<p class="earn-note">{% icon "info" 14 %}Withdraw from {{ rules.minimum_payout|inr }}. {{ to_minimum|inr }} to go.</p>
-{% else %}<p class="earn-note">{% icon "lock" 14 %}Withdrawals open at {{ rules.follower_goal }} followers.</p>{% endif %}
+<div class="earn-wallet-meta"><span>{% icon "trending-up" 14 %}This month {{ this_month_earned|inr }} (estimated)</span><span>{% icon "send" 14 %}Paid out {{ paid_out|inr }}</span></div>
+{% if sending_payout %}<p class="earn-note">{% icon "clock" 14 %}{{ sending_payout.net_amount|inr }} is on its way to {{ sending_payout.destination }}</p>
+{% elif not earning %}<p class="earn-note">{% icon "lock" 14 %}Payments start at {{ rules.follower_goal }} followers.</p>
+{% elif holds %}<button class="button earn-withdraw" type="button" data-open-dialog="payment-dialog">{% icon "alert-circle" 16 %}{% if has_details %}Payments on hold: fix it{% else %}Set up payments{% endif %}</button>
+{% elif next_payment.will_pay %}<p class="earn-note">{% icon "calendar" 14 %}{{ next_payment.amount|inr }} will be paid {% if next_payment.due %}in the next few days{% else %}around {{ next_payment.date|date:"M j" }}{% endif %}{% if next_payment.estimated %} (estimated){% endif %}</p>
+{% else %}<p class="earn-note">{% icon "info" 14 %}We pay once your balance reaches {{ rules.minimum_payout|inr }}. {{ next_payment.short_by|inr }} to go.</p>{% endif %}
 </div>
 <div class="earn-ring{% if not earning %} is-locked{% endif %}" role="img" aria-label="{{ coins_in_block }} of {{ rules.coins_per_conversion }} coins toward your next {{ rules.rupees_per_conversion|inr }}">
 <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="earn-ring-track" cx="60" cy="60" r="52"/><circle class="earn-ring-fill" cx="60" cy="60" r="52" pathLength="100" style="--offset:{{ coin_percent }}"/></svg>
@@ -43,6 +44,23 @@
 <ol>{% for step in journey %}<li class="{% if step.done %}is-done{% elif forloop.counter0 == next_step %}is-current{% endif %}"><span class="earn-step-dot">{% if step.done %}{% icon "check" 14 %}{% else %}{{ forloop.counter }}{% endif %}</span><b>{{ step.title }}</b><small>{{ step.detail }}</small></li>{% endfor %}</ol>
 </section>
 
+<section class="card earn-payments" id="payments"><div class="card-heading"><h2>Payments</h2><button class="button soft" type="button" data-open-dialog="payment-dialog">{% icon "sliders" 16 %}Payment settings</button></div>
+<ol class="earn-cycle" aria-label="How payments work">
+<li><span>{% icon "trending-up" 16 %}</span><div><b>Earn all month</b><small>Coins turn into rupees as you publish.</small></div></li>
+<li><span>{% icon "check-circle" 16 %}</span><div><b>Month closes on the 1st</b><small>That month's earnings become final.</small></div></li>
+<li><span>{% icon "send" 16 %}</span><div><b>Paid around the {{ rules.payout_day|ordinal }}</b><small>When your balance is {{ rules.minimum_payout|inr }} or more and nothing is on hold.</small></div></li>
+</ol>
+<div class="earn-next">
+<div><small>Next payment</small><b>{% if not earning %}After you unlock{% elif next_payment.will_pay %}{{ next_payment.amount|inr }}{% elif holds %}On hold{% else %}Under {{ rules.minimum_payout|inr }}{% endif %}</b><span>{% if earning %}{% if next_payment.due %}Being prepared now{% else %}Around {{ next_payment.date|date:"M j, Y" }}{% endif %}{% if next_payment.estimated %} (estimated){% endif %}{% else %}{{ followers_needed }} more followers{% endif %}</span></div>
+<div><small>Paid to</small><b>{{ account.destination|default:"Not set up yet" }}</b><span>{% if account.pan %}PAN {{ account.masked_pan }}{% else %}No PAN yet{% endif %}</span></div>
+<div><small>Tax</small><b>{% if rules.tds_percent > 0 %}{{ rules.tds_percent|floatformat:"-2" }}% deducted{% else %}None deducted{% endif %}</b><span>{% if account.hold_payments %}You're holding payments{% else %}Paid automatically{% endif %}</span></div>
+</div>
+{% if earning and holds %}<div class="earn-holds" role="status"><b>{% icon "alert-circle" 16 %}Your payments are on hold</b><ul>{% for hold in holds %}<li>{{ hold.text }}</li>{% endfor %}</ul><button class="button primary" type="button" data-open-dialog="payment-dialog">Open payment settings</button></div>{% endif %}
+{% if payouts %}<div class="earn-table" role="table" aria-label="Payment history"><div class="earn-row head" role="row"><span role="columnheader">For</span><span role="columnheader">Amount</span><span role="columnheader">You got</span><span role="columnheader">Status</span></div>
+{% for payout in payouts %}<div class="earn-row" role="row"><span role="cell">{% if payout.run %}{{ payout.run.month|date:"F Y" }}{% else %}{{ payout.requested_at|date:"M j, Y" }}{% endif %}<small>{{ payout.destination|default:payout.upi_id }}</small></span><span role="cell"><b>{{ payout.amount|inr }}</b>{% if payout.tds_amount %}<small>{{ payout.tds_amount|inr }} tax</small>{% endif %}</span><span role="cell">{{ payout.net_amount|inr }}</span><span role="cell"><em class="earn-status {{ payout.status }}">{{ payout.get_status_display }}</em>{% if payout.status == "paid" and payout.reference %}<small>Ref {{ payout.reference }}</small>{% elif payout.status == "rejected" and payout.note %}<small>{{ payout.note }}</small>{% endif %}</span></div>{% endfor %}
+</div>{% else %}<p class="earn-empty">Your payments will show up here, with the bank reference for each one.</p>{% endif %}
+</section>
+
 <div class="earn-grid">
 <section class="card earn-chart"><div class="card-heading"><h2>Coins by month</h2><span class="muted">{{ coins_earned }} earned in total</span></div>
 <div class="earn-bars">{% for month in months %}<div class="earn-bar{% if forloop.last %} is-now{% endif %}"><span class="earn-bar-value">{{ month.coins }}</span><i style="height:{{ month.height }}%"></i><small>{{ month.label }}</small></div>{% endfor %}</div>
@@ -55,7 +73,7 @@
 <li><span>{% icon "zap" 16 %}</span><p>Every <b>{{ rules.coins_per_conversion }} coins</b> becomes <b>{{ rules.rupees_per_conversion|inr }}</b> in your wallet, automatically.</p></li>
 <li><span>{% icon "users" 16 %}</span><p>Coins turn into money once you reach <b>{{ rules.follower_goal }} followers</b>{% if rules.follower_bonus > 0 %}, and that day you get a one-time <b>{{ rules.follower_bonus|inr }}</b> bonus{% endif %}. Coins you earn before then are saved.</p></li>
 <li><span>{% icon "clock" 16 %}</span><p>Up to {{ rules.daily_post_limit }} posts a day earn coins. Unpublishing or deleting a post removes its coins.</p></li>
-<li><span>{% icon "send" 16 %}</span><p>Withdraw to any UPI ID from <b>{{ rules.minimum_payout|inr }}</b>.</p></li>
+<li><span>{% icon "send" 16 %}</span><p>We pay you every month, around the <b>{{ rules.payout_day|ordinal }}</b>, once your balance is <b>{{ rules.minimum_payout|inr }}</b> or more.</p></li>
 </ul>
 </section>
 </div>
@@ -71,14 +89,13 @@
 </section>
 </div>
 
-{% if payouts %}<section class="card earn-payouts"><div class="card-heading"><h2>Withdrawals</h2></div>
-<div class="earn-table" role="table" aria-label="Withdrawals"><div class="earn-row head" role="row"><span role="columnheader">Requested</span><span role="columnheader">Amount</span><span role="columnheader">UPI ID</span><span role="columnheader">Status</span></div>
-{% for payout in payouts %}<div class="earn-row" role="row"><span role="cell">{{ payout.requested_at|date:"M j, Y" }}</span><span role="cell"><b>{{ payout.amount|inr }}</b></span><span role="cell">{{ payout.upi_id }}</span><span role="cell"><em class="earn-status {{ payout.status }}">{{ payout.get_status_display }}</em>{% if payout.status == "paid" and payout.reference %}<small>Ref {{ payout.reference }}</small>{% elif payout.status == "rejected" and payout.note %}<small>{{ payout.note }}</small>{% endif %}</span></div>{% endfor %}
-</div></section>{% endif %}
 </div>
-{% if can_withdraw and not pending_payout %}<dialog class="app-dialog" id="withdraw-dialog"><form method="post" action="{% url 'earnings:withdraw' %}">{% csrf_token %}<button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button><span class="kicker">WITHDRAW</span><h2>Send money to your UPI</h2><p>You have {{ wallet|inr }}. Withdrawals usually arrive within 3 working days.</p>
-<label>Amount (₹)<input name="amount" type="number" inputmode="decimal" min="{{ rules.minimum_payout }}" max="{{ wallet }}" step="0.01" value="{{ wallet }}" required></label>
-<label>UPI ID<input name="upi_id" value="{{ account.upi_id }}" placeholder="name@okbank" maxlength="100" autocomplete="off" required></label>
-<label>Name on your bank account<input name="payout_name" value="{{ account.payout_name|default:user.get_full_name }}" maxlength="120" required></label>
-<div class="dialog-actions"><button class="button soft" type="button" data-close-dialog>Cancel</button><button class="button primary">Request withdrawal</button></div></form></dialog>{% endif %}
+<dialog class="app-dialog earn-pay-dialog" id="payment-dialog"><form method="post" action="{% url 'earnings:payment_details' %}" data-payment-form>{% csrf_token %}<button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button><span class="kicker">PAYMENT SETTINGS</span><h2>How you get paid</h2><p>We pay once a month, around the {{ rules.payout_day|ordinal }}, when your balance is {{ rules.minimum_payout|inr }} or more. These details are only used to pay you.</p>
+<label>Legal name<input name="payout_name" value="{{ account.payout_name|default:user.get_full_name }}" maxlength="120" autocomplete="name" required><small>As it appears on your bank account and PAN card.</small></label>
+<label>PAN<input name="pan" value="{{ account.pan }}" maxlength="10" placeholder="ABCDE1234F" autocomplete="off" class="earn-upper"{% if rules.require_pan %} required{% endif %}><small>Needed for tax{% if rules.tds_percent > 0 %}. {{ rules.tds_percent|floatformat:"-2" }}% is deducted from each payment and shows on your tax statement{% endif %}.</small></label>
+<fieldset class="earn-method"><legend>Pay me by</legend><label><input type="radio" name="payout_method" value="upi"{% if account.payout_method != 'bank' %} checked{% endif %}>UPI</label><label><input type="radio" name="payout_method" value="bank"{% if account.payout_method == 'bank' %} checked{% endif %}>Bank account</label></fieldset>
+<div data-method="upi"><label>UPI ID<input name="upi_id" value="{{ account.upi_id }}" placeholder="name@okbank" maxlength="100" autocomplete="off"></label></div>
+<div data-method="bank" class="earn-bank"><label>Account number<input name="bank_account" inputmode="numeric" maxlength="18" autocomplete="off"{% if account.bank_account %} placeholder="Saved: ending {{ account.bank_account|slice:'-4:' }}"{% endif %}></label><label>Account number again<input name="bank_account_confirm" inputmode="numeric" maxlength="18" autocomplete="off"></label><label>IFSC<input name="ifsc" value="{{ account.ifsc }}" maxlength="11" placeholder="HDFC0001234" autocomplete="off" class="earn-upper"></label>{% if account.bank_account %}<small class="earn-bank-note">Leave the account number empty to keep the saved one.</small>{% endif %}</div>
+<label class="earn-check"><input type="checkbox" name="hold_payments"{% if account.hold_payments %} checked{% endif %}><span><b>Hold my payments</b><small>Your balance keeps adding up and is paid once you turn this off.</small></span></label>
+<div class="dialog-actions"><button class="button soft" type="button" data-close-dialog>Cancel</button><button class="button primary">Save payment settings</button></div></form></dialog>
 <script src="{% static 'earnings/earnings.js' %}" defer></script>

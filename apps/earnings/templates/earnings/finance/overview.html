@@ -3,13 +3,13 @@
 {% block heading %}Overview{% endblock %}
 {% block subheading %}Where the money is, what creators are owed, and what's waiting for you.{% endblock %}
 {% block content %}
-{% if shortfall > 0 %}<div class="fin-alert danger">{% icon "alert-circle" 18 %}<div><b>The master account is short by {{ shortfall|inr }}</b><span>Creators are owed {{ owed|inr }} but the master account holds {{ balance|inr }}. Add money before approving more payouts.</span></div><a class="fin-btn primary" href="{% url 'finance:treasury' %}">Add money</a></div>
-{% elif not rules.program_enabled %}<div class="fin-alert">{% icon "info" 18 %}<div><b>The creator program is paused</b><span>Creators keep what they have, but no new coins or withdrawals happen until you turn it back on.</span></div><a class="fin-btn ghost" href="{% url 'finance:settings' %}">Earning rules</a></div>{% endif %}
+{% if shortfall > 0 %}<div class="fin-alert danger">{% icon "alert-circle" 18 %}<div><b>The master account is short by {{ shortfall|inr }}</b><span>Creators are owed {{ owed|inr }} but the master account holds {{ balance|inr }}. Add money before payment day.</span></div><a class="fin-btn primary" href="{% url 'finance:treasury' %}">Add money</a></div>
+{% elif not rules.program_enabled %}<div class="fin-alert">{% icon "info" 18 %}<div><b>The creator program is paused</b><span>Creators keep what they have, but no new coins or payments happen until you turn it back on.</span></div><a class="fin-btn ghost" href="{% url 'finance:settings' %}">Earning rules</a></div>{% endif %}
 
 <section class="fin-kpis">
 <article class="fin-kpi feature"><span class="fin-kpi-icon">{% icon "database" 18 %}</span><small>Master account</small><strong>{{ balance|inr }}</strong><p>{% if cover >= 0 %}{{ cover|inr }} free after everything owed{% else %}{{ shortfall|inr }} short of what's owed{% endif %}</p></article>
-<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "credit-card" 18 %}</span><small>Owed to creators</small><strong>{{ owed|inr }}</strong><p>Wallets plus withdrawals waiting</p></article>
-<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "clock" 18 %}</span><small>Waiting to be paid</small><strong>{{ pending_total|inr }}</strong><p>{{ pending_count }} withdrawal{{ pending_count|pluralize }}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "credit-card" 18 %}</span><small>Owed to creators</small><strong>{{ owed|inr }}</strong><p>Balances plus payments not yet sent</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "calendar" 18 %}</span><small>Next payment day</small><strong>{{ next_run.date|date:"M j" }}</strong><p>{% if next_run.count is not None %}{{ next_run.count }} creator{{ next_run.count|pluralize }}, {{ next_run.total|inr }} for {{ next_run.month|date:"F" }}{% else %}For {{ next_run.month|date:"F" }} earnings{% endif %}</p></article>
 <article class="fin-kpi"><span class="fin-kpi-icon green">{% icon "send" 18 %}</span><small>Paid this month</small><strong>{{ paid_month_total|inr }}</strong><p>{{ paid_month_count }} payout{{ paid_month_count|pluralize }}</p></article>
 </section>
 <section class="fin-minis">
@@ -17,16 +17,16 @@
 <div><b>{{ new_creators }}</b><span>Unlocked this month</span></div>
 <div><b>{{ earned_month|inr }}</b><span>Credited to wallets this month</span></div>
 <div><b>{{ coins_out }}</b><span>Coins not yet converted</span></div>
-<div><b>{{ suspended_creators }}</b><span>Paused creators</span></div>
+<div><b>{{ tax_due|inr }}</b><span>Tax to pay the government</span></div>
 </section>
 
 <div class="fin-grid">
 <section class="fin-card"><div class="fin-card-head"><h2>Money in and out</h2><span class="fin-legend"><i class="in"></i>Added <i class="out"></i>Paid to creators</span></div>
 <div class="fin-bars">{% for month in months %}<div class="fin-bar"><div class="fin-bar-pair"><i class="in" style="height:{{ month.deposit_height }}%" title="Added {{ month.deposits|inr }}"></i><i class="out" style="height:{{ month.payout_height }}%" title="Paid {{ month.payouts|inr }}"></i></div><small>{{ month.label }}</small></div>{% endfor %}</div>
 </section>
-<section class="fin-card"><div class="fin-card-head"><h2>Waiting for you</h2><a href="{% url 'finance:payouts' %}">Review all</a></div>
-{% for payout in pending_list %}<div class="fin-line"><span class="fin-avatar sm">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.upi_id }} · {{ payout.requested_at|timesince }} ago</small></div><strong>{{ payout.amount|inr }}</strong></div>
-{% empty %}<p class="fin-empty">{% icon "check-circle" 18 %}No withdrawals waiting.</p>{% endfor %}
+<section class="fin-card"><div class="fin-card-head"><h2>Payments not yet confirmed</h2><a href="{% url 'finance:payouts' %}">Payments</a></div>
+{% for payout in pending_list %}<div class="fin-line"><span class="fin-avatar sm">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.destination|default:payout.upi_id }} · {{ payout.get_status_display }}{% if payout.run %} · {{ payout.run.month|date:"F" }}{% endif %}</small></div><strong>{{ payout.net_amount|inr }}</strong></div>
+{% empty %}<p class="fin-empty">{% icon "check-circle" 18 %}Every payment is confirmed. {{ pending_total|inr }} waiting.</p>{% endfor %}
 </section>
 </div>
 
@@ -35,7 +35,7 @@
 <ol>
 <li><span>{% icon "database" 18 %}</span><div><b>Master account</b><small>Your company bank account. Record each top-up under Master account.</small></div></li>
 <li><span>{% icon "users" 18 %}</span><div><b>Creator wallets</b><small>Bonuses and converted coins land here. It's money you owe, not money that has left.</small></div></li>
-<li><span>{% icon "send" 18 %}</span><div><b>UPI payout</b><small>Send the money from the bank or a payout provider, then mark it paid with the reference (UTR).</small></div></li>
+<li><span>{% icon "send" 18 %}</span><div><b>Monthly payment</b><small>Each month closes on the 1st. On the {{ rules.payout_day|ordinal }}, balances of {{ rules.minimum_payout|inr }} or more are paid to UPI or bank.</small></div></li>
 </ol>
 </section>
 <section class="fin-card"><div class="fin-card-head"><h2>Earning rules</h2><a href="{% url 'finance:settings' %}">Edit</a></div>
@@ -44,7 +44,7 @@
 <div><dt>Coins per post</dt><dd>Article {{ rules.coins_per_article }} · Video {{ rules.coins_per_video }}</dd></div>
 <div><dt>Conversion</dt><dd>{{ rules.coins_per_conversion }} coins = {{ rules.rupees_per_conversion|inr }}</dd></div>
 <div><dt>Daily limit</dt><dd>{{ rules.daily_post_limit }} posts</dd></div>
-<div><dt>Minimum withdrawal</dt><dd>{{ rules.minimum_payout|inr }}</dd></div>
+<div><dt>Payments</dt><dd>On the {{ rules.payout_day|ordinal }}, from {{ rules.minimum_payout|inr }}{% if rules.tds_percent > 0 %}, {{ rules.tds_percent|floatformat:"-2" }}% tax{% endif %}</dd></div>
 <div><dt>Program</dt><dd>{% if rules.program_enabled %}<em class="fin-pill green">On</em>{% else %}<em class="fin-pill red">Paused</em>{% endif %}</dd></div>
 </dl>
 </section>

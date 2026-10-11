@@ -119,7 +119,7 @@ class ActivityEvent(models.Model):
     class Meta:
         ordering = ["-created_at"]
 class EarningTransaction(models.Model):
-    TYPES = [("credit", "Credit"), ("payout", "Payout"), ("adjustment", "Adjustment")]
+    TYPES = [("credit", "Credit"), ("payout", "Payout"), ("adjustment", "Adjustment"), ("refund", "Payment returned")]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="earning_transactions")
     post = models.ForeignKey(LearningPost, on_delete=models.SET_NULL, null=True, blank=True, related_name="earning_transactions")
     transaction_type = models.CharField(max_length=20, choices=TYPES, default="credit")

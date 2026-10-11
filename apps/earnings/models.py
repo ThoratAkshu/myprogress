@@ -12,7 +12,11 @@ class EarningSettings(models.Model):
     coins_per_conversion = models.PositiveIntegerField(default=100, help_text="Coins that turn into rupees")
     rupees_per_conversion = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("10"))
     daily_post_limit = models.PositiveIntegerField(default=5, help_text="Posts per creator per day that earn coins")
-    minimum_payout = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("100"), help_text="Smallest withdrawal in rupees")
+    minimum_payout = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("100"), help_text="Payment threshold: a finished month's balance must reach this to be paid")
+    payout_day = models.PositiveSmallIntegerField(default=21, help_text="Day of the month payments go out, for the month before")
+    tds_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"), help_text="Tax deducted at source from each payment, in percent")
+    require_pan = models.BooleanField(default=True, help_text="Hold payments until the creator adds a PAN")
+    auto_send = models.BooleanField(default=False, help_text="Send payments through the payout provider on payment day without waiting for approval")
     confirmed_followers_only = models.BooleanField(default=False, help_text="Count only followers who confirmed their email")
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
@@ -30,10 +34,28 @@ class CreatorAccount(models.Model):
     follower_bonus_paid_at = models.DateTimeField(null=True, blank=True)
     suspended = models.BooleanField(default=False)
     suspended_reason = models.CharField(max_length=200, blank=True)
+    METHODS = [("upi", "UPI"), ("bank", "Bank account")]
+    payout_name = models.CharField(max_length=120, blank=True, help_text="Legal name, as on the bank account and PAN")
+    pan = models.CharField(max_length=10, blank=True)
+    payout_method = models.CharField(max_length=10, choices=METHODS, default="upi")
     upi_id = models.CharField(max_length=100, blank=True)
-    payout_name = models.CharField(max_length=120, blank=True)
+    bank_account = models.CharField(max_length=18, blank=True)
+    ifsc = models.CharField(max_length=11, blank=True)
+    hold_payments = models.BooleanField(default=False, help_text="The creator asked to hold payments")
+    details_updated_at = models.DateTimeField(null=True, blank=True)
+    provider_contact_id = models.CharField(max_length=40, blank=True)
+    provider_fund_account_id = models.CharField(max_length=40, blank=True)
     def __str__(self):
         return f"Creator account of {self.user}"
+    @property
+    def masked_pan(self):
+        return f"•••••{self.pan[5:]}" if self.pan else ""
+    @property
+    def destination(self):
+        """Where payments go, safe to show: UPI arjun@okhdfc or Bank ••••4321 (HDFC0001234)."""
+        if self.payout_method == "bank":
+            return f"Bank ••••{self.bank_account[-4:]} ({self.ifsc})" if self.bank_account and self.ifsc else ""
+        return f"UPI {self.upi_id}" if self.upi_id else ""
 class CoinTransaction(models.Model):
     KINDS = [("post", "Post reward"), ("reversal", "Post removed"), ("conversion", "Converted to rupees"), ("adjustment", "Adjustment")]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="coin_transactions")
@@ -44,12 +66,31 @@ class CoinTransaction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at", "-id"]
+class PaymentRun(models.Model):
+    """One month's payments, like YouTube's monthly AdSense payment: earnings close on the 1st and are paid on payment day."""
+    STATUSES = [("scheduled", "Scheduled"), ("ready", "Ready to send"), ("sending", "Sending"), ("completed", "Completed")]
+    month = models.DateField(unique=True, help_text="First day of the month being paid for")
+    scheduled_for = models.DateField()
+    status = models.CharField(max_length=12, choices=STATUSES, default="scheduled")
+    created_at = models.DateTimeField(auto_now_add=True)
+    prepared_at = models.DateTimeField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    class Meta:
+        ordering = ["-month"]
+    def __str__(self):
+        return f"Payments for {self.month:%B %Y}"
 class PayoutRequest(models.Model):
-    STATUSES = [("pending", "Pending"), ("paid", "Paid"), ("rejected", "Rejected")]
+    """One creator's payment within a run. `amount` leaves the wallet; the creator receives it minus `tds_amount`."""
+    STATUSES = [("pending", "Waiting to send"), ("processing", "Sending"), ("paid", "Paid"), ("rejected", "Returned")]
+    run = models.ForeignKey(PaymentRun, on_delete=models.PROTECT, null=True, blank=True, related_name="payouts")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="payout_requests")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    upi_id = models.CharField(max_length=100)
+    tds_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    destination = models.CharField(max_length=80, blank=True)
+    upi_id = models.CharField(max_length=100, blank=True)
     payout_name = models.CharField(max_length=120)
+    provider_payout_id = models.CharField(max_length=40, blank=True)
     status = models.CharField(max_length=10, choices=STATUSES, default="pending")
     requested_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
@@ -58,9 +99,13 @@ class PayoutRequest(models.Model):
     note = models.CharField(max_length=200, blank=True)
     class Meta:
         ordering = ["-requested_at"]
+        constraints = [models.UniqueConstraint(fields=["run", "user"], name="one_payout_per_creator_per_run")]
+    @property
+    def net_amount(self):
+        return self.amount - self.tds_amount
 class TreasuryEntry(models.Model):
     """The master account: money the owner adds, takes back, or pays out to creators."""
-    KINDS = [("deposit", "Money added"), ("withdrawal", "Money taken out"), ("payout", "Creator payout")]
+    KINDS = [("deposit", "Money added"), ("withdrawal", "Money taken out"), ("payout", "Creator payout"), ("tax", "Tax paid to government")]
     kind = models.CharField(max_length=20, choices=KINDS)
     amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Always positive; the kind decides the direction")
     reference = models.CharField(max_length=100, blank=True)

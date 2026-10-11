@@ -154,6 +154,6 @@ def language_breakdown(language_maps, limit=6):
         breakdown.append({"name": "Other", "percent": round(sum(size for _, size in ranked[limit:]) * 100 / grand_total, 1)})
     return breakdown
 def earning_balance(user):
-    credits = EarningTransaction.objects.filter(user=user, transaction_type__in=["credit", "adjustment"]).aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    credits = EarningTransaction.objects.filter(user=user, transaction_type__in=["credit", "adjustment", "refund"]).aggregate(total=Sum("amount"))["total"] or Decimal("0")
     payouts = EarningTransaction.objects.filter(user=user, transaction_type="payout").aggregate(total=Sum("amount"))["total"] or Decimal("0")
     return credits - payouts

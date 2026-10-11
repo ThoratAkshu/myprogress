@@ -874,3 +874,36 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 @media(max-width:1080px){.earn-hero{grid-template-columns:minmax(0,1fr) auto}.earn-unlock{grid-column:1/-1}}
 @media(max-width:860px){.earn-actions,.earn-grid{grid-template-columns:minmax(0,1fr)}.earn-journey ol{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:18px}.earn-journey li:nth-child(2)::before{display:none}}
 @media(max-width:600px){.earn-hero{grid-template-columns:minmax(0,1fr);justify-items:center;padding:22px 18px;text-align:center}.earn-wallet{display:grid;justify-items:center}.earn-wallet-meta{justify-content:center}.earn-unlock{justify-items:center;width:100%;box-sizing:border-box}.earn-amount{font-size:44px}.earn-journey ol{grid-template-columns:minmax(0,1fr)}.earn-journey li::before{display:none}.earn-row{grid-template-columns:1fr 1fr}.earn-row.head{display:none}}
+/* Creator earnings: monthly payments, like YouTube's payment cycle */
+.earn-cycle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 0;padding:0;list-style:none}
+.earn-cycle li{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--canvas)}
+.earn-cycle li>span{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:var(--violet-soft);color:var(--violet);flex:none}
+.earn-cycle li div{display:grid}
+.earn-cycle b{font-size:13.5px}
+.earn-cycle small{color:var(--muted);font-size:12.5px;line-height:1.4}
+.earn-next{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-top:14px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--line)}
+.earn-next>div{display:grid;gap:2px;padding:12px 14px;background:var(--surface);min-width:0}
+.earn-next small{color:var(--muted);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.earn-next b{overflow:hidden;font:800 17px/1.3 Manrope,"DM Sans",sans-serif;text-overflow:ellipsis;white-space:nowrap}
+.earn-next span{color:var(--muted);font-size:12.5px}
+.earn-holds{display:grid;gap:8px;justify-items:start;margin-top:14px;padding:14px 16px;border:1px solid #fcd34d;border-radius:12px;background:#fffbeb;color:#78350f}
+.earn-holds b{display:flex;align-items:center;gap:8px}
+.earn-holds ul{margin:0;padding-left:20px;font-size:13.5px;line-height:1.5}
+.earn-payments .earn-table{margin-top:14px}
+.earn-status.processing{background:#e0f2fe;color:#075985}
+.earn-pay-dialog{width:min(520px,calc(100vw - 32px))}
+.earn-pay-dialog .earn-method{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0;padding:0;border:0}
+.earn-pay-dialog .earn-method legend{width:100%;margin-bottom:6px;padding:0;font-size:12px;font-weight:700}
+.earn-pay-dialog .earn-method label{display:flex;align-items:center;gap:8px;margin:0;padding:9px 14px;border:1px solid var(--line);border-radius:10px;font-size:13.5px;cursor:pointer}
+.earn-pay-dialog .earn-method label:has(input:checked){border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
+.earn-pay-dialog .earn-method input[type=radio]{display:inline-block;width:auto;margin:0;padding:0;accent-color:var(--violet)}
+.earn-pay-dialog .earn-bank{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px}
+.earn-pay-dialog .earn-bank label:last-of-type{grid-column:1/-1}
+.earn-pay-dialog .earn-bank-note{grid-column:1/-1;margin-top:6px}
+.earn-pay-dialog .earn-check{display:flex;align-items:flex-start;gap:10px;margin-top:16px;cursor:pointer}
+.earn-pay-dialog .earn-check input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--violet);flex:none}
+.earn-pay-dialog .earn-check span{display:grid;gap:2px}
+.earn-pay-dialog .earn-upper{text-transform:uppercase}
+.earn-pay-dialog [hidden]{display:none!important}
+@media(max-width:860px){.earn-cycle,.earn-next{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){.earn-pay-dialog .earn-bank{grid-template-columns:minmax(0,1fr)}}

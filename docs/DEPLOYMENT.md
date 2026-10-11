@@ -95,6 +95,13 @@ compressed.
 |---|---|---|
 | Daily | `python manage.py refresh_scores` | Scores use a 90-day window and must decay over time; it also saves each day's ranks so Rankings can show weekly movement and climbers |
 | After restores | `python manage.py refresh_languages` | Rebuilds language data from repositories |
+| Daily | `python manage.py run_payment_cycle` | Creator payments, like YouTube's monthly cycle: closes last month on the 1st and tells creators what they earned, prepares payments on payment day (default the 21st), sends them through RazorpayX when auto-send is on, and checks payments still sending |
+
+### Creator payments
+
+The finance console lives at `/finance/` with its own sign-in. Give an account access with `python manage.py create_finance_admin you@example.com`.
+
+Without RazorpayX keys, payments are manual: on payment day the console lists each creator's payment, you send it from the bank (or upload the CSV), and mark it paid with the UTR. To pay automatically, set the four `RAZORPAYX_*` settings and add the webhook `https://<your-domain>/finance/webhooks/razorpayx/` in the RazorpayX dashboard for the `payout.processed`, `payout.reversed`, `payout.failed` and `payout.rejected` events. The daily job also polls payments still sending, in case a webhook is missed. Keep the RazorpayX balance topped up from the master account; the console refuses to send more than the master account holds.
 
 ## 6. Backups
 
