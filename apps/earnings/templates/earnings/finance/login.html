@@ -1,0 +1,19 @@
+{% load static ui %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Sign in · MyProgress Finance</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'earnings/finance.css' %}"></head>
+<body class="fin fin-login-page">
+<main class="fin-login">
+<div class="fin-login-card">
+<span class="fin-login-mark">{% icon "shield" 26 %}</span>
+<h1>MyProgress Finance</h1>
+<p class="fin-muted">Payouts, the master account, and earning rules. Staff with finance access only.</p>
+{% for error in form.non_field_errors %}<p class="fin-flash error" role="alert">{{ error }}</p>{% endfor %}
+<form method="post" class="fin-form">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+<label>Email<input type="email" name="email" value="{{ form.email.value|default:'' }}" autocomplete="username" maxlength="254" required{% if not form.email.value %} autofocus{% endif %}></label>
+{% for error in form.email.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}
+<label>Password<input type="password" name="password" autocomplete="current-password" required{% if form.email.value %} autofocus{% endif %}></label>
+<button class="fin-btn primary block">Sign in to finance</button>
+</form>
+<p class="fin-login-foot">{% icon "lock" 14 %}Even if you're signed in to MyProgress, you enter your password again here. The console locks after {{ idle_minutes }} idle minutes, and every action is recorded.</p>
+<a class="fin-login-back" href="/">Back to MyProgress</a>
+</div>
+</main>
+</body></html>

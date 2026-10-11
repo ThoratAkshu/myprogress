@@ -1,0 +1,12 @@
+{% extends "earnings/finance/base.html" %}{% load ui %}
+{% block title %}Audit log{% endblock %}
+{% block heading %}Audit log{% endblock %}
+{% block subheading %}Every sign-in, payout, rule change, and adjustment. Entries can't be edited or deleted.{% endblock %}
+{% block content %}
+<section class="fin-card flush">
+<div class="fin-table" role="table" aria-label="Audit log"><div class="fin-tr head audit" role="row"><span role="columnheader">When</span><span role="columnheader">Who</span><span role="columnheader">Action</span><span role="columnheader">Details</span></div>
+{% for entry in page %}<div class="fin-tr audit" role="row"><span role="cell">{{ entry.created_at|date:"M j, Y, g:i a" }}</span><span role="cell">{{ entry.actor.email|default:"System" }}</span><span role="cell"><em class="fin-pill">{{ entry.action }}</em></span><span role="cell">{{ entry.details }}</span></div>
+{% empty %}<p class="fin-empty pad">Nothing recorded yet.</p>{% endfor %}
+</div></section>
+{% include "earnings/finance/_pager.html" %}
+{% endblock %}

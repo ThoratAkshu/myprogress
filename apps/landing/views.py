@@ -26,7 +26,8 @@ from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
-from apps.core.services import achievements, coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
+from apps.earnings.services import creator_dashboard, refresh_creator
+from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view
 from apps.notifications.services import notify
 from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioView, ShortlistEntry
@@ -241,6 +242,8 @@ def workspace_section_view(request, section):
         context["new_git_token"] = request.session.pop("new_git_token", None)
     if section == "rankings":
         context.update(_rankings_context(request, context["profile"]))
+    if section == "earnings":
+        context.update(creator_dashboard(request.user))
     if section == "learning":
         pending = request.user.contact_requests.filter(status="pending").count()
         tabs = [("for-you", "For you"), ("following", "Following"), ("mine", f"My content {context['learning_count']}"), ("network", f"Network {pending}" if pending else "Network")]
@@ -539,6 +542,7 @@ def follow_view(request, handle):
         if created:
             follower_handle = Profile.objects.get_or_create(user=request.user)[0].handle
             notify(profile.user, request.user, "follow", f"{request.user.get_full_name() or follower_handle} started following you", reverse("landing:public_profile", args=[follower_handle]))
+            refresh_creator(profile.user)
         else:
             follow.delete()
         refresh_rank(profile.user)

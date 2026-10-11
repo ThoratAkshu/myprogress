@@ -1,0 +1,84 @@
+{% load static ui money %}<div class="earn-page">
+<header class="page-head"><div><span class="kicker">CREATOR EARNINGS</span><h1>Earnings</h1><p class="muted">Teach what you build. Every article and video earns coins, and coins turn into real money.</p></div><a class="button soft" href="#earn-rules">{% icon "info" 16 %}How it works</a></header>
+{% if program_paused %}<div class="earn-alert">{% icon "alert-circle" 18 %}<div><b>The creator program is paused</b><span>Your coins and wallet are safe. New coins and withdrawals start again when it's back.</span></div></div>
+{% elif account.suspended %}<div class="earn-alert danger">{% icon "alert-circle" 18 %}<div><b>Earnings are paused on your account</b><span>{{ account.suspended_reason|default:"Your coins and wallet are safe while we review your account." }} Contact support if you think this is a mistake.</span></div></div>{% endif %}
+
+<section class="earn-hero">
+<div class="earn-wallet">
+<span class="earn-label">Wallet balance</span>
+<strong class="earn-amount" data-count-to="{{ wallet }}">{{ wallet|inr }}</strong>
+<div class="earn-wallet-meta"><span>{% icon "trending-up" 14 %}Lifetime {{ lifetime|inr }}</span><span>{% icon "send" 14 %}Paid out {{ paid_out|inr }}</span></div>
+{% if pending_payout %}<p class="earn-note">{% icon "clock" 14 %}{{ pending_payout.amount|inr }} is on its way to {{ pending_payout.upi_id }}</p>
+{% elif can_withdraw %}<button class="button earn-withdraw" type="button" data-open-dialog="withdraw-dialog">{% icon "send" 16 %}Withdraw to UPI</button>
+{% elif earning %}<p class="earn-note">{% icon "info" 14 %}Withdraw from {{ rules.minimum_payout|inr }}. {{ to_minimum|inr }} to go.</p>
+{% else %}<p class="earn-note">{% icon "lock" 14 %}Withdrawals open at {{ rules.follower_goal }} followers.</p>{% endif %}
+</div>
+<div class="earn-ring{% if not earning %} is-locked{% endif %}" role="img" aria-label="{{ coins_in_block }} of {{ rules.coins_per_conversion }} coins toward your next {{ rules.rupees_per_conversion|inr }}">
+<svg viewBox="0 0 120 120" aria-hidden="true"><circle class="earn-ring-track" cx="60" cy="60" r="52"/><circle class="earn-ring-fill" cx="60" cy="60" r="52" pathLength="100" style="--offset:{{ coin_percent }}"/></svg>
+<div><b>{{ coins_in_block }}</b><small>of {{ rules.coins_per_conversion }} coins</small><em>{{ coins_to_next }} to {{ rules.rupees_per_conversion|inr }}</em></div>
+</div>
+<div class="earn-unlock{% if earning %} is-open{% endif %}">
+{% if account.eligible_since %}
+<span class="earn-unlock-badge">{% icon "unlock" 16 %}Earnings unlocked</span>
+<b class="earn-unlock-count">{{ followers }} followers</b>
+<p>Coins turn into money automatically. Unlocked on {{ account.eligible_since|date:"M j, Y" }}.</p>
+{% if account.follower_bonus_paid_at %}<span class="earn-chip">{% icon "gift" 14 %}{{ rules.follower_bonus|inr }} follower bonus received</span>{% endif %}
+{% else %}
+<span class="earn-unlock-badge">{% icon "lock" 16 %}Unlock earnings</span>
+<b class="earn-unlock-count">{{ followers }} <small>/ {{ rules.follower_goal }} followers</small></b>
+<div class="earn-progress" role="progressbar" aria-valuemin="0" aria-valuemax="{{ rules.follower_goal }}" aria-valuenow="{{ followers }}" aria-label="Followers toward unlocking earnings"><i style="width:{{ follower_percent }}%"></i></div>
+<p>{{ followers_needed }} more follower{{ followers_needed|pluralize }} to unlock earnings{% if rules.follower_bonus > 0 %} and a {{ rules.follower_bonus|inr }} bonus{% endif %}.</p>
+{% if locked_rupees > 0 %}<span class="earn-chip">{% icon "gift" 14 %}{{ locked_rupees|inr }} from your {{ coins }} coins is waiting</span>{% elif coins > 0 %}<span class="earn-chip">{% icon "zap" 14 %}{{ coins }} coins saved for you</span>{% endif %}
+{% endif %}
+</div>
+</section>
+
+<section class="earn-actions" aria-label="Ways to earn">
+<a class="earn-action" href="{% url 'learning:create' %}?kind=article"><span class="earn-action-icon article">{% icon "file-text" 20 %}</span><span class="earn-action-text"><b>Write an article</b><small>{% if articles_to_next %}{{ articles_to_next }} more to your next {{ rules.rupees_per_conversion|inr }}{% else %}Share what you learned{% endif %}</small></span><span class="earn-coin">+{{ rules.coins_per_article }}</span></a>
+<a class="earn-action" href="{% url 'learning:create' %}?kind=video"><span class="earn-action-icon video">{% icon "video" 20 %}</span><span class="earn-action-text"><b>Record a video</b><small>{% if videos_to_next %}{{ videos_to_next }} more to your next {{ rules.rupees_per_conversion|inr }}{% else %}Show how you built it{% endif %}</small></span><span class="earn-coin">+{{ rules.coins_per_video }}</span></a>
+<a class="earn-action" href="{% url 'landing:workspace_section' 'learning' %}?tab=network"><span class="earn-action-icon people">{% icon "users" 20 %}</span><span class="earn-action-text"><b>Grow your audience</b><small>{% if account.eligible_since %}More followers, more readers{% else %}{{ followers_needed }} to go for the bonus{% endif %}</small></span>{% if not account.eligible_since and rules.follower_bonus > 0 %}<span class="earn-coin gift">{{ rules.follower_bonus|inr }}</span>{% else %}<span class="earn-coin people">{% icon "user-plus" 16 %}</span>{% endif %}</a>
+</section>
+
+<section class="card earn-journey"><div class="card-heading"><h2>Your creator journey</h2><span class="muted">{{ journey_done }} of {{ journey|length }} done</span></div>
+<ol>{% for step in journey %}<li class="{% if step.done %}is-done{% elif forloop.counter0 == next_step %}is-current{% endif %}"><span class="earn-step-dot">{% if step.done %}{% icon "check" 14 %}{% else %}{{ forloop.counter }}{% endif %}</span><b>{{ step.title }}</b><small>{{ step.detail }}</small></li>{% endfor %}</ol>
+</section>
+
+<div class="earn-grid">
+<section class="card earn-chart"><div class="card-heading"><h2>Coins by month</h2><span class="muted">{{ coins_earned }} earned in total</span></div>
+<div class="earn-bars">{% for month in months %}<div class="earn-bar{% if forloop.last %} is-now{% endif %}"><span class="earn-bar-value">{{ month.coins }}</span><i style="height:{{ month.height }}%"></i><small>{{ month.label }}</small></div>{% endfor %}</div>
+<p class="earn-chart-foot">{{ post_count }} public post{{ post_count|pluralize }}, {{ video_count }} video{{ video_count|pluralize }}</p>
+</section>
+<section class="card earn-rules" id="earn-rules"><div class="card-heading"><h2>How earning works</h2></div>
+<ul>
+<li><span>{% icon "file-text" 16 %}</span><p>Each public article earns <b>{{ rules.coins_per_article }} coins</b>.</p></li>
+<li><span>{% icon "video" 16 %}</span><p>Each public video earns <b>{{ rules.coins_per_video }} coins</b>.</p></li>
+<li><span>{% icon "zap" 16 %}</span><p>Every <b>{{ rules.coins_per_conversion }} coins</b> becomes <b>{{ rules.rupees_per_conversion|inr }}</b> in your wallet, automatically.</p></li>
+<li><span>{% icon "users" 16 %}</span><p>Coins turn into money once you reach <b>{{ rules.follower_goal }} followers</b>{% if rules.follower_bonus > 0 %}, and that day you get a one-time <b>{{ rules.follower_bonus|inr }}</b> bonus{% endif %}. Coins you earn before then are saved.</p></li>
+<li><span>{% icon "clock" 16 %}</span><p>Up to {{ rules.daily_post_limit }} posts a day earn coins. Unpublishing or deleting a post removes its coins.</p></li>
+<li><span>{% icon "send" 16 %}</span><p>Withdraw to any UPI ID from <b>{{ rules.minimum_payout|inr }}</b>.</p></li>
+</ul>
+</section>
+</div>
+
+<div class="earn-grid">
+<section class="card earn-history"><div class="card-heading"><h2>Coin activity</h2></div>
+{% for item in coin_history %}<article><span class="earn-history-icon {{ item.kind }}">{% if item.kind == "conversion" %}{% icon "zap" 16 %}{% elif item.kind == "reversal" %}{% icon "rotate-ccw" 16 %}{% elif item.kind == "adjustment" %}{% icon "sliders" 16 %}{% else %}{% icon "plus" 16 %}{% endif %}</span><div><b>{{ item.description }}</b><small>{{ item.created_at|date:"M j, Y" }}</small></div><strong class="{% if item.amount > 0 %}plus{% else %}minus{% endif %}">{% if item.amount > 0 %}+{% endif %}{{ item.amount }}</strong></article>
+{% empty %}<p class="earn-empty">Publish your first article to earn {{ rules.coins_per_article }} coins.</p>{% endfor %}
+</section>
+<section class="card earn-history"><div class="card-heading"><h2>Wallet activity</h2></div>
+{% for item in money_history %}<article><span class="earn-history-icon {{ item.transaction_type }}">{% if item.transaction_type == "payout" %}{% icon "arrow-up-right" 16 %}{% else %}{% icon "arrow-down-left" 16 %}{% endif %}</span><div><b>{{ item.description }}</b><small>{{ item.created_at|date:"M j, Y" }}</small></div><strong class="{% if item.transaction_type == 'payout' or item.amount < 0 %}minus{% else %}plus{% endif %}">{% if item.transaction_type == "payout" %}−{% elif item.amount >= 0 %}+{% endif %}{{ item.amount|inr }}</strong></article>
+{% empty %}<p class="earn-empty">{% if earning %}Your next {{ rules.coins_per_conversion }} coins land here as {{ rules.rupees_per_conversion|inr }}.{% else %}Reach {{ rules.follower_goal }} followers and your bonus lands here.{% endif %}</p>{% endfor %}
+</section>
+</div>
+
+{% if payouts %}<section class="card earn-payouts"><div class="card-heading"><h2>Withdrawals</h2></div>
+<div class="earn-table" role="table" aria-label="Withdrawals"><div class="earn-row head" role="row"><span role="columnheader">Requested</span><span role="columnheader">Amount</span><span role="columnheader">UPI ID</span><span role="columnheader">Status</span></div>
+{% for payout in payouts %}<div class="earn-row" role="row"><span role="cell">{{ payout.requested_at|date:"M j, Y" }}</span><span role="cell"><b>{{ payout.amount|inr }}</b></span><span role="cell">{{ payout.upi_id }}</span><span role="cell"><em class="earn-status {{ payout.status }}">{{ payout.get_status_display }}</em>{% if payout.status == "paid" and payout.reference %}<small>Ref {{ payout.reference }}</small>{% elif payout.status == "rejected" and payout.note %}<small>{{ payout.note }}</small>{% endif %}</span></div>{% endfor %}
+</div></section>{% endif %}
+</div>
+{% if can_withdraw and not pending_payout %}<dialog class="app-dialog" id="withdraw-dialog"><form method="post" action="{% url 'earnings:withdraw' %}">{% csrf_token %}<button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button><span class="kicker">WITHDRAW</span><h2>Send money to your UPI</h2><p>You have {{ wallet|inr }}. Withdrawals usually arrive within 3 working days.</p>
+<label>Amount (₹)<input name="amount" type="number" inputmode="decimal" min="{{ rules.minimum_payout }}" max="{{ wallet }}" step="0.01" value="{{ wallet }}" required></label>
+<label>UPI ID<input name="upi_id" value="{{ account.upi_id }}" placeholder="name@okbank" maxlength="100" autocomplete="off" required></label>
+<label>Name on your bank account<input name="payout_name" value="{{ account.payout_name|default:user.get_full_name }}" maxlength="120" required></label>
+<div class="dialog-actions"><button class="button soft" type="button" data-close-dialog>Cancel</button><button class="button primary">Request withdrawal</button></div></form></dialog>{% endif %}
+<script src="{% static 'earnings/earnings.js' %}" defer></script>

@@ -1,0 +1,35 @@
+{% extends "earnings/finance/base.html" %}{% load ui money %}
+{% block title %}Payouts{% endblock %}
+{% block heading %}Payouts{% endblock %}
+{% block subheading %}Send each withdrawal from your bank or payout provider, then record it here with its reference.{% endblock %}
+{% block content %}
+<div class="fin-toolbar">
+<nav class="fin-tabs" aria-label="Payout status">
+<a href="?status=pending"{% if status == 'pending' %} aria-current="page"{% endif %}>Waiting <em>{{ counts.pending|default:0 }}</em></a>
+<a href="?status=paid"{% if status == 'paid' %} aria-current="page"{% endif %}>Paid <em>{{ counts.paid|default:0 }}</em></a>
+<a href="?status=rejected"{% if status == 'rejected' %} aria-current="page"{% endif %}>Returned <em>{{ counts.rejected|default:0 }}</em></a>
+<a href="?status=all"{% if status == 'all' %} aria-current="page"{% endif %}>All</a>
+</nav>
+<div class="fin-toolbar-side"><span class="fin-muted">Master account {{ balance|inr }} · waiting {{ pending_total|inr }}</span>{% if counts.pending %}<a class="fin-btn ghost" href="{% url 'finance:payouts_csv' %}">{% icon "download" 16 %}Download CSV</a>{% endif %}</div>
+</div>
+{% if status == 'pending' and pending_total > balance %}<div class="fin-alert danger">{% icon "alert-circle" 18 %}<div><b>Not enough in the master account</b><span>Waiting withdrawals total {{ pending_total|inr }}, but the master account holds {{ balance|inr }}.</span></div><a class="fin-btn primary" href="{% url 'finance:treasury' %}">Add money</a></div>{% endif %}
+<section class="fin-card flush">
+{% for payout in page %}<article class="fin-payout{% if payout.status == 'pending' and payout.amount > balance %} is-over{% endif %}">
+<div class="fin-payout-who"><span class="fin-avatar">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.user.email }}</small><a href="{% url 'finance:creator' payout.user_id %}">View creator</a></div></div>
+<div class="fin-payout-amount"><strong>{{ payout.amount|inr }}</strong><small>to {{ payout.upi_id }}</small></div>
+<div class="fin-payout-when"><small>Requested</small><span>{{ payout.requested_at|date:"M j, Y, g:i a" }}</span></div>
+<div class="fin-payout-act">
+{% if payout.status == 'pending' %}
+<form method="post" action="{% url 'finance:payout_paid' payout.pk %}" class="fin-inline" data-confirm="Mark {{ payout.amount|inr }} to {{ payout.payout_name }} as paid? Do this only after the money has been sent.">{% csrf_token %}<input name="reference" placeholder="UTR / reference" maxlength="100" required aria-label="Payment reference"><button class="fin-btn primary">{% icon "check" 16 %}Mark paid</button></form>
+<details class="fin-reject"><summary>Return to wallet</summary><form method="post" action="{% url 'finance:payout_reject' payout.pk %}" class="fin-inline">{% csrf_token %}<input name="reason" placeholder="Reason the creator will see" maxlength="200" required aria-label="Reason"><button class="fin-btn danger">Return</button></form></details>
+{% else %}
+<em class="fin-pill {% if payout.status == 'paid' %}green{% else %}red{% endif %}">{% if payout.status == 'paid' %}Paid{% else %}Returned{% endif %}</em>
+<small>{{ payout.processed_at|date:"M j, Y" }}{% if payout.processed_by %} by {{ payout.processed_by.email }}{% endif %}</small>
+{% if payout.reference %}<small>Ref {{ payout.reference }}</small>{% endif %}{% if payout.note %}<small>{{ payout.note }}</small>{% endif %}
+{% endif %}
+</div>
+</article>
+{% empty %}<p class="fin-empty pad">{% icon "check-circle" 18 %}{% if status == 'pending' %}No withdrawals waiting. Nice.{% else %}Nothing here yet.{% endif %}</p>{% endfor %}
+</section>
+{% with extra="status="|add:status %}{% include "earnings/finance/_pager.html" %}{% endwith %}
+{% endblock %}

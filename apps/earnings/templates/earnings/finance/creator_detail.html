@@ -1,0 +1,42 @@
+{% extends "earnings/finance/base.html" %}{% load ui money %}
+{% block title %}{{ creator.get_full_name|default:creator.email }}{% endblock %}
+{% block heading %}{{ creator.get_full_name|default:creator.email|default:creator.username }}{% endblock %}
+{% block subheading %}{{ creator.email }}{% if creator.profile %} · <a href="{% url 'landing:public_profile' creator.profile.handle %}" target="_blank" rel="noopener">@{{ creator.profile.handle }}</a>{% endif %}{% endblock %}
+{% block content %}
+<a class="fin-back" href="{% url 'finance:creators' %}">{% icon "chevron-right" 14 %}All creators</a>
+{% if account.suspended %}<div class="fin-alert danger">{% icon "alert-circle" 18 %}<div><b>Earnings are paused for this creator</b><span>{{ account.suspended_reason|default:"No reason recorded." }}</span></div></div>{% endif %}
+<section class="fin-kpis">
+<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "users" 18 %}</span><small>Followers</small><strong>{{ followers }}</strong><p>{% if account.eligible_since %}Unlocked {{ account.eligible_since|date:"M j, Y" }}{% else %}{{ rules.follower_goal }} needed to unlock{% endif %}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "zap" 18 %}</span><small>Coins</small><strong>{{ creator.coin_total }}</strong><p>{{ post_count }} public post{{ post_count|pluralize }}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon green">{% icon "credit-card" 18 %}</span><small>Wallet</small><strong>{{ creator.wallet_total|inr }}</strong><p>{% if account.follower_bonus_paid_at %}Follower bonus paid{% else %}No bonus yet{% endif %}</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon">{% icon "send" 18 %}</span><small>Payout details</small><strong class="small">{{ account.upi_id|default:"Not set" }}</strong><p>{{ account.payout_name|default:"—" }}</p></article>
+</section>
+<div class="fin-grid">
+<section class="fin-card"><div class="fin-card-head"><h2>Add or remove coins or money</h2></div>
+<form method="post" class="fin-form two">{% csrf_token %}<input type="hidden" name="action" value="adjust">
+<label>Coins{{ adjust_form.coins }}<small>Use a minus sign to remove.</small></label>
+<label>Rupees{{ adjust_form.amount }}<small>Use a minus sign to remove.</small></label>
+<label class="span">Reason{{ adjust_form.reason }}<small>The creator sees this in their history.</small>{% for error in adjust_form.reason.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+{% for error in adjust_form.non_field_errors %}<small class="fin-error span">{{ error }}</small>{% endfor %}
+<div class="span"><button class="fin-btn primary">Save adjustment</button></div>
+</form>
+</section>
+<section class="fin-card"><div class="fin-card-head"><h2>{% if account.suspended %}Restore earnings{% else %}Pause earnings{% endif %}</h2></div>
+{% if account.suspended %}<p class="fin-muted">Restoring turns any saved coins into money right away if the creator has unlocked earnings.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="restore"><button class="fin-btn primary">Restore earnings</button></form>
+{% else %}<p class="fin-muted">Use this for fake followers, copied content, or a payout dispute. Coins and wallet stay; conversion and withdrawals stop.</p>
+<form method="post" class="fin-form" data-confirm="Pause earnings for this creator?">{% csrf_token %}<input type="hidden" name="action" value="suspend"><label>Reason<input name="reason" maxlength="200" required placeholder="The creator sees this"></label><div><button class="fin-btn danger">Pause earnings</button></div></form>{% endif %}
+</section>
+</div>
+<div class="fin-grid">
+<section class="fin-card"><div class="fin-card-head"><h2>Coins</h2></div>
+{% for item in coin_history %}<div class="fin-line"><div><b>{{ item.description }}</b><small>{{ item.get_kind_display }} · {{ item.created_at|date:"M j, Y" }}</small></div><strong class="{% if item.amount > 0 %}plus{% else %}minus{% endif %}">{% if item.amount > 0 %}+{% endif %}{{ item.amount }}</strong></div>{% empty %}<p class="fin-empty">No coins yet.</p>{% endfor %}
+</section>
+<section class="fin-card"><div class="fin-card-head"><h2>Wallet</h2></div>
+{% for item in money_history %}<div class="fin-line"><div><b>{{ item.description }}</b><small>{{ item.get_transaction_type_display }} · {{ item.created_at|date:"M j, Y" }}</small></div><strong class="{% if item.transaction_type == 'payout' or item.amount < 0 %}minus{% else %}plus{% endif %}">{% if item.transaction_type == 'payout' %}−{% elif item.amount >= 0 %}+{% endif %}{{ item.amount|inr }}</strong></div>{% empty %}<p class="fin-empty">No money yet.</p>{% endfor %}
+</section>
+</div>
+{% if payouts %}<section class="fin-card"><div class="fin-card-head"><h2>Withdrawals</h2><a href="{% url 'finance:payouts' %}">Payouts</a></div>
+{% for payout in payouts %}<div class="fin-line"><div><b>{{ payout.amount|inr }} to {{ payout.upi_id }}</b><small>{{ payout.requested_at|date:"M j, Y" }}{% if payout.reference %} · Ref {{ payout.reference }}{% endif %}</small></div><em class="fin-pill {% if payout.status == 'paid' %}green{% elif payout.status == 'rejected' %}red{% else %}amber{% endif %}">{{ payout.get_status_display }}</em></div>{% endfor %}
+</section>{% endif %}
+{% endblock %}

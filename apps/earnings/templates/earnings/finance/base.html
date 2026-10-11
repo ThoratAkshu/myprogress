@@ -1,0 +1,23 @@
+{% load static ui %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{% block title %}Finance{% endblock %} · MyProgress Finance</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'earnings/finance.css' %}"></head>
+<body class="fin">
+<aside class="fin-side">
+<a class="fin-brand" href="{% url 'finance:overview' %}"><span class="fin-brand-mark">{% icon "shield" 18 %}</span><span><b>MyProgress</b><small>Finance console</small></span></a>
+<nav class="fin-nav" aria-label="Finance">
+<a href="{% url 'finance:overview' %}"{% if active == 'overview' %} aria-current="page"{% endif %}>{% icon "pie-chart" 18 %}<span>Overview</span></a>
+<a href="{% url 'finance:payouts' %}"{% if active == 'payouts' %} aria-current="page"{% endif %}>{% icon "send" 18 %}<span>Payouts</span>{% if pending_count %}<em aria-label="{{ pending_count }} waiting">{{ pending_count }}</em>{% endif %}</a>
+<a href="{% url 'finance:treasury' %}"{% if active == 'treasury' %} aria-current="page"{% endif %}>{% icon "database" 18 %}<span>Master account</span></a>
+<a href="{% url 'finance:settings' %}"{% if active == 'settings' %} aria-current="page"{% endif %}>{% icon "sliders" 18 %}<span>Earning rules</span></a>
+<a href="{% url 'finance:creators' %}"{% if active == 'creators' %} aria-current="page"{% endif %}>{% icon "users" 18 %}<span>Creators</span></a>
+<a href="{% url 'finance:audit' %}"{% if active == 'audit' %} aria-current="page"{% endif %}>{% icon "list" 18 %}<span>Audit log</span></a>
+</nav>
+<p class="fin-side-foot">{% icon "lock" 14 %}Locks after {{ idle_minutes }} idle minutes</p>
+</aside>
+<div class="fin-main">
+<header class="fin-top"><div class="fin-top-title"><h1>{% block heading %}{% endblock %}</h1><p>{% block subheading %}{% endblock %}</p></div>
+<div class="fin-user"><span class="fin-avatar">{{ request.user|initials }}</span><span class="fin-user-text"><b>{{ request.user.get_full_name|default:request.user.email }}</b><small>{% if request.user.is_superuser %}Owner{% else %}Finance admin{% endif %}</small></span><form method="post" action="{% url 'finance:logout' %}">{% csrf_token %}<button class="fin-btn ghost">{% icon "log-out" 16 %}<span>Sign out</span></button></form></div>
+</header>
+{% if messages %}<div class="fin-messages">{% for message in messages %}<p class="fin-flash {{ message.tags }}" role="status">{{ message }}</p>{% endfor %}</div>{% endif %}
+<main class="fin-content">{% block content %}{% endblock %}</main>
+</div>
+<script src="{% static 'earnings/finance.js' %}" defer></script>
+</body></html>

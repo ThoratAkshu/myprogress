@@ -19,6 +19,7 @@ from apps.accounts.models import Profile
 from apps.core.git_service import clean_repo_path, object_type, read_blob
 from apps.core.models import ArticleImage, ContentView, LearningPost, PostComment, PostLike, Project
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
+from apps.earnings.services import reverse_post_coins, sync_post_coins
 from apps.notifications.services import notify
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
@@ -93,7 +94,9 @@ def post_create_view(request):
         record_activity(request.user, "learning", "published_learning", 4, {"post_id": post.pk})
         complete_daily_step(request.user, "share")
         refresh_rank(request.user)
-        messages.success(request, "Published. Share the link so other developers can learn from it." if post.is_public else "Saved as a private draft.")
+        coins = sync_post_coins(post)
+        earned = f" You earned {coins} coins." if coins else ""
+        messages.success(request, f"Published. Share the link so other developers can learn from it.{earned}" if post.is_public else "Saved as a private draft.")
         return _published(request, post)
     return render(request, "learning/post_form.html", _form_context(request, form))
 def _published(request, post):
@@ -230,7 +233,8 @@ def post_edit_view(request, post_id):
         post = form.save()
         _delete_replaced_files(post, form, previous)
         refresh_rank(request.user)
-        messages.success(request, "Post updated.")
+        coins = sync_post_coins(post)
+        messages.success(request, f"Post updated. You earned {coins} coins." if coins else "Post updated.")
         return _published(request, post)
     return render(request, "learning/post_form.html", _form_context(request, form, post))
 @login_required(login_url="landing:home")
@@ -240,6 +244,7 @@ def post_delete_view(request, post_id):
     for field in [post.video_file, post.thumbnail]:
         if field:
             field.storage.delete(field.name)
+    reverse_post_coins(post)
     post.delete()
     refresh_rank(request.user)
     messages.success(request, "Post deleted.")

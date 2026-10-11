@@ -1,0 +1,26 @@
+{% extends "earnings/finance/base.html" %}{% load ui money %}
+{% block title %}Creators{% endblock %}
+{% block heading %}Creators{% endblock %}
+{% block subheading %}Who is earning, who is close, and who is paused.{% endblock %}
+{% block content %}
+<div class="fin-toolbar">
+<nav class="fin-tabs" aria-label="Filter creators">
+<a href="?show=all{% if query %}&q={{ query|urlencode }}{% endif %}"{% if show == 'all' %} aria-current="page"{% endif %}>All</a>
+<a href="?show=earning{% if query %}&q={{ query|urlencode }}{% endif %}"{% if show == 'earning' %} aria-current="page"{% endif %}>Earning</a>
+<a href="?show=locked{% if query %}&q={{ query|urlencode }}{% endif %}"{% if show == 'locked' %} aria-current="page"{% endif %}>Not unlocked yet</a>
+<a href="?show=suspended{% if query %}&q={{ query|urlencode }}{% endif %}"{% if show == 'suspended' %} aria-current="page"{% endif %}>Paused</a>
+</nav>
+<form class="fin-search" method="get" role="search"><input type="hidden" name="show" value="{{ show }}">{% icon "search" 16 %}<input type="search" name="q" value="{{ query }}" placeholder="Name, email, or handle" aria-label="Search creators"></form>
+</div>
+<section class="fin-card flush">
+<div class="fin-table" role="table" aria-label="Creators"><div class="fin-tr head creators" role="row"><span role="columnheader">Creator</span><span role="columnheader">Followers</span><span role="columnheader">Coins</span><span role="columnheader">Wallet</span><span role="columnheader">Status</span></div>
+{% for creator in page %}<a class="fin-tr creators" role="row" href="{% url 'finance:creator' creator.pk %}">
+<span role="cell" class="fin-who"><span class="fin-avatar sm">{{ creator|initials }}</span><span><b>{{ creator.get_full_name|default:creator.email|default:creator.username }}</b><small>{% if creator.profile %}@{{ creator.profile.handle }} · {% endif %}{{ creator.email }}</small></span></span>
+<span role="cell">{{ creator.follower_total }}<small class="fin-muted"> / {{ rules.follower_goal }}</small></span>
+<span role="cell">{{ creator.coin_total }}</span>
+<span role="cell"><b>{{ creator.wallet_total|inr }}</b></span>
+<span role="cell">{% if creator.creator_account.suspended %}<em class="fin-pill red">Paused</em>{% elif creator.creator_account.eligible_since %}<em class="fin-pill green">Earning</em>{% else %}<em class="fin-pill">Locked</em>{% endif %}</span>
+</a>{% empty %}<p class="fin-empty pad">{% if query %}No one matches “{{ query }}”.{% else %}No creators yet. They appear once they publish.{% endif %}</p>{% endfor %}
+</div></section>
+{% with extra="show="|add:show %}{% include "earnings/finance/_pager.html" %}{% endwith %}
+{% endblock %}

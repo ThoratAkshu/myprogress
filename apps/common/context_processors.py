@@ -26,4 +26,5 @@ def workspace_navigation(request):
         "nav_pending_requests": lambda: user.contact_requests.filter(status="pending").count(),
         "nav_shortlist_count": lambda: user.shortlists.count(),
         "nav_unread_notifications": lambda: user.notifications.filter(read_at__isnull=True).count(),
+        "nav_can_finance": lambda: user.is_superuser or (user.is_staff and user.has_perm("earnings.access_finance")),
     }
