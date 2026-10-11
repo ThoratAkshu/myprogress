@@ -1,14 +1,17 @@
 """Organization rules: who can see what, joining, invites, and the growth numbers teachers see."""
 import csv
 import io
+import logging
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Count, Max, Q
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -17,6 +20,7 @@ from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
 from .models import Attendance, Certificate, ChannelPost, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
+logger = logging.getLogger(__name__)
 # Class points: task points earned, plus these for each class attended and each coding day in the last 30.
 POINTS_PER_CLASS = 5
 POINTS_PER_CODING_DAY = 1
@@ -426,3 +430,57 @@ def series_position(live):
         return None
     ids = list(LiveClass.objects.filter(series=live.series).order_by("starts_at").values_list("pk", flat=True))
     return (ids.index(live.pk) + 1, len(ids)) if live.pk in ids else None
+DIGEST_GAP = timedelta(days=6)
+def weekly_digest(member, now=None):
+    """One student's last 7 days and next 7, for the weekly parent email. None when there's nothing to say."""
+    organization, now = member.organization, now or timezone.now()
+    since, until = now - timedelta(days=7), now + timedelta(days=7)
+    visible = classes_for(organization, member)
+    held = [live for live in visible.filter(starts_at__gte=since, starts_at__lt=now).order_by("starts_at") if live.ends_at <= now]
+    marks = dict(Attendance.objects.filter(live_class__in=held, student=member.user).values_list("live_class_id", "status"))
+    classes = [{"live": live, "status": marks.get(live.pk, "absent")} for live in held]
+    given = task_load(organization, member)
+    submissions = {submission.task_id: submission for submission in Submission.objects.filter(task__organization=organization, student=member.user)}
+    def this_week(submission):
+        return submission.submitted_at >= since or (submission.reviewed_at and submission.reviewed_at >= since)
+    tasks = [{"task": task, "submission": submissions[task.pk]} for task in given if task.pk in submissions and this_week(submissions[task.pk])]
+    missed = sorted([task for task in given if task.due_at and since <= task.due_at < now and task.pk not in submissions], key=lambda task: task.due_at)
+    due = sorted([task for task in given if task.due_at and now <= task.due_at < until and task.pk not in submissions], key=lambda task: task.due_at)
+    next_classes = list(visible.filter(starts_at__gte=now, starts_at__lt=until).order_by("starts_at")[:10])
+    if not (classes or tasks or missed or due or next_classes):
+        return None
+    return {
+        "since": since, "now": now, "classes": classes, "attended": len([item for item in classes if item["status"] != "absent"]),
+        "tasks": tasks, "missed": missed, "due": due, "next_classes": next_classes,
+        "row": (student_growth(organization, users={member.user_id}) or [None])[0],
+    }
+def send_parent_digests(site_url, now=None):
+    """Email each parent a summary of their student's week. Each parent gets at most one every 6 days, so an extra run sends nothing twice.
+    Returns (sent, quiet): quiet parents had nothing new this week and get nothing."""
+    now = now or timezone.now()
+    accesses = (ParentAccess.objects.filter(revoked_at__isnull=True, digest_stopped_at__isnull=True, member__status="active", member__role="student", member__organization__parent_digest=True)
+                .filter(Q(digest_sent_at__isnull=True) | Q(digest_sent_at__lte=now - DIGEST_GAP)).select_related("member__organization", "member__user__profile"))
+    digests, sent, quiet = {}, 0, 0
+    for access in accesses:
+        member = access.member
+        if member.pk not in digests:
+            digests[member.pk] = weekly_digest(member, now)
+        digest = digests[member.pk]
+        if digest is None:
+            quiet += 1
+            continue
+        stop_url = site_url + reverse("organizations:parent_emails", args=[access.token])
+        context = {"access": access, "member": member, "organization": member.organization, "student": display_name(member.user), "digest": digest,
+                   "report_url": site_url + reverse("organizations:parent_report", args=[access.token]), "stop_url": stop_url}
+        message = EmailMultiAlternatives(f"{context['student']}'s week at {member.organization.name}", render_to_string("organizations/emails/parent_digest.txt", context), None, [access.email],
+                                         headers={"List-Unsubscribe": f"<{stop_url}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+        message.attach_alternative(render_to_string("organizations/emails/parent_digest.html", context), "text/html")
+        try:
+            message.send()
+        except Exception:
+            logger.exception("Could not send the weekly email for parent access %s", access.pk)
+            continue
+        access.digest_sent_at = now
+        access.save(update_fields=["digest_sent_at"])
+        sent += 1
+    return sent, quiet

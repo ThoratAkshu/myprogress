@@ -1,0 +1,26 @@
+{% autoescape off %}Hello {{ access.name }},
+
+Here is {{ student }}'s week at {{ organization.name }}, {{ digest.since|date:"M j" }} to {{ digest.now|date:"M j" }}.
+{% if digest.classes %}
+LIVE CLASSES: attended {{ digest.attended }} of {{ digest.classes|length }}
+{% for item in digest.classes %}  - {{ item.live.title }} ({{ item.live.starts_at|date:"D, M j" }}): {% if item.status == 'present' %}present{% elif item.status == 'late' %}late{% else %}absent{% endif %}
+{% endfor %}{% endif %}{% if digest.tasks %}
+TASKS HANDED IN OR MARKED
+{% for item in digest.tasks %}  - {{ item.task.title }}: {{ item.submission.get_status_display|lower }}{% if item.submission.score is not None %}, scored {{ item.submission.score }}/{{ item.task.points }}{% endif %}
+{% endfor %}{% endif %}{% if digest.missed %}
+MISSED (not handed in by the due date)
+{% for task in digest.missed %}  - {{ task.title }}, due {{ task.due_at|date:"D, M j" }}
+{% endfor %}{% endif %}{% if digest.due %}
+DUE IN THE NEXT 7 DAYS
+{% for task in digest.due %}  - {{ task.title }}, due {{ task.due_at|date:"D, M j, g:i a" }}
+{% endfor %}{% endif %}{% if digest.next_classes %}
+LIVE CLASSES IN THE NEXT 7 DAYS
+{% for live in digest.next_classes %}  - {{ live.title }}, {{ live.starts_at|date:"D, M j, g:i a" }}
+{% endfor %}{% endif %}{% if digest.row %}
+So far: {% if digest.row.attendance is not None %}{{ digest.row.attendance }}% attendance, {% endif %}{{ digest.row.tasks_submitted }} of {{ digest.row.tasks_given }} tasks handed in.
+{% endif %}
+Full progress report: {{ report_url }}
+
+{{ organization.name }} shared {{ student }}'s progress with you on MyProgress, so you get this summary once a week. Please keep the report link private.
+Stop these emails: {{ stop_url }}
+{% endautoescape %}

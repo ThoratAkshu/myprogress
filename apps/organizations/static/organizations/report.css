@@ -32,6 +32,9 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.55 "DM Sans"
 .rp-empty{margin:8px 0;color:var(--muted)}
 .rp-foot{margin:6px 0 0;color:var(--muted);font-size:13px;text-align:center}
 .rp-gone{width:min(520px,100% - 32px);margin:80px auto;padding:28px;border-radius:16px;background:#fff;text-align:center}
+.rp-gone form{margin:20px 0 14px}
+.rp-gone a,.rp-foot a{color:var(--accent);font-weight:700}
+.rp-button{padding:11px 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:700 15px "DM Sans",sans-serif;cursor:pointer}
 .rp-gone h1{margin:0 0 8px;font:800 22px Manrope,sans-serif}
 @media(max-width:760px){.rp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-grid{grid-template-columns:minmax(0,1fr)}.rp-head .rp-wrap{flex-wrap:wrap}}
 @media print{body{background:#fff}.rp-head{background:none;color:var(--ink);border-bottom:2px solid var(--ink)}.rp-head button{display:none}.rp-logo{background:var(--canvas)}.rp-card,.rp-kpis div{break-inside:avoid}}

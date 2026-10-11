@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
 from apps.common.ratelimit import rate_limit
@@ -533,6 +534,8 @@ def _send_parent_link(request, access):
     student = services.display_name(access.member.user)
     organization = access.member.organization
     body = f"Hello {access.name},\n\n{organization.name} has shared {student}'s progress report with you on MyProgress.\n\nOpen it any time:\n{link}\n\nIt shows attendance at live classes, task results, upcoming deadlines and certificates. You don't need an account. Please keep this link private; the institute can turn it off whenever you ask.\n"
+    if organization.parent_digest:
+        body += "\nOnce a week you'll also get a short summary by email, with a link in it to stop.\n"
     try:
         send_mail(f"{student}'s progress at {organization.name}", body, None, [access.email])
     except Exception:
@@ -551,7 +554,7 @@ def parent_access_view(request, slug, user_id):
             access.member, access.created_by = student, request.user
             access.save()
             _send_parent_link(request, access)
-            notify(student.user, request.user, "organization", f"{organization.name} shared your progress report with {access.name} ({access.get_relation_display().lower()})", services.channel_url(organization))
+            notify(student.user, request.user, "organization", f"{organization.name} shared your progress report with {access.name} ({access.get_relation_display().lower()})" + (", who also gets a weekly summary email" if organization.parent_digest else ""), services.channel_url(organization))
             messages.success(request, f"Sent the progress report link to {access.email}.")
         else:
             messages.error(request, " ".join(error for errors in form.errors.values() for error in errors))
@@ -573,6 +576,25 @@ def parent_report_view(request, token):
     access.last_viewed_at = timezone.now()
     access.save(update_fields=["last_viewed_at"])
     response = render(request, "organizations/parent_report.html", {"access": access, "member": access.member, "organization": access.member.organization, "report": services.progress_report(access.member), "now": timezone.now()})
+    response["Cache-Control"] = "private, no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
+@csrf_exempt
+def parent_emails_view(request, token):
+    """Turn a parent's weekly email off or back on. The token in the link is the key; mail apps POST here for one-click unsubscribe."""
+    access = ParentAccess.objects.select_related("member__organization", "member__user__profile").filter(token=token, revoked_at__isnull=True).first()
+    if access is None:
+        return render(request, "organizations/parent_report.html", {"gone": True}, status=404)
+    if request.method == "POST":
+        if request.POST.get("action") == "resume":
+            access.digest_stopped_at = None
+        elif not access.digest_stopped_at:
+            access.digest_stopped_at = timezone.now()
+        access.save(update_fields=["digest_stopped_at"])
+        if request.POST.get("List-Unsubscribe") == "One-Click":
+            return HttpResponse("You won't get the weekly email any more.", content_type="text/plain")
+        return redirect("organizations:parent_emails", token=token)
+    response = render(request, "organizations/parent_emails.html", {"access": access, "organization": access.member.organization, "student": services.display_name(access.member.user)})
     response["Cache-Control"] = "private, no-store"
     response["Referrer-Policy"] = "no-referrer"
     return response

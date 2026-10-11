@@ -100,7 +100,8 @@ compressed.
 |---|---|---|
 | Daily | `python manage.py refresh_scores` | Scores use a 90-day window and must decay over time; it also saves each day's ranks so Rankings can show weekly movement and climbers |
 | After restores | `python manage.py refresh_languages` | Rebuilds language data from repositories |
-| Every 5 minutes | `python manage.py run_organization_jobs` | Publishes scheduled channel posts when their time comes, and reminds organization members 15 minutes before a live class |
+| Every 5 minutes | `python manage.py run_organization_jobs` | Publishes scheduled channel posts, lectures and tasks when their time comes, and reminds organization members 15 minutes before a live class |
+| Weekly (for example Sunday 18:00) | `python manage.py send_parent_digests` | Emails each parent or guardian a summary of their student's week: attendance, tasks handed in, marked or missed, and what's due next. Needs `SITE_URL` set for the links. Each parent gets at most one every 6 days, and organizations can turn it off in Settings |
 | Daily | `python manage.py run_payment_cycle` | Creator payments, like YouTube's monthly cycle: closes last month on the 1st and tells creators what they earned, prepares payments on payment day (default the 21st), sends them through RazorpayX when auto-send is on, and checks payments still sending |
 
 ### Creator payments

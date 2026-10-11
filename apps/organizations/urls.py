@@ -8,6 +8,7 @@ urlpatterns = [
     path("invite/<str:token>/", views.accept_invite_view, name="accept_invite"),
     path("certificates/<str:code>/", views.certificate_view, name="certificate"),
     path("parent/<str:token>/", views.parent_report_view, name="parent_report"),
+    path("parent/<str:token>/emails/", views.parent_emails_view, name="parent_emails"),
     path("<slug:slug>/", views.overview_view, name="overview"),
     path("<slug:slug>/students/", views.members_view, name="members"),
     path("<slug:slug>/students/<int:user_id>/", views.member_detail_view, name="member"),

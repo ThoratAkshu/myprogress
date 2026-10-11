@@ -1,0 +1,8 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Weekly emails · {{ organization.name }}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'organizations/report.css' %}"></head>
+<body><main class="rp-gone">
+{% if access.digest_stopped_at %}<h1>Weekly emails are off</h1><p>You won't get {{ student }}'s weekly summary from {{ organization.name }} any more. The progress report link still works.</p>
+<form method="post"><input type="hidden" name="action" value="resume"><button class="rp-button">Turn weekly emails back on</button></form>
+{% else %}<h1>Stop the weekly email?</h1><p>{{ organization.name }} emails you a summary of {{ student }}'s week{% if not organization.parent_digest %}, though the institute has paused these for now{% endif %}. The progress report link keeps working either way.</p>
+<form method="post"><input type="hidden" name="action" value="stop"><button class="rp-button">Stop weekly emails</button></form>{% endif %}
+<p><a href="{% url 'organizations:parent_report' access.token %}">Open the progress report</a></p>
+</main></body></html>

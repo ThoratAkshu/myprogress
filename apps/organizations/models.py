@@ -26,6 +26,7 @@ class Organization(models.Model):
     invite_code = models.CharField(max_length=16, unique=True, default=new_invite_code)
     join_requires_approval = models.BooleanField(default=False, help_text="New members wait until a teacher approves them")
     show_leaderboard = models.BooleanField(default=True, help_text="Students can see the class leaderboard")
+    parent_digest = models.BooleanField(default=True, help_text="Parents with a report link get a weekly summary email")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["name"]
@@ -217,5 +218,7 @@ class ParentAccess(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_viewed_at = models.DateTimeField(null=True, blank=True)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    digest_sent_at = models.DateTimeField(null=True, blank=True, help_text="When the last weekly summary email went out")
+    digest_stopped_at = models.DateTimeField(null=True, blank=True, help_text="The parent turned the weekly email off")
     class Meta:
         ordering = ["-created_at"]

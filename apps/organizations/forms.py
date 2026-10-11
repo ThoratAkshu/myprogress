@@ -11,8 +11,8 @@ def check_size(upload):
 class OrganizationForm(forms.ModelForm):
     class Meta:
         model = Organization
-        fields = ["name", "kind", "city", "website", "about", "join_requires_approval", "show_leaderboard"]
-        labels = {"name": "Organization name", "kind": "Type", "about": "About", "join_requires_approval": "Approve new members before they join", "show_leaderboard": "Show the class leaderboard to students"}
+        fields = ["name", "kind", "city", "website", "about", "join_requires_approval", "show_leaderboard", "parent_digest"]
+        labels = {"name": "Organization name", "kind": "Type", "about": "About", "join_requires_approval": "Approve new members before they join", "show_leaderboard": "Show the class leaderboard to students", "parent_digest": "Email parents a weekly summary"}
         widgets = {"about": forms.Textarea(attrs={"rows": 3, "placeholder": "What you teach and who it's for."}), "name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"})}
 class InviteForm(forms.Form):
     emails = forms.CharField(widget=forms.Textarea(attrs={"rows": 4, "placeholder": "one@example.com, two@example.com\nor one email per line"}), label="Email addresses")

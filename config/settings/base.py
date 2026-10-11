@@ -232,6 +232,8 @@ CORS_ALLOW_CREDENTIALS = False
 # CSRF
 # -----------------------------------------------------------------------------
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
+# The site's address, for links in emails sent by scheduled jobs (there's no request to read it from).
+SITE_URL = config("SITE_URL", default=(CSRF_TRUSTED_ORIGINS or ["http://localhost:8000"])[0]).rstrip("/")
 # -----------------------------------------------------------------------------
 # SECURITY
 # -----------------------------------------------------------------------------

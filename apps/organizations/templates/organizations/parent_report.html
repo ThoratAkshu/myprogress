@@ -32,6 +32,6 @@
 {% empty %}<p class="rp-empty">No certificates yet.</p>{% endfor %}
 </section>
 </div>
-<p class="rp-foot">Shared by {{ organization.name }} through MyProgress. Keep this link private; the institute can turn it off whenever you ask.</p>
+<p class="rp-foot">Shared by {{ organization.name }} through MyProgress. Keep this link private; the institute can turn it off whenever you ask.{% if organization.parent_digest %} You also get a summary by email once a week: <a href="{% url 'organizations:parent_emails' access.token %}">{% if access.digest_stopped_at %}turn it back on{% else %}stop it{% endif %}</a>.{% endif %}</p>
 </main>{% endwith %}{% endif %}
 </body></html>
