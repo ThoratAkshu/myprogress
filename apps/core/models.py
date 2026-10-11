@@ -58,6 +58,7 @@ class LearningPost(models.Model):
     video_script = models.TextField(blank=True, help_text="Private script the author reads while recording")
     chapters = models.TextField(blank=True, help_text="One chapter per line, like 1:20 The data model")
     captions = models.TextField(blank=True, help_text="WebVTT captions for the video")
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_posts", help_text="Shared only with this organization's members")
     body = models.TextField(blank=True)
     views = models.PositiveIntegerField(default=0)
     earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)

@@ -8,7 +8,7 @@
 <main class="auth-main" id="main"><div class="auth-form-card"><a class="back-link" href="{% url 'landing:home' %}">{% icon "chevron-right" 16 %}Back to home</a>
 <h2>Create your account</h2><p class="card-sub">Choose how you'll use MyProgress. You can add more access later.</p>
 {% if messages %}<div class="site-messages" role="alert">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
-<form action="{% url 'landing:register' %}" method="post">{% csrf_token %}{% with role=form.role.value|default:"developer" %}
+<form action="{% url 'landing:register' %}" method="post">{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}{% csrf_token %}{% with role=form.role.value|default:"developer" %}
 <fieldset class="account-types"><legend>Account type</legend>
 <label class="account-type"><input type="radio" name="role" value="developer"{% if role == "developer" %} checked{% endif %}><span class="type-icon">{% icon "code" 20 %}</span><span><strong>Developer</strong><small>Build a portfolio, share learning, and grow your rank.</small></span><span class="type-check">{% icon "check" 14 %}</span></label>
 <label class="account-type"><input type="radio" name="role" value="recruiter"{% if role == "recruiter" %} checked{% endif %}><span class="type-icon">{% icon "search" 20 %}</span><span><strong>Recruiter</strong><small>Find developers through verified proof of work.</small></span><span class="type-check">{% icon "check" 14 %}</span></label>

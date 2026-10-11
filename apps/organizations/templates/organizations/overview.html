@@ -1,0 +1,38 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% if not stats.students %}<section class="card org-start"><h2>Get your organization going</h2><ol>
+<li><span class="org-step">1</span><div><b>Share your invite link</b><small>Students open it, sign in or create an account, and they're in.</small><div class="org-copy"><input value="{{ invite_url }}" readonly aria-label="Invite link"><button class="button soft" type="button" data-copy-link>Copy</button></div></div></li>
+<li><span class="org-step">2</span><div><b>Post your first lecture or notes</b><small>Record in the browser or write notes. Only members can see them.</small><div class="org-start-actions"><a class="button soft" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">{% icon "video" 16 %}Record a lecture</a><a class="button soft" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=article">{% icon "file-text" 16 %}Write notes</a></div></div></li>
+<li><span class="org-step">3</span><div><b>Set a task</b><small>Give it a due date and points; review submissions as they arrive.</small><div class="org-start-actions"><a class="button soft" href="{% url 'organizations:tasks' organization.slug %}#new-task">{% icon "check-circle" 16 %}Create a task</a></div></div></li>
+</ol></section>{% endif %}
+<section class="org-kpis">
+<a class="org-kpi" href="{% url 'organizations:members' organization.slug %}"><small>Students</small><b>{{ stats.students }}</b><span>{{ stats.active_week }} active this week</span></a>
+<div class="org-kpi"><small>Average score</small><b>{{ stats.average_score }}</b><span>Out of 100, from real work</span></div>
+<a class="org-kpi" href="{% url 'organizations:tasks' organization.slug %}"><small>Tasks handed in</small><b>{% if stats.completion is not None %}{{ stats.completion }}%{% else %}—{% endif %}</b><span>Of everything assigned so far</span></a>
+<a class="org-kpi{% if stats.to_review_count %} attention{% endif %}" href="{% url 'organizations:tasks' organization.slug %}"><small>To review</small><b>{{ stats.to_review_count }}</b><span>Submissions waiting for you</span></a>
+<a class="org-kpi" href="{% url 'organizations:channel' organization.slug %}"><small>Posted this week</small><b>{{ stats.posts_week }}</b><span>Lectures, notes and material</span></a>
+{% if stats.pending %}<a class="org-kpi attention" href="{% url 'organizations:members' organization.slug %}"><small>Join requests</small><b>{{ stats.pending }}</b><span>Waiting for approval</span></a>{% endif %}
+</section>
+<div class="org-grid">
+<section class="card"><div class="card-heading"><h2>Needs review</h2><a href="{% url 'organizations:tasks' organization.slug %}">All tasks</a></div>
+{% for submission in stats.to_review %}<a class="org-line" href="{% url 'organizations:task' organization.slug submission.task_id %}#student-{{ submission.student_id }}"><span class="avatar avatar-sm {{ submission.student|avatar_tone }}">{{ submission.student|initials }}</span><span><b>{{ submission.student.get_full_name|default:submission.student.email }}</b><small>{{ submission.task.title }} · {{ submission.updated_at|timesince }} ago</small></span>{% icon "chevron-right" 16 %}</a>
+{% empty %}<p class="org-empty-line">{% icon "check-circle" 16 %}Nothing waiting for review.</p>{% endfor %}
+</section>
+<section class="card"><div class="card-heading"><h2>Coming up</h2><a href="{% url 'organizations:tasks' organization.slug %}#new-task">New task</a></div>
+{% for task in stats.upcoming %}<a class="org-line" href="{% url 'organizations:task' organization.slug task.pk %}"><span class="org-date"><b>{{ task.due_at|date:"j" }}</b><small>{{ task.due_at|date:"M" }}</small></span><span><b>{{ task.title }}</b><small>Due {{ task.due_at|date:"D, g:i a" }}{% if task.group %} · {{ task.group }}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>
+{% empty %}<p class="org-empty-line">No tasks with an upcoming due date.</p>{% endfor %}
+</section>
+</div>
+<div class="org-grid">
+<section class="card"><div class="card-heading"><h2>Top students</h2><a href="{% url 'organizations:members' organization.slug %}">Everyone</a></div>
+{% for row in stats.top %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="org-rank">{{ forloop.counter }}</span><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.coding_days }} coding days this month · {{ row.tasks_submitted }}/{{ row.tasks_given }} tasks</small></span><em class="org-score">{{ row.score }}</em></a>
+{% empty %}<p class="org-empty-line">Students appear here once they join.</p>{% endfor %}
+</section>
+<section class="card"><div class="card-heading"><h2>Quiet this week</h2><span class="muted">No activity in 7 days</span></div>
+{% for row in stats.quiet %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.last_active %}Last active {{ row.last_active|timesince }} ago{% else %}Not active yet{% endif %}{% if row.tasks_missed %} · {{ row.tasks_missed }} missed task{{ row.tasks_missed|pluralize }}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>
+{% empty %}<p class="org-empty-line">{% icon "check-circle" 16 %}Everyone was active this week.</p>{% endfor %}
+</section>
+</div>
+</div>{% endblock %}

@@ -1,0 +1,224 @@
+import shutil
+import tempfile
+from datetime import timedelta
+from django.contrib.auth.models import User
+from django.core import mail
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+from apps.accounts.models import Follow, Profile
+from apps.core.models import ActivityEvent, LearningPost, Project, Repository
+from apps.earnings.services import coin_balance
+from apps.notifications.models import Notification
+from . import services
+from .models import ChannelPost, ChannelSeen, Invite, Membership, Organization, Submission, Task
+PASSWORD = "StrongPass!482"
+def make_user(email, first_name="Dev", last_name="Eloper", role="developer"):
+    user = User.objects.create_user(username=email, email=email, password=PASSWORD, first_name=first_name, last_name=last_name)
+    Profile.objects.create(user=user, handle=email.split("@")[0].replace(".", "-"), role=role)
+    return user
+MEDIA = tempfile.mkdtemp()
+@override_settings(MEDIA_ROOT=MEDIA)
+class OrganizationTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(MEDIA, ignore_errors=True)
+    def setUp(self):
+        cache.clear()
+        self.owner = make_user("principal@institute.example", "Prin", "Cipal", role="organization")
+        self.organization = services.create_organization(self.owner, {"name": "Sunrise Coding Institute", "kind": "institute", "city": "Pune", "about": "Full-stack batches", "website": "", "join_requires_approval": False})
+        self.student = make_user("asha@example.com", "Asha", "Rao")
+        self.outsider = make_user("outsider@example.com", "Out", "Sider")
+    def join(self, user, group=""):
+        member = services.join(self.organization, user)
+        if group:
+            member.group = group
+            member.save()
+        return member
+
+    def test_organization_accounts_get_their_own_workspace(self):
+        self.client.force_login(self.owner)
+        self.assertRedirects(self.client.get(reverse("landing:dashboard")), reverse("organizations:home"), target_status_code=302)
+        page = self.client.get(reverse("organizations:home"), follow=True)
+        self.assertContains(page, "Sunrise Coding Institute")
+        self.assertContains(page, "Get your organization going")
+        for label in ["Students", "Channel", "Tasks"]:
+            self.assertContains(page, f"<span>{label}</span>")
+        fresh = make_user("new-institute@example.com", role="organization")
+        self.client.force_login(fresh)
+        self.assertRedirects(self.client.get(reverse("organizations:home")), reverse("organizations:create"))
+        response = self.client.post(reverse("organizations:create"), {"name": "New", "kind": "college", "city": "", "website": "", "about": ""})
+        created = Organization.objects.get(owner=fresh)
+        self.assertEqual(created.slug, "new-org")  # "new" is reserved for the create page
+        self.assertRedirects(response, reverse("organizations:invite", args=[created.slug]))
+        self.assertTrue(Membership.objects.filter(organization=created, user=fresh, role="owner").exists())
+
+    def test_invite_link_explains_what_teachers_see_and_survives_sign_up(self):
+        join_url = reverse("organizations:join", args=[self.organization.invite_code])
+        page = self.client.get(join_url)
+        self.assertContains(page, "What its teachers will see")
+        self.assertContains(page, "Your score, rank and coding days")
+        self.assertContains(page, f"{reverse('landing:register')}?next=")
+        response = self.client.post(reverse("landing:register"), {"role": "developer", "first_name": "Ravi", "last_name": "Kumar", "email": "ravi@example.com", "password": PASSWORD, "terms": "on", "next": join_url})
+        self.assertRedirects(response, join_url, fetch_redirect_response=False)
+        response = self.client.post(join_url)
+        self.assertRedirects(response, reverse("organizations:channel", args=[self.organization.slug]))
+        ravi = User.objects.get(email="ravi@example.com")
+        self.assertTrue(Membership.objects.filter(organization=self.organization, user=ravi, role="student", status="active").exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.owner, kind="organization", text__contains="Ravi Kumar joined").exists())
+    def test_approval_mode_keeps_new_members_waiting(self):
+        self.organization.join_requires_approval = True
+        self.organization.save()
+        self.client.force_login(self.student)
+        self.client.post(reverse("organizations:join", args=[self.organization.invite_code]))
+        member = Membership.objects.get(user=self.student)
+        self.assertEqual(member.status, "pending")
+        self.assertEqual(self.client.get(reverse("organizations:channel", args=[self.organization.slug])).status_code, 404)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("organizations:members", args=[self.organization.slug])), "Join requests")
+        self.client.post(reverse("organizations:member_action", args=[self.organization.slug, self.student.pk]), {"action": "approve"})
+        member.refresh_from_db()
+        self.assertEqual(member.status, "active")
+    def test_email_invites_set_role_and_batch(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("organizations:invite", args=[self.organization.slug]), {"emails": "teacher@example.com, asha@example.com\nnot-an-email", "role": "teacher", "group": ""})
+        self.assertContains(response, "These don&#x27;t look like email addresses: not-an-email")
+        self.client.post(reverse("organizations:invite", args=[self.organization.slug]), {"emails": "teacher@example.com\nTeacher@example.com", "role": "teacher", "group": "Batch A"})
+        self.assertEqual(Invite.objects.count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Join Sunrise Coding Institute", mail.outbox[0].subject)
+        invite = Invite.objects.get()
+        teacher = make_user("teacher@example.com", "Tea", "Cher")
+        self.client.force_login(teacher)
+        self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
+        member = Membership.objects.get(user=teacher)
+        self.assertEqual((member.role, member.group, member.status), ("teacher", "Batch A", "active"))
+        invite.refresh_from_db()
+        self.assertEqual(invite.accepted_by, teacher)
+        self.assertEqual(self.client.get(reverse("organizations:members", args=[self.organization.slug])).status_code, 200)
+
+    def test_everything_is_private_to_members(self):
+        material = ChannelPost.objects.create(organization=self.organization, author=self.owner, kind="material", title="SQL notes", file=SimpleUploadedFile("joins.pdf", b"%PDF-1.4 notes"))
+        task = Task.objects.create(organization=self.organization, created_by=self.owner, title="Build an API", instructions="Do it")
+        self.client.force_login(self.outsider)
+        for url in [reverse("organizations:overview", args=[self.organization.slug]), reverse("organizations:channel", args=[self.organization.slug]), reverse("organizations:tasks", args=[self.organization.slug]), reverse("organizations:task", args=[self.organization.slug, task.pk]), reverse("organizations:channel_file", args=[self.organization.slug, material.pk])]:
+            self.assertEqual(self.client.get(url).status_code, 404, url)
+        self.join(self.student)
+        self.client.force_login(self.student)
+        self.assertRedirects(self.client.get(reverse("organizations:overview", args=[self.organization.slug])), reverse("organizations:channel", args=[self.organization.slug]))
+        self.assertEqual(self.client.get(reverse("organizations:members", args=[self.organization.slug])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("organizations:channel", args=[self.organization.slug]), {"kind": "announcement", "title": "Hack"}).status_code, 404)
+        download = self.client.get(reverse("organizations:channel_file", args=[self.organization.slug, material.pk]))
+        self.assertEqual(b"".join(download.streaming_content), b"%PDF-1.4 notes")
+        self.assertIn("joins.pdf", download["Content-Disposition"])
+    def test_channel_posts_reach_members_and_batches(self):
+        self.join(self.student, group="Batch A")
+        other = make_user("other@example.com", "Oth", "Er")
+        self.join(other, group="Batch B")
+        self.client.force_login(self.owner)
+        self.client.post(reverse("organizations:channel", args=[self.organization.slug]), {"kind": "announcement", "title": "Holiday on Monday", "body": "No class", "group": "", "link": ""})
+        self.client.post(reverse("organizations:channel", args=[self.organization.slug]), {"kind": "announcement", "title": "Batch A lab moved", "body": "", "group": "Batch A", "link": ""})
+        response = self.client.post(reverse("organizations:channel", args=[self.organization.slug]), {"kind": "material", "title": "Empty material", "body": "", "group": "", "link": ""})
+        self.assertContains(response, "Study material needs a file or a link.")
+        self.assertEqual(Notification.objects.filter(recipient=self.student, kind="organization").count(), 2)
+        self.assertEqual(Notification.objects.filter(recipient=other, kind="organization").count(), 1)
+        self.client.force_login(other)
+        page = self.client.get(reverse("organizations:channel", args=[self.organization.slug]))
+        self.assertContains(page, "Holiday on Monday")
+        self.assertNotContains(page, "Batch A lab moved")
+        self.assertEqual(ChannelSeen.objects.filter(user=other).count(), 1)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("organizations:channel", args=[self.organization.slug])), "Seen by 1 of 3")
+    def test_lectures_from_the_studio_stay_inside_the_organization(self):
+        self.join(self.student)
+        self.client.force_login(self.owner)
+        form = self.client.get(reverse("learning:create") + f"?org={self.organization.slug}&kind=video")
+        self.assertContains(form, "Share only with my organization")
+        response = self.client.post(reverse("learning:create"), {"title": "Day 3: Joins explained", "kind": "article", "body": "Joins combine tables. " * 10, "is_public": "on", "organization": self.organization.pk}, follow=True)
+        self.assertContains(response, "Shared with Sunrise Coding Institute. Only its members can see it.")
+        lecture = LearningPost.objects.get(title="Day 3: Joins explained")
+        self.assertFalse(lecture.is_public)
+        self.assertEqual(coin_balance(self.owner), 0)
+        self.assertTrue(Notification.objects.filter(recipient=self.student, text__contains="New notes in Sunrise Coding Institute").exists())
+        self.client.force_login(self.student)
+        self.assertContains(self.client.get(reverse("organizations:channel", args=[self.organization.slug])), "Day 3: Joins explained")
+        self.assertContains(self.client.get(reverse("learning:detail", args=[lecture.pk])), "Shared only with members of")
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(reverse("learning:detail", args=[lecture.pk])).status_code, 404)
+        self.assertNotContains(self.client.get(reverse("landing:search") + "?q=Joins"), "Day 3")
+
+    def test_tasks_submissions_and_reviews(self):
+        self.join(self.student, group="Batch A")
+        project = Project.objects.create(owner=self.student, title="Todo API")
+        repository = Repository.objects.create(project=project, owner=self.student, slug="todo-api")
+        self.client.force_login(self.owner)
+        due = (timezone.localtime() + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M")
+        response = self.client.post(reverse("organizations:tasks", args=[self.organization.slug]), {"title": "Build a todo API", "instructions": "## Steps\n- Add CRUD", "due_at": due, "points": "20", "group": "Batch A", "resource_link": ""})
+        task = Task.objects.get()
+        self.assertRedirects(response, reverse("organizations:task", args=[self.organization.slug, task.pk]))
+        self.assertTrue(Notification.objects.filter(recipient=self.student, text__startswith="New task in Sunrise Coding Institute: Build a todo API").exists())
+        self.client.force_login(self.student)
+        self.assertContains(self.client.get(reverse("organizations:tasks", args=[self.organization.slug])), "To do")
+        self.assertContains(self.client.post(reverse("organizations:task", args=[self.organization.slug, task.pk]), {"text": "", "link": ""}), "Add an answer, a link, a file, or a repository.")
+        self.client.post(reverse("organizations:task", args=[self.organization.slug, task.pk]), {"text": "Done with tests", "link": "", "repository": repository.pk})
+        submission = Submission.objects.get()
+        self.assertEqual((submission.status, submission.repository), ("submitted", repository))
+        self.assertTrue(Notification.objects.filter(recipient=self.owner, text="Asha Rao submitted Build a todo API").exists())
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("organizations:task", args=[self.organization.slug, task.pk]))
+        self.assertContains(page, "Done with tests")
+        self.assertContains(page, "Todo API")
+        self.client.post(reverse("organizations:review", args=[self.organization.slug, submission.pk]), {"status": "approved", "score": "25", "feedback": ""})
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "submitted")  # 25 is more than the task is worth
+        self.client.post(reverse("organizations:review", args=[self.organization.slug, submission.pk]), {"status": "approved", "score": "18", "feedback": "Clean code"})
+        submission.refresh_from_db()
+        self.assertEqual((submission.status, submission.score, submission.reviewed_by), ("approved", 18, self.owner))
+        self.assertTrue(Notification.objects.filter(recipient=self.student, text="Your work on Build a todo API was approved (18/20)").exists())
+        self.client.force_login(self.student)
+        page = self.client.get(reverse("organizations:task", args=[self.organization.slug, task.pk]))
+        self.assertContains(page, "Clean code")
+        self.assertContains(page, "Approved. Well done.")
+        row = services.student_growth(self.organization)[0]
+        self.assertEqual((row["tasks_given"], row["tasks_submitted"], row["tasks_approved"], row["task_percent"], row["tasks_missed"]), (1, 1, 1, 90, 0))
+    def test_growth_dashboard_numbers_csv_and_missed_tasks(self):
+        self.join(self.student, group="Batch A")
+        quiet = make_user("quiet@example.com", "Qui", "Et")
+        self.join(quiet, group="Batch B")
+        for days_ago in [0, 1, 2, 9]:
+            event = ActivityEvent.objects.create(user=self.student, event_type="project", action="pushed_commits")
+            ActivityEvent.objects.filter(pk=event.pk).update(created_at=timezone.now() - timedelta(days=days_ago))
+        LearningPost.objects.create(author=self.student, title="My first post", kind="article", body="Hi", is_public=True)
+        Task.objects.create(organization=self.organization, created_by=self.owner, title="Old task", instructions="x", due_at=timezone.now() - timedelta(days=1))
+        rows = {row["user"]: row for row in services.student_growth(self.organization)}
+        self.assertEqual((rows[self.student]["coding_days"], rows[self.student]["streak"], rows[self.student]["posts"]), (4, 3, 1))
+        self.assertEqual(rows[quiet]["tasks_missed"], 1)
+        self.assertIsNone(rows[quiet]["last_active"])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("organizations:members", args=[self.organization.slug]), {"group": "Batch A"})
+        self.assertContains(page, "Asha Rao")
+        self.assertNotContains(page, "Qui Et")
+        csv_body = self.client.get(reverse("organizations:members", args=[self.organization.slug]), {"format": "csv"}).content.decode()
+        self.assertIn("Asha Rao,asha@example.com,Batch A", csv_body)
+        overview = self.client.get(reverse("organizations:overview", args=[self.organization.slug]))
+        self.assertContains(overview, "Quiet this week")
+        self.assertContains(overview, "Qui Et")
+        detail = self.client.get(reverse("organizations:member", args=[self.organization.slug, self.student.pk]))
+        self.assertContains(detail, "How the score is built")
+        self.assertContains(detail, "Missed")
+    def test_leaving_removes_teacher_access_and_dashboard_shows_classes(self):
+        self.join(self.student)
+        Task.objects.create(organization=self.organization, created_by=self.owner, title="Read chapter 2", instructions="x", due_at=timezone.now() + timedelta(days=1))
+        self.client.force_login(self.student)
+        dashboard = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(dashboard, "Sunrise Coding Institute")
+        self.assertContains(dashboard, "Read chapter 2")
+        self.assertContains(dashboard, "<span>Classes</span>")
+        self.client.post(reverse("organizations:leave", args=[self.organization.slug]))
+        self.assertFalse(Membership.objects.filter(user=self.student).exists())
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("organizations:member", args=[self.organization.slug, self.student.pk])).status_code, 404)
+        self.assertEqual(services.student_growth(self.organization), [])

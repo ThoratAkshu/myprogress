@@ -1,0 +1,14 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Settings · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<div class="org-grid">
+<form method="post" class="card org-form">{% csrf_token %}<h2>Organization details</h2>
+{% for field in form %}{% if field.name == 'join_requires_approval' %}<label class="org-check">{{ field }}<span><b>{{ field.label }}</b><small>When it's off, anyone with your invite link joins straight away.</small></span></label>{% else %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}
+<button class="button primary">Save</button>
+</form>
+<section class="card"><h2>Invite link</h2><p class="muted">Making a new link stops the old one working. People who already joined stay members.</p>
+<form method="post" data-confirm="Make a new invite link? The current one stops working.">{% csrf_token %}<input type="hidden" name="action" value="new_code"><button class="button soft">{% icon "rotate-ccw" 16 %}Make a new link</button></form>
+<h2 class="org-gap">Privacy</h2><p class="muted">Students see exactly what teachers can see before they join. Lectures, notes, study material and tasks are visible only to members, and files download only for signed-in members.</p></section>
+</div>
+</div>{% endblock %}

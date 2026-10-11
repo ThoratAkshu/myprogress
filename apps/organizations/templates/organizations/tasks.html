@@ -1,0 +1,27 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Tasks · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% if member.is_staff %}
+<details class="card org-new-task" id="new-task"{% if form.errors %} open{% endif %}><summary>{% icon "plus" 18 %}<b>New task</b><small>Set work with instructions, a due date and points</small></summary>
+<form method="post" enctype="multipart/form-data" class="org-form">{% csrf_token %}
+<div class="org-form-row">{% for field in form %}{% if field.name == 'group' %}<label>{{ field.label }}<input name="group" list="org-groups" value="{{ field.value|default:'' }}" maxlength="60"><datalist id="org-groups">{% for value in org_groups %}<option value="{{ value }}">{% endfor %}</datalist></label>{% else %}<label{% if field.name == 'instructions' or field.name == 'title' %} class="span"{% endif %}>{{ field.label }}{{ field }}{% if field.name == 'instructions' %}<small class="muted">Use the same formatting as articles: ## headings, - lists and ``` code blocks.</small>{% endif %}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}</div>
+<div class="org-form-actions"><button class="button primary">Create task</button><small class="muted">Students in the batch get a notification.</small></div>
+</form></details>
+<section class="org-task-list">
+{% for task in tasks %}<a class="card org-task" href="{% url 'organizations:task' organization.slug task.pk %}">
+<div class="org-task-main"><b>{{ task.title }}</b><small>{% if task.due_at %}{% if task.due_at < now %}Closed {% else %}Due {% endif %}{{ task.due_at|date:"D, M j · g:i a" }}{% else %}No due date{% endif %} · {{ task.points }} points{% if task.group %} · {{ task.group }}{% endif %}</small></div>
+<div class="org-task-progress"><span><b>{{ task.submitted }}</b> of {{ task.assigned }} handed in</span><i class="org-meter"><i style="width:{{ task.percent }}%"></i></i></div>
+{% if task.waiting %}<em class="org-pill submitted">{{ task.waiting }} to review</em>{% else %}<em class="org-pill approved">{{ task.approved }} approved</em>{% endif %}
+</a>{% empty %}<section class="card org-empty">{% icon "check-circle" 28 %}<h2>No tasks yet</h2><p class="muted">Tasks take the place of projects for your students: set one above, and track who hands it in.</p></section>{% endfor %}
+</section>
+{% else %}
+<section class="org-task-list">
+{% for task in tasks %}<a class="card org-task" href="{% url 'organizations:task' organization.slug task.pk %}">
+<span class="org-task-state {{ task.state }}">{% if task.state == 'approved' %}{% icon "check-circle" 18 %}{% elif task.state == 'overdue' %}{% icon "alert-circle" 18 %}{% elif task.state == 'submitted' %}{% icon "clock" 18 %}{% elif task.state == 'changes' %}{% icon "edit" 18 %}{% else %}{% icon "target" 18 %}{% endif %}</span>
+<div class="org-task-main"><b>{{ task.title }}</b><small>{% if task.due_at %}Due {{ task.due_at|date:"D, M j · g:i a" }}{% else %}No due date{% endif %} · {{ task.points }} points</small></div>
+<em class="org-pill {{ task.state }}">{% if task.state == 'todo' %}To do{% elif task.state == 'overdue' %}Overdue{% else %}{{ task.mine.get_status_display }}{% endif %}{% if task.mine.score is not None %} · {{ task.mine.score }}/{{ task.points }}{% endif %}</em>
+</a>{% empty %}<section class="card org-empty">{% icon "check-circle" 28 %}<h2>No tasks yet</h2><p class="muted">When your teachers set work, it shows up here with its due date.</p></section>{% endfor %}
+</section>
+{% endif %}
+</div>{% endblock %}

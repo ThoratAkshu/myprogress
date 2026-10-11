@@ -1,0 +1,13 @@
+{% load ui org_tags %}{% with item=entry.item %}{% if entry.type == 'lesson' %}<article class="card org-item lesson" id="lesson-{{ item.pk }}">
+<span class="org-item-icon {% if item.kind == 'video' %}video{% else %}notes{% endif %}">{% if item.kind == 'video' %}{% icon "play" 18 %}{% else %}{% icon "file-text" 18 %}{% endif %}</span>
+<div class="org-item-body"><span class="org-item-kind">{% if item.kind == 'video' %}Lecture{% else %}Notes{% endif %}</span><a class="org-item-title" href="{% url 'learning:detail' item.pk %}">{{ item.title }}</a>
+{% if item.summary %}<p>{{ item.summary|truncatechars:220 }}</p>{% endif %}
+<div class="org-item-meta"><span>{{ item.author.get_full_name|default:item.author.email }}</span><span>{{ item.published_at|date:"g:i a" }}</span>{% if item.comment_count %}<span>{% icon "message" 13 %}{{ item.comment_count }}</span>{% endif %}{% if member.is_staff %}<span>{% icon "eye" 13 %}Opened by {{ watched|get_item:item.pk|default:0 }} of {{ member_count }}</span>{% endif %}</div>
+<a class="button soft" href="{% url 'learning:detail' item.pk %}">{% if item.kind == 'video' %}{% icon "play" 16 %}Watch lecture{% else %}{% icon "book-open" 16 %}Read notes{% endif %}</a></div>
+</article>{% else %}<article class="card org-item {{ item.kind }}{% if item.pinned %} pinned{% endif %}" id="post-{{ item.pk }}">
+<span class="org-item-icon {{ item.kind }}">{% if item.kind == 'material' %}{% icon "folder" 18 %}{% else %}{% icon "bell" 18 %}{% endif %}</span>
+<div class="org-item-body"><span class="org-item-kind">{{ item.get_kind_display }}{% if item.group %} · {{ item.group }}{% endif %}</span><b class="org-item-title">{{ item.title }}</b>
+{% if item.body %}<p>{{ item.body|urlize|linebreaksbr }}</p>{% endif %}
+{% if item.file or item.link %}<div class="org-item-files">{% if item.file %}<a class="org-file" href="{% url 'organizations:channel_file' organization.slug item.pk %}">{% icon "download" 16 %}<span>{{ item.file_name }}</span></a>{% endif %}{% if item.link %}<a class="org-file" href="{{ item.link }}" target="_blank" rel="noopener">{% icon "link" 16 %}<span>{{ item.link|truncatechars:60 }}</span></a>{% endif %}</div>{% endif %}
+<div class="org-item-meta"><span>{{ item.author.get_full_name|default:item.author.email|default:"A teacher" }}</span><span>{{ item.created_at|date:"g:i a" }}</span>{% if member.is_staff %}<span>{% icon "eye" 13 %}Seen by {{ seen|get_item:item.pk|default:0 }} of {{ member_count }}</span><form method="post" action="{% url 'organizations:channel_delete' organization.slug item.pk %}" data-confirm="Remove {{ item.title }} from the channel?">{% csrf_token %}<button class="org-link-button">Remove</button></form>{% endif %}</div></div>
+</article>{% endif %}{% endwith %}

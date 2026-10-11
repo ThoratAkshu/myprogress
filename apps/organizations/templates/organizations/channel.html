@@ -1,0 +1,28 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Channel · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<div class="org-channel">
+<div class="org-channel-main">
+{% if member.is_staff %}<section class="card org-composer">
+<div class="org-composer-actions"><a class="org-make" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video"><span class="green">{% icon "video" 18 %}</span><b>Record a lecture</b><small>Screen and camera, in the browser</small></a><a class="org-make" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=article"><span class="violet">{% icon "file-text" 18 %}</span><b>Write notes</b><small>Voice typing, code and AI help</small></a><button class="org-make" type="button" data-toggle-composer><span class="amber">{% icon "plus" 18 %}</span><b>Material or announcement</b><small>Files, links, or a quick message</small></button></div>
+<form method="post" enctype="multipart/form-data" class="org-form org-composer-form" data-composer{% if not form.errors %} hidden{% endif %}>{% csrf_token %}
+<div class="org-form-row">{% for field in form %}{% if field.name == 'pinned' %}<label class="org-check">{{ field }}<span><b>{{ field.label }}</b></span></label>{% elif field.name == 'group' %}<label>{{ field.label }}<input name="group" list="org-groups" value="{{ field.value|default:'' }}" maxlength="60"><datalist id="org-groups">{% for value in org_groups %}<option value="{{ value }}">{% endfor %}</datalist></label>{% else %}<label{% if field.name == 'body' or field.name == 'title' %} class="span"{% endif %}>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}</div>
+{% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<div class="org-form-actions"><button class="button primary">Post to the channel</button><small class="muted">Members get a notification.</small></div>
+</form></section>{% endif %}
+<nav class="org-filters" aria-label="Filter the channel">
+<a href="?"{% if not kind %} aria-current="page"{% endif %}>Everything</a><a href="?kind=video"{% if kind == 'video' %} aria-current="page"{% endif %}>{% icon "play" 14 %}Lectures</a><a href="?kind=article"{% if kind == 'article' %} aria-current="page"{% endif %}>{% icon "file-text" 14 %}Notes</a><a href="?kind=material"{% if kind == 'material' %} aria-current="page"{% endif %}>{% icon "folder" 14 %}Study material</a><a href="?kind=announcement"{% if kind == 'announcement' %} aria-current="page"{% endif %}>{% icon "bell" 14 %}Announcements</a>
+</nav>
+{% if pinned %}<section class="org-day"><h3>{% icon "bookmark" 14 %}Pinned</h3>{% for entry in pinned %}{% include "organizations/_channel_item.html" %}{% endfor %}</section>{% endif %}
+{% for label, entries in days %}<section class="org-day"><h3>{{ label }}</h3>{% for entry in entries %}{% include "organizations/_channel_item.html" %}{% endfor %}</section>
+{% empty %}{% if not pinned %}<section class="card org-empty">{% icon "book-open" 28 %}<h2>Nothing here yet</h2><p class="muted">{% if member.is_staff %}Record today's lecture, write notes, or share study material. Only members of {{ organization.name }} will see it.{% else %}Your teachers' lectures, notes and study material will show up here.{% endif %}</p></section>{% endif %}{% endfor %}
+{% if page.has_other_pages %}<nav class="org-pager">{% if page.has_previous %}<a class="button soft" href="?{% if kind %}kind={{ kind }}&{% endif %}page={{ page.previous_page_number }}">Newer</a>{% endif %}{% if page.has_next %}<a class="button soft" href="?{% if kind %}kind={{ kind }}&{% endif %}page={{ page.next_page_number }}">Older</a>{% endif %}</nav>{% endif %}
+</div>
+<aside class="org-channel-side">
+<section class="card"><h2>{{ organization.name }}</h2>{% if organization.about %}<p class="muted">{{ organization.about }}</p>{% endif %}<p class="org-side-fact">{% icon "users" 16 %}{{ member_count }} member{{ member_count|pluralize }}</p><p class="org-side-fact">{% icon "lock" 16 %}Only members can see this channel</p></section>
+<section class="card"><div class="card-heading"><h2>Tasks</h2><a href="{% url 'organizations:tasks' organization.slug %}">All</a></div><p class="muted small">Work your teachers set, with due dates and points.</p><a class="button soft block" href="{% url 'organizations:tasks' organization.slug %}">{% icon "check-circle" 16 %}Open tasks</a></section>
+{% if member.role != 'owner' %}<form method="post" action="{% url 'organizations:leave' organization.slug %}" data-confirm="Leave {{ organization.name }}? You'll lose access to its channel and tasks, and its teachers will no longer see your progress.">{% csrf_token %}<button class="org-leave">Leave {{ organization.name }}</button></form>{% endif %}
+</aside>
+</div>
+</div>{% endblock %}

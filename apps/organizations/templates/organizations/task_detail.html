@@ -1,0 +1,45 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ task.title }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<a class="org-back" href="{% url 'organizations:tasks' organization.slug %}">{% icon "chevron-right" 14 %}All tasks</a>
+<section class="card org-task-card">
+<div class="org-task-top"><div><span class="kicker">Task · {{ task.points }} points{% if task.group %} · {{ task.group }}{% endif %}</span><h2>{{ task.title }}</h2></div>{% if task.due_at %}<span class="org-due{% if task.due_at < now %} closed{% endif %}">{% icon "calendar" 16 %}{% if task.due_at < now %}Was due{% else %}Due{% endif %} {{ task.due_at|date:"D, M j · g:i a" }}</span>{% endif %}</div>
+<div class="org-instructions">{{ instructions }}</div>
+{% if task.resource_link or task.attachment %}<div class="org-item-files">{% if task.attachment %}<a class="org-file" href="{% url 'organizations:task_file' organization.slug task.pk %}">{% icon "download" 16 %}<span>{{ task.attachment_name|truncatechars:60 }}</span></a>{% endif %}{% if task.resource_link %}<a class="org-file" href="{{ task.resource_link }}" target="_blank" rel="noopener">{% icon "link" 16 %}<span>{{ task.resource_link|truncatechars:60 }}</span></a>{% endif %}</div>{% endif %}
+{% if member.is_staff %}<form method="post" action="{% url 'organizations:task_delete' organization.slug task.pk %}" data-confirm="Delete {{ task.title }} and every submission to it?">{% csrf_token %}<button class="org-link-button danger">Delete task</button></form>{% endif %}
+</section>
+
+{% if member.is_staff %}
+<nav class="org-filters" aria-label="Filter submissions">
+<a href="?"{% if not status %} aria-current="page"{% endif %}>Everyone</a><a href="?status=submitted"{% if status == 'submitted' %} aria-current="page"{% endif %}>To review <em>{{ counts.submitted }}</em></a><a href="?status=changes"{% if status == 'changes' %} aria-current="page"{% endif %}>Needs changes <em>{{ counts.changes }}</em></a><a href="?status=approved"{% if status == 'approved' %} aria-current="page"{% endif %}>Approved <em>{{ counts.approved }}</em></a><a href="?status=missing"{% if status == 'missing' %} aria-current="page"{% endif %}>Not handed in <em>{{ counts.missing }}</em></a>
+</nav>
+<section class="org-submissions">
+{% for row in rows %}{% with submission=row.submission student=row.student.user %}<article class="card org-submission" id="student-{{ student.pk }}">
+<div class="org-submission-head"><span class="avatar avatar-sm {{ student|avatar_tone }}">{{ student|initials }}</span><span><b>{{ student.get_full_name|default:student.email }}</b><small>{% if row.student.group %}{{ row.student.group }} · {% endif %}{% if submission %}Handed in {{ submission.updated_at|date:"M j, g:i a" }}{% if task.due_at and submission.updated_at > task.due_at %} · late{% endif %}{% else %}Not handed in{% endif %}</small></span>{% if submission %}<em class="org-pill {{ submission.status }}">{{ submission.get_status_display }}</em>{% elif task.due_at and task.due_at < now %}<em class="org-pill missed">Missed</em>{% endif %}</div>
+{% if submission %}
+{% if submission.text %}<p class="org-answer">{{ submission.text|linebreaksbr }}</p>{% endif %}
+<div class="org-item-files">{% if submission.link %}<a class="org-file" href="{{ submission.link }}" target="_blank" rel="noopener">{% icon "link" 16 %}<span>{{ submission.link|truncatechars:60 }}</span></a>{% endif %}{% if submission.file %}<a class="org-file" href="{% url 'organizations:submission_file' organization.slug submission.pk %}">{% icon "download" 16 %}<span>{{ submission.file_name }}</span></a>{% endif %}{% if submission.repository %}<a class="org-file" href="{% url 'landing:repository' submission.repository.pk %}">{% icon "git-branch" 16 %}<span>{{ submission.repository.project.title|default:submission.repository.slug }}</span></a>{% endif %}</div>
+<form method="post" action="{% url 'organizations:review' organization.slug submission.pk %}" class="org-review">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}#student-{{ student.pk }}">
+<label>Result<select name="status"><option value="approved"{% if submission.status != 'changes' %} selected{% endif %}>Approve</option><option value="changes"{% if submission.status == 'changes' %} selected{% endif %}>Ask for changes</option></select></label>
+<label>Score<span class="org-score-input"><input type="number" name="score" min="0" max="{{ task.points }}" value="{{ submission.score|default_if_none:'' }}"><small>/ {{ task.points }}</small></span></label>
+<label class="grow">Feedback<input name="feedback" value="{{ submission.feedback }}" maxlength="2000" placeholder="What was good, what to improve"></label>
+<button class="button primary">Save review</button>
+</form>
+{% if submission.reviewed_by %}<small class="muted">Reviewed by {{ submission.reviewed_by.get_full_name|default:submission.reviewed_by.email }} {{ submission.reviewed_at|timesince }} ago</small>{% endif %}
+{% endif %}
+</article>{% endwith %}{% empty %}<p class="org-empty-line">No students match.</p>{% endfor %}
+</section>
+{% else %}
+<section class="card org-my-submission">
+{% if submission %}<div class="org-submission-head"><span><b>Your submission</b><small>Handed in {{ submission.updated_at|date:"M j, g:i a" }}</small></span><em class="org-pill {{ submission.status }}">{{ submission.get_status_display }}{% if submission.score is not None %} · {{ submission.score }}/{{ task.points }}{% endif %}</em></div>
+{% if submission.feedback %}<div class="org-feedback"><b>{% icon "message" 16 %}Feedback from {{ submission.reviewed_by.get_full_name|default:"your teacher" }}</b><p>{{ submission.feedback|linebreaksbr }}</p></div>{% endif %}{% endif %}
+{% if not submission or submission.status != 'approved' %}<form method="post" enctype="multipart/form-data" class="org-form">{% csrf_token %}
+<h3>{% if submission %}Update your submission{% else %}Hand in your work{% endif %}</h3>
+{% for field in form %}<label>{{ field.label }}{{ field }}{% if field.name == 'file' and submission.file %}<small class="muted">Current file: {{ submission.file_name }}. Choose a new one to replace it.</small>{% endif %}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
+{% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<button class="button primary">{% if submission %}Hand in again{% else %}Hand in{% endif %}</button>
+</form>{% else %}<p class="org-done">{% icon "check-circle" 18 %}Approved. Well done.</p>{% endif %}
+</section>
+{% endif %}
+</div>{% endblock %}

@@ -1,6 +1,7 @@
 from functools import lru_cache
 from django.conf import settings
 from apps.accounts.models import Profile
+from apps.organizations.services import staff_organizations
 from apps.recruiting.models import RECRUITER_ROLES
 THEMES = {"ocean", "emerald", "midnight"}
 def ui_theme(request):
@@ -26,5 +27,8 @@ def workspace_navigation(request):
         "nav_pending_requests": lambda: user.contact_requests.filter(status="pending").count(),
         "nav_shortlist_count": lambda: user.shortlists.count(),
         "nav_unread_notifications": lambda: user.notifications.filter(read_at__isnull=True).count(),
+        "nav_is_organization": lambda: bool(nav_profile() and nav_profile().role == "organization"),
+        "nav_org": lambda: staff_organizations(user).first(),
+        "nav_has_organizations": lambda: user.org_memberships.filter(status="active").exists(),
         "nav_can_finance": lambda: user.is_superuser or (user.is_staff and user.has_perm("earnings.access_finance")),
     }

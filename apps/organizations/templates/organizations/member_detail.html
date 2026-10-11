@@ -1,0 +1,37 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ student.user.get_full_name|default:student.user.email }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+<a class="org-back" href="{% url 'organizations:members' organization.slug %}">{% icon "chevron-right" 14 %}All students</a>
+<section class="card org-student">
+<span class="avatar avatar-lg {{ student.user|avatar_tone }}">{{ student.user|initials }}</span>
+<div><h2>{{ student.user.get_full_name|default:student.user.email }}</h2><p class="muted">{{ student.get_role_display }}{% if student.group %} · {{ student.group }}{% endif %} · joined {{ student.joined_at|date:"M j, Y" }}{% if row.last_active %} · last active {{ row.last_active|timesince }} ago{% endif %}</p></div>
+{% if student.user.profile.handle %}<a class="button soft" href="{% url 'landing:public_profile' student.user.profile.handle %}">{% icon "user" 16 %}Public profile</a>{% endif %}
+</section>
+{% if row %}<section class="org-kpis">
+<div class="org-kpi"><small>Score</small><b>{{ row.score }}</b><span>{% if row.rank %}Rank #{{ row.rank }} on MyProgress{% else %}Not ranked yet{% endif %}</span></div>
+<div class="org-kpi"><small>Coding days</small><b>{{ row.coding_days }}</b><span>In the last 30 days{% if row.streak %} · {{ row.streak }}-day streak{% endif %}</span></div>
+<div class="org-kpi"><small>Projects with code</small><b>{{ row.projects }}</b><span>{{ row.posts }} public post{{ row.posts|pluralize }}</span></div>
+<div class="org-kpi"><small>Tasks</small><b>{{ row.tasks_submitted }}/{{ row.tasks_given }}</b><span>{% if row.task_percent is not None %}{{ row.task_percent }}% average score{% else %}No scores yet{% endif %}{% if row.tasks_missed %} · {{ row.tasks_missed }} missed{% endif %}</span></div>
+</section>{% endif %}
+<div class="org-grid">
+<section class="card"><div class="card-heading"><h2>How the score is built</h2></div>
+{% for part in breakdown %}<div class="org-part"><span>{{ part.label }}</span><b>{{ part.points }}/{{ part.max }}</b><i class="org-meter"><i style="width:{{ part.percent }}%"></i></i><small>{{ part.detail }}</small></div>{% endfor %}
+</section>
+<section class="card"><div class="card-heading"><h2>Tasks</h2></div>
+{% for item in task_rows %}<a class="org-line" href="{% url 'organizations:task' organization.slug item.task.pk %}#student-{{ student.user_id }}"><span><b>{{ item.task.title }}</b><small>{% if item.task.due_at %}Due {{ item.task.due_at|date:"M j" }}{% else %}No due date{% endif %}{% if item.submission.score is not None %} · {{ item.submission.score }}/{{ item.task.points }}{% endif %}</small></span>
+{% if item.submission %}<em class="org-pill {{ item.submission.status }}">{{ item.submission.get_status_display }}</em>{% elif item.task.due_at and item.task.due_at < now %}<em class="org-pill missed">Missed</em>{% else %}<em class="org-pill">To do</em>{% endif %}</a>
+{% empty %}<p class="org-empty-line">No tasks assigned yet.</p>{% endfor %}
+</section>
+</div>
+<div class="org-grid">
+<section class="card"><div class="card-heading"><h2>Recent public posts</h2></div>
+{% for post in recent_posts %}<a class="org-line" href="{% url 'learning:detail' post.pk %}">{% if post.kind == 'video' %}{% icon "play" 16 %}{% else %}{% icon "file-text" 16 %}{% endif %}<span><b>{{ post.title }}</b><small>{{ post.published_at|date:"M j, Y" }}</small></span></a>
+{% empty %}<p class="org-empty-line">No public posts yet.</p>{% endfor %}
+</section>
+<section class="card"><div class="card-heading"><h2>Manage</h2></div>
+<form method="post" class="org-form">{% csrf_token %}{% for field in form %}<label>{{ field.label }}{{ field }}</label>{% endfor %}<button class="button primary">Save</button></form>
+{% if student.role != 'owner' %}{% if member.role == 'owner' or student.role == 'student' %}<form method="post" action="{% url 'organizations:member_action' organization.slug student.user_id %}" data-confirm="Remove {{ student.user.get_full_name|default:student.user.email }} from {{ organization.name }}? They lose access to the channel and tasks.">{% csrf_token %}<button class="button danger" name="action" value="remove">Remove from {{ organization.name }}</button></form>{% endif %}{% endif %}
+</section>
+</div>
+</div>{% endblock %}

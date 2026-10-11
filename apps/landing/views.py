@@ -27,6 +27,7 @@ from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trendi
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.earnings.models import EarningSettings
+from apps.organizations.services import student_summary
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view
@@ -91,12 +92,15 @@ def register_view(request):
         request.session.cycle_key()
         send_verification_email(request, user)
         messages.success(request, f"Welcome! We sent a confirmation link to {user.email}.")
+        next_url = request.POST.get("next", "")
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            return redirect(next_url)  # back to an organization invite, for example
         return redirect("landing:dashboard")
     if request.method == "POST":
         for errors in form.errors.values():
             for error in errors:
                 messages.error(request, error)
-    return render(request, "landing/register.html", {"form": form})
+    return render(request, "landing/register.html", {"form": form, "next": request.POST.get("next") or request.GET.get("next", "")})
 def login_view(request):
     if request.method != "POST":
         return redirect("landing:home")
@@ -128,11 +132,14 @@ def logout_view(request):
 @login_required(login_url="landing:home")
 @never_cache
 def dashboard_view(request):
-    if Profile.objects.filter(user=request.user, role__in=RECRUITER_ROLES).exists():
+    role = Profile.objects.filter(user=request.user).values_list("role", flat=True).first()
+    if role == "organization":
+        return redirect("organizations:home")
+    if role in RECRUITER_ROLES:
         return redirect("recruiting:search")
     context = _workspace_context(request)
     show = request.GET.get("show") if request.GET.get("show") in FEED_FILTERS else ""
-    context.update({"feed": build_feed(request.user, show=show), "feed_show": show, "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
+    context.update({"classes": student_summary(request.user), "feed": build_feed(request.user, show=show), "feed_show": show, "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
     return render(request, "landing/dashboard.html", context)
 
 @login_required(login_url="landing:home")

@@ -1,0 +1,18 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Start an organization{% endblock %}
+{% block content %}<div class="section-page org-page">
+<header class="page-head"><div><span class="kicker">NEW ORGANIZATION</span><h1>Set up your institute</h1><p class="muted">Invite your students, share lectures and notes privately, set tasks, and watch everyone grow.</p></div></header>
+<div class="org-split">
+<form method="post" class="card org-form">{% csrf_token %}
+{% for field in form %}{% if field.name == 'join_requires_approval' %}<label class="org-check">{{ field }}<span><b>{{ field.label }}</b><small>When it's off, anyone with your invite link joins straight away.</small></span></label>{% else %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}
+<button class="button primary">Create organization</button>
+</form>
+<aside class="card org-explain"><h2>What you get</h2>
+<ul>
+<li>{% icon "user-plus" 18 %}<span><b>Invite by link or email</b>Students join with their MyProgress account in one click.</span></li>
+<li>{% icon "trending-up" 18 %}<span><b>See every student's growth</b>Score, coding days, projects, posts and task results, from their real work.</span></li>
+<li>{% icon "book-open" 18 %}<span><b>A private channel</b>Daily lectures recorded in the browser, notes, study material and announcements. Only members can see them.</span></li>
+<li>{% icon "check-circle" 18 %}<span><b>Tasks instead of projects</b>Set work with a due date and points, then approve it or ask for changes.</span></li>
+</ul></aside>
+</div>
+</div>{% endblock %}

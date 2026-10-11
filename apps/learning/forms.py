@@ -1,5 +1,6 @@
 import subprocess
 from django import forms
+from apps.organizations.services import staff_organizations
 from apps.core.git_service import list_branches
 from apps.core.models import LearningPost
 from .media import MAX_THUMBNAIL_BYTES, validate_video_file
@@ -11,8 +12,8 @@ class LearningPostForm(forms.ModelForm):
     thumbnail = forms.ImageField(required=False, widget=forms.ClearableFileInput(attrs={"accept": "image/*"}))
     class Meta:
         model = LearningPost
-        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "chapters", "captions", "video_url", "video_file", "thumbnail", "is_public"]
-        labels = {"project": "Project this explains", "video_script": "Video script", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly"}
+        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "chapters", "captions", "video_url", "video_file", "thumbnail", "is_public", "organization"]
+        labels = {"project": "Project this explains", "video_script": "Video script", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly", "organization": "Share only with my organization"}
         help_texts = {"project": "", "video_script": "", "chapters": "", "captions": ""}
         widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."}), "chapters": forms.Textarea(attrs={"rows": 5, "placeholder": "0:00 Intro\n1:20 The data model\n4:05 Deploying"}), "captions": forms.Textarea(attrs={"rows": 6, "placeholder": "WEBVTT", "spellcheck": "false"}), "video_script": forms.Textarea(attrs={"rows": 12, "placeholder": "INTRO\nHi, I'm ... In this video I'll show how I built ...\n\nDEMO\n[SHOW: the running app]"})}
     def __init__(self, *args, user=None, **kwargs):
@@ -20,6 +21,10 @@ class LearningPostForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["project"].queryset = user.projects.order_by("title") if user else self.fields["project"].queryset.none()
         self.fields["project"].empty_label = "Not about a specific project"
+        # Teachers can share a lecture or notes with their organization only, instead of publicly.
+        self.fields["organization"].queryset = staff_organizations(user) if user else self.fields["organization"].queryset.none()
+        self.fields["organization"].empty_label = "No, use the setting above"
+        self.fields["organization"].help_text = ""
     def clean_video_url(self):
         url = self.cleaned_data.get("video_url", "")
         if url and not url.lower().startswith(("https://", "http://")):
@@ -42,6 +47,8 @@ class LearningPostForm(forms.ModelForm):
         return thumbnail
     def clean(self):
         cleaned = super().clean()
+        if cleaned.get("organization"):
+            cleaned["is_public"] = False  # organization posts never appear publicly
         project, branch = cleaned.get("project"), (cleaned.get("branch") or "").strip()
         cleaned["branch"] = branch
         if branch:

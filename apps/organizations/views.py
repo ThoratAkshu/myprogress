@@ -1,0 +1,359 @@
+"""Organization workspace: home, students' growth, the private channel, tasks, invites and settings."""
+import csv
+import logging
+from datetime import timedelta
+from itertools import groupby
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.mail import send_mail
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
+from django.http import FileResponse, Http404, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
+from apps.accounts.models import Profile
+from apps.common.ratelimit import rate_limit
+from apps.core.models import ContentView, LearningPost
+from apps.core.services import progress_facts, score_breakdown
+from apps.learning.formatting import render_article
+from apps.notifications.services import notify
+from . import services
+from .forms import ChannelPostForm, InviteForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
+from .models import ChannelPost, ChannelSeen, Invite, Membership, Organization, Submission, Task
+logger = logging.getLogger(__name__)
+GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
+
+def _organization(request, slug, staff=False):
+    """The organization and the viewer's membership; 404 for outsiders, so private organizations stay invisible."""
+    organization = get_object_or_404(Organization, slug=slug)
+    member = services.membership(organization, request.user)
+    if member is None or (staff and not member.is_staff):
+        raise Http404
+    return organization, member
+def _render(request, template, organization, member, section, context=None):
+    groups = sorted({group for group in Membership.objects.filter(organization=organization).exclude(group="").values_list("group", flat=True)}, key=str.lower)
+    return render(request, f"organizations/{template}", {"organization": organization, "member": member, "org_section": section, "section": "organization", "org_groups": groups, **(context or {})})
+def _back(request, fallback):
+    target = request.POST.get("next", "")
+    return redirect(target if url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}) else fallback)
+
+@login_required(login_url="landing:home")
+def home_view(request):
+    """Where the Organization link goes: your organization, the list if you're in several, or a way to start or join one."""
+    staff = list(services.staff_organizations(request.user))
+    if len(staff) == 1:
+        return redirect("organizations:overview", slug=staff[0].slug)
+    joined = list(services.member_organizations(request.user))
+    if len(joined) == 1 and not staff:
+        return redirect("organizations:channel", slug=joined[0].slug)
+    profile = Profile.objects.filter(user=request.user).first()
+    if not joined and profile and profile.role == "organization":
+        return redirect("organizations:create")
+    pending = Membership.objects.filter(user=request.user, status="pending").select_related("organization")
+    return render(request, "organizations/home.html", {"section": "organization", "organizations": joined, "staff_ids": {organization.pk for organization in staff}, "pending": pending})
+@login_required(login_url="landing:home")
+@rate_limit("create-organization", 5, 3600)
+def create_view(request):
+    form = OrganizationForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        organization = services.create_organization(request.user, form.cleaned_data)
+        messages.success(request, f"{organization.name} is ready. Share the invite link with your students.")
+        return redirect("organizations:invite", slug=organization.slug)
+    return render(request, "organizations/create.html", {"section": "organization", "form": form})
+
+@login_required(login_url="landing:home")
+def overview_view(request, slug):
+    organization, member = _organization(request, slug)
+    if not member.is_staff:
+        return redirect("organizations:channel", slug=slug)
+    return _render(request, "overview.html", organization, member, "overview", {"stats": services.overview(organization), "invite_url": request.build_absolute_uri(reverse("organizations:join", args=[organization.invite_code]))})
+
+@login_required(login_url="landing:home")
+def members_view(request, slug):
+    organization, member = _organization(request, slug, staff=True)
+    group, query = request.GET.get("group", "").strip()[:60], request.GET.get("q", "").strip()[:80]
+    sort = request.GET.get("sort") if request.GET.get("sort") in dict(GROWTH_SORTS) else "score"
+    rows = services.student_growth(organization, group=group, query=query, sort=sort)
+    if request.GET.get("format") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{organization.slug}-students-{timezone.localdate():%Y-%m-%d}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["name", "email", "batch", "score", "rank", "coding_days_30", "streak", "projects", "public_posts", "tasks_given", "tasks_submitted", "tasks_approved", "tasks_missed", "task_score_percent", "last_active"])
+        for row in rows:
+            writer.writerow([services.display_name(row["user"]), row["user"].email, row["member"].group, row["score"], row["rank"] or "", row["coding_days"], row["streak"], row["projects"], row["posts"], row["tasks_given"], row["tasks_submitted"], row["tasks_approved"], row["tasks_missed"], "" if row["task_percent"] is None else row["task_percent"], row["last_active"].strftime("%Y-%m-%d") if row["last_active"] else ""])
+        return response
+    staff = Membership.objects.filter(organization=organization, status="active", role__in=["owner", "teacher"]).select_related("user__profile")
+    pending = Membership.objects.filter(organization=organization, status="pending").select_related("user__profile")
+    return _render(request, "members.html", organization, member, "members", {"rows": rows, "staff": staff, "pending": pending, "group": group, "query": query, "sort": sort, "sorts": GROWTH_SORTS, "week_ago": timezone.now() - timedelta(days=7)})
+@login_required(login_url="landing:home")
+def member_detail_view(request, slug, user_id):
+    organization, member = _organization(request, slug, staff=True)
+    student = get_object_or_404(Membership.objects.select_related("user__profile"), organization=organization, user_id=user_id, status="active")
+    form = MemberForm(request.POST or None, instance=student, can_change_role=member.role == "owner" and student.role != "owner")
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Saved.")
+        return redirect("organizations:member", slug=slug, user_id=user_id)
+    row = next((row for row in services.student_growth(organization) if row["user"].pk == student.user_id), None)
+    tasks = services.task_load(organization, student)
+    submissions = {submission.task_id: submission for submission in Submission.objects.filter(task__organization=organization, student=student.user)}
+    return _render(request, "member_detail.html", organization, member, "members", {
+        "student": student, "row": row, "form": form, "breakdown": score_breakdown(student.user, progress_facts(student.user)),
+        "task_rows": [{"task": task, "submission": submissions.get(task.pk)} for task in tasks], "now": timezone.now(),
+        "recent_posts": student.user.learning_posts.filter(is_public=True).order_by("-published_at")[:4],
+    })
+@login_required(login_url="landing:home")
+@require_POST
+def member_action_view(request, slug, user_id):
+    organization, member = _organization(request, slug, staff=True)
+    target = get_object_or_404(Membership, organization=organization, user_id=user_id)
+    action = request.POST.get("action")
+    if target.role == "owner":
+        messages.error(request, "The owner can't be removed.")
+    elif action == "approve" and target.status == "pending":
+        target.status = "active"
+        target.save(update_fields=["status"])
+        notify(target.user, request.user, "organization", f"You're now a member of {organization.name}.", services.channel_url(organization))
+        messages.success(request, f"{services.display_name(target.user)} can now see {organization.name}.")
+    elif action in {"decline", "remove"} and (member.role == "owner" or target.role == "student"):
+        target.delete()
+        messages.success(request, f"{services.display_name(target.user)} was removed." if action == "remove" else "Request declined.")
+    else:
+        messages.error(request, "You can't do that.")
+    return _back(request, reverse("organizations:members", args=[slug]))
+
+@login_required(login_url="landing:home")
+def invite_view(request, slug):
+    organization, member = _organization(request, slug, staff=True)
+    form = InviteForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        def send(invite):
+            link = request.build_absolute_uri(reverse("organizations:accept_invite", args=[invite.token]))
+            body = f"Hi,\n\n{services.display_name(request.user)} invited you to join {organization.name} on MyProgress as a {invite.get_role_display().lower()}.\n\nJoin here:\n{link}\n\nMembers see the organization's lectures, notes, study material and tasks. Teachers can see each student's progress on MyProgress.\n"
+            try:
+                send_mail(f"Join {organization.name} on MyProgress", body, None, [invite.email])
+            except Exception:
+                logger.exception("Could not send an organization invite to %s", invite.email)
+        created, skipped = services.invite_by_email(organization, request.user, form.cleaned_data["emails"], form.cleaned_data["role"], form.cleaned_data["group"].strip(), send)
+        messages.success(request, f"Invited {len(created)} {'person' if len(created) == 1 else 'people'}." + (f" {len(skipped)} already invited or a member." if skipped else ""))
+        return redirect("organizations:invite", slug=slug)
+    invites = Paginator(Invite.objects.filter(organization=organization).select_related("accepted_by"), 25).get_page(request.GET.get("page"))
+    return _render(request, "invite.html", organization, member, "invite", {"form": form, "invites": invites, "invite_url": request.build_absolute_uri(reverse("organizations:join", args=[organization.invite_code]))})
+def join_view(request, code):
+    """The shared invite link. Shows the organization and exactly what teachers will see before anyone joins."""
+    organization = get_object_or_404(Organization, invite_code=code)
+    return _join(request, organization, None)
+def accept_invite_view(request, token):
+    invite = get_object_or_404(Invite.objects.select_related("organization"), token=token)
+    if invite.accepted_at and invite.accepted_by != request.user:
+        messages.error(request, "This invitation was already used. Ask for a new one.")
+        return redirect("landing:dashboard" if request.user.is_authenticated else "landing:home")
+    return _join(request, invite.organization, invite)
+def _join(request, organization, invite):
+    existing = Membership.objects.filter(organization=organization, user=request.user).first() if request.user.is_authenticated else None
+    if request.method == "POST" and request.user.is_authenticated and not existing:
+        member = services.join(organization, request.user, invite)
+        if member.status == "active":
+            messages.success(request, f"Welcome to {organization.name}.")
+            return redirect("organizations:channel", slug=organization.slug)
+        messages.success(request, f"Request sent. A teacher at {organization.name} will approve it.")
+        return redirect("organizations:home")
+    if existing and existing.status == "active":
+        return redirect("organizations:channel", slug=organization.slug)
+    return render(request, "organizations/join.html", {"organization": organization, "invite": invite, "existing": existing, "shared": services.SHARED_WITH_TEACHERS, "member_count": organization.memberships.filter(status="active").count()})
+@login_required(login_url="landing:home")
+@require_POST
+def leave_view(request, slug):
+    organization, member = _organization(request, slug)
+    if member.role == "owner":
+        messages.error(request, "The owner can't leave. Transfer or delete the organization instead.")
+        return redirect("organizations:settings", slug=slug)
+    member.delete()
+    messages.success(request, f"You left {organization.name}. Its teachers can no longer see your progress.")
+    return redirect("organizations:home")
+
+def _channel_items(organization, member, kind=""):
+    """Announcements, study material, and lectures and notes shared from the studio, newest first."""
+    posts = services.visible_to(ChannelPost.objects.filter(organization=organization).select_related("author__profile"), member)
+    lessons = LearningPost.objects.filter(organization=organization).select_related("author__profile").annotate(comment_count=Count("comments", distinct=True))
+    if kind in {"announcement", "material"}:
+        lessons = lessons.none()
+        posts = posts.filter(kind=kind)
+    elif kind in {"video", "article"}:
+        posts = posts.none()
+        lessons = lessons.filter(kind=kind)
+    items = [{"type": "post", "item": post, "when": post.created_at, "pinned": post.pinned} for post in posts[:200]]
+    items += [{"type": "lesson", "item": lesson, "when": lesson.published_at, "pinned": False} for lesson in lessons[:200]]
+    items.sort(key=lambda entry: entry["when"], reverse=True)
+    return [entry for entry in items if entry["pinned"]], [entry for entry in items if not entry["pinned"]]
+@login_required(login_url="landing:home")
+def channel_view(request, slug):
+    organization, member = _organization(request, slug)
+    kind = request.GET.get("kind", "")
+    form = ChannelPostForm(request.POST or None, request.FILES or None) if member.is_staff else None
+    if request.method == "POST":
+        if not member.is_staff:
+            raise Http404
+        if form.is_valid():
+            post = form.save(commit=False)
+            post.organization, post.author = organization, request.user
+            post.save()
+            services.notify_members(organization, request.user, f"{organization.name}: {post.title}", f"{services.channel_url(organization)}#post-{post.pk}", post.group)
+            messages.success(request, "Posted to the channel.")
+            return redirect("organizations:channel", slug=slug)
+    pinned, items = _channel_items(organization, member, kind)
+    page = Paginator(items, 20).get_page(request.GET.get("page"))
+    today = timezone.localdate()
+    def day_label(entry):
+        day = timezone.localtime(entry["when"]).date()
+        if day == today:
+            return "Today"
+        return "Yesterday" if (today - day).days == 1 else f"{day:%A}, {day:%b} {day.day}"
+    days = [(label, list(entries)) for label, entries in groupby(page.object_list, key=day_label)]
+    post_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "post"]
+    ChannelSeen.objects.bulk_create([ChannelSeen(post_id=post_id, user=request.user) for post_id in post_ids], ignore_conflicts=True)
+    seen = dict(ChannelSeen.objects.filter(post_id__in=post_ids).values("post_id").annotate(total=Count("id")).values_list("post_id", "total")) if member.is_staff else {}
+    lesson_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "lesson"]
+    watched = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
+    return _render(request, "channel.html", organization, member, "channel", {
+        "form": form, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
+        "member_count": Membership.objects.filter(organization=organization, status="active").count(),
+    })
+@login_required(login_url="landing:home")
+@require_POST
+def channel_delete_view(request, slug, post_id):
+    organization, member = _organization(request, slug, staff=True)
+    post = get_object_or_404(ChannelPost, pk=post_id, organization=organization)
+    if post.file:
+        post.file.delete(save=False)
+    post.delete()
+    messages.success(request, "Removed from the channel.")
+    return redirect("organizations:channel", slug=slug)
+
+def _send_file(field):
+    if not field:
+        raise Http404
+    try:
+        return FileResponse(field.open("rb"), as_attachment=True, filename=field.name.rsplit("/", 1)[-1])
+    except FileNotFoundError:
+        raise Http404
+@login_required(login_url="landing:home")
+def channel_file_view(request, slug, post_id):
+    organization, member = _organization(request, slug)
+    post = get_object_or_404(services.visible_to(ChannelPost.objects.filter(organization=organization), member), pk=post_id)
+    return _send_file(post.file)
+@login_required(login_url="landing:home")
+def task_file_view(request, slug, task_id):
+    organization, member = _organization(request, slug)
+    task = get_object_or_404(services.visible_to(Task.objects.filter(organization=organization), member), pk=task_id)
+    return _send_file(task.attachment)
+@login_required(login_url="landing:home")
+def submission_file_view(request, slug, submission_id):
+    organization, member = _organization(request, slug)
+    submission = get_object_or_404(Submission, pk=submission_id, task__organization=organization)
+    if not member.is_staff and submission.student != request.user:
+        raise Http404
+    return _send_file(submission.file)
+
+@login_required(login_url="landing:home")
+def tasks_view(request, slug):
+    organization, member = _organization(request, slug)
+    form = TaskForm(request.POST or None, request.FILES or None) if member.is_staff else None
+    if request.method == "POST":
+        if not member.is_staff:
+            raise Http404
+        if form.is_valid():
+            task = form.save(commit=False)
+            task.organization, task.created_by = organization, request.user
+            task.save()
+            due = f", due {timezone.localtime(task.due_at):%b} {timezone.localtime(task.due_at).day}" if task.due_at else ""
+            services.notify_members(organization, request.user, f"New task in {organization.name}: {task.title}{due}", reverse("organizations:task", args=[slug, task.pk]), task.group)
+            messages.success(request, "Task created. Students have been told.")
+            return redirect("organizations:task", slug=slug, task_id=task.pk)
+    tasks = list(services.visible_to(Task.objects.filter(organization=organization), member).annotate(submitted=Count("submissions"), approved=Count("submissions", filter=Q(submissions__status="approved")), waiting=Count("submissions", filter=Q(submissions__status="submitted"))))
+    now = timezone.now()
+    if member.is_staff:
+        students = list(services.students_of(organization))
+        for task in tasks:
+            task.assigned = len([student for student in students if not task.group or student.group.lower() == task.group.lower()])
+            task.percent = round(task.submitted * 100 / task.assigned) if task.assigned else 0
+    else:
+        mine = {submission.task_id: submission for submission in Submission.objects.filter(task__organization=organization, student=request.user)}
+        for task in tasks:
+            task.mine = mine.get(task.pk)
+            task.state = task.mine.status if task.mine else "overdue" if task.due_at and task.due_at < now else "todo"
+    return _render(request, "tasks.html", organization, member, "tasks", {"tasks": tasks, "form": form, "now": now})
+@login_required(login_url="landing:home")
+def task_detail_view(request, slug, task_id):
+    organization, member = _organization(request, slug)
+    task = get_object_or_404(services.visible_to(Task.objects.filter(organization=organization), member), pk=task_id)
+    context = {"task": task, "instructions": render_article(task.instructions), "now": timezone.now()}
+    if member.is_staff:
+        students = [student for student in services.students_of(organization) if not task.group or student.group.lower() == task.group.lower()]
+        submissions = {submission.student_id: submission for submission in task.submissions.select_related("student__profile", "repository__project", "reviewed_by")}
+        status = request.GET.get("status", "")
+        rows = [{"student": student, "submission": submissions.get(student.user_id)} for student in students]
+        context.update({"rows": [row for row in rows if not status or (row["submission"].status if row["submission"] else "missing") == status], "status": status,
+                        "counts": {"missing": len([row for row in rows if not row["submission"]]), **{key: len([row for row in rows if row["submission"] and row["submission"].status == key]) for key in ["submitted", "changes", "approved"]}}})
+    else:
+        submission = Submission.objects.filter(task=task, student=request.user).first()
+        form = SubmissionForm(request.POST or None, request.FILES or None, instance=submission, student=request.user)
+        if request.method == "POST" and form.is_valid():
+            if submission and submission.status == "approved":
+                messages.error(request, "This task is already approved.")
+                return redirect("organizations:task", slug=slug, task_id=task.pk)
+            saved = form.save(commit=False)
+            saved.task, saved.student, saved.status = task, request.user, "submitted"
+            saved.save()
+            for teacher in services.staff_of(organization):
+                notify(teacher, request.user, "organization", f"{services.display_name(request.user)} submitted {task.title}", reverse("organizations:task", args=[slug, task.pk]))
+            messages.success(request, "Submitted. Your teacher will review it.")
+            return redirect("organizations:task", slug=slug, task_id=task.pk)
+        context.update({"submission": submission, "form": form})
+    return _render(request, "task_detail.html", organization, member, "tasks", context)
+@login_required(login_url="landing:home")
+@require_POST
+def review_view(request, slug, submission_id):
+    organization, member = _organization(request, slug, staff=True)
+    submission = get_object_or_404(Submission.objects.select_related("task", "student"), pk=submission_id, task__organization=organization)
+    form = ReviewForm(request.POST, points=submission.task.points)
+    if form.is_valid():
+        submission.status, submission.score, submission.feedback = form.cleaned_data["status"], form.cleaned_data["score"], form.cleaned_data["feedback"].strip()
+        submission.reviewed_by, submission.reviewed_at = request.user, timezone.now()
+        submission.save(update_fields=["status", "score", "feedback", "reviewed_by", "reviewed_at", "updated_at"])
+        result = "approved" if submission.status == "approved" else "needs changes"
+        score = f" ({submission.score}/{submission.task.points})" if submission.score is not None else ""
+        notify(submission.student, request.user, "organization", f"Your work on {submission.task.title} was {result}{score}", reverse("organizations:task", args=[slug, submission.task_id]))
+        messages.success(request, f"Review saved for {services.display_name(submission.student)}.")
+    else:
+        messages.error(request, " ".join(error for errors in form.errors.values() for error in errors))
+    return _back(request, reverse("organizations:task", args=[slug, submission.task_id]))
+@login_required(login_url="landing:home")
+@require_POST
+def task_delete_view(request, slug, task_id):
+    organization, member = _organization(request, slug, staff=True)
+    task = get_object_or_404(Task, pk=task_id, organization=organization)
+    task.delete()
+    messages.success(request, "Task deleted.")
+    return redirect("organizations:tasks", slug=slug)
+
+@login_required(login_url="landing:home")
+def settings_view(request, slug):
+    organization, member = _organization(request, slug, staff=True)
+    if member.role != "owner":
+        raise Http404
+    form = OrganizationForm(request.POST or None, instance=organization)
+    if request.method == "POST":
+        if request.POST.get("action") == "new_code":
+            organization.invite_code = Organization._meta.get_field("invite_code").default()
+            organization.save(update_fields=["invite_code"])
+            messages.success(request, "New invite link created. The old one no longer works.")
+            return redirect("organizations:invite", slug=slug)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Settings saved.")
+            return redirect("organizations:settings", slug=slug)
+    return _render(request, "settings.html", organization, member, "settings", {"form": form})
