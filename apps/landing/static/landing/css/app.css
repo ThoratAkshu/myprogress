@@ -1297,3 +1297,10 @@ a.org-item-title:hover{color:var(--violet)}
 .org-room iframe{display:block;border:0}
 .org-room-loading{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:24px;color:#cbd5e1;text-align:center}
 @media(max-width:760px){.org-room{height:calc(100vh - 230px);height:calc(100dvh - 230px);min-height:380px;border-radius:12px}.org-room-out{margin-left:0}}
+/* Organizations: a page you can't open */
+.org-unavailable{display:grid;justify-items:center;gap:8px;max-width:600px;margin:32px auto;padding:36px 28px;text-align:center}
+.org-unavailable h1{margin:6px 0 0;font-size:24px}
+.org-unavailable p{margin:0;max-width:480px}
+.org-unavailable-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--violet-soft);color:var(--violet)}
+.org-unavailable-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px}
+.org-unavailable-actions form{margin:0}

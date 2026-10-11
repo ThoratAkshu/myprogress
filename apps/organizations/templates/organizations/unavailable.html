@@ -1,0 +1,9 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Can't open this page · MyProgress{% endblock %}
+{% block content %}<div class="section-page org-page"><section class="card org-unavailable">
+<span class="org-unavailable-icon">{% icon "lock" 22 %}</span>
+{% if staff_only %}<h1>This page is for teachers</h1><p class="muted">Only the organization's owner and teachers can open it. You're a student here, signed in as <b>{{ user.email }}</b>.</p>
+{% else %}<h1>You can't open this organization page</h1><p class="muted">Either the link is wrong, or the page is only for the organization's members and {% if user.is_authenticated %}<b>{{ user.email }}</b>{% else %}you{% endif %} isn't one of them.</p>
+<p class="muted">If you created the organization, sign in with the account you made it with. If you're joining one, open the invite link your institute sent.</p>{% endif %}
+<div class="org-unavailable-actions"><a class="button primary" href="{% url 'organizations:home' %}">Your organizations</a>{% if user.is_authenticated %}<form method="post" action="{% url 'landing:logout' %}">{% csrf_token %}<button class="button soft">Sign out to switch account</button></form>{% endif %}</div>
+</section></div>{% endblock %}

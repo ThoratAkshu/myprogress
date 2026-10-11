@@ -23,17 +23,18 @@ from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
 from apps.notifications.services import notify
 from . import services
+from .middleware import OrganizationUnavailable
 from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
 from .models import Attendance, Certificate, ChannelPost, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
 def _organization(request, slug, staff=False):
-    """The organization and the viewer's membership; 404 for outsiders, so private organizations stay invisible."""
-    organization = get_object_or_404(Organization, slug=slug)
-    member = services.membership(organization, request.user)
+    """The organization and the viewer's membership. Outsiders get the same 404 whether or not it exists, so private organizations stay invisible."""
+    organization = Organization.objects.filter(slug=slug).first()
+    member = services.membership(organization, request.user) if organization else None
     if member is None or (staff and not member.is_staff):
-        raise Http404
+        raise OrganizationUnavailable(staff_only=member is not None)
     return organization, member
 def _render(request, template, organization, member, section, context=None):
     groups = sorted({group for group in Membership.objects.filter(organization=organization).exclude(group="").values_list("group", flat=True)}, key=str.lower)

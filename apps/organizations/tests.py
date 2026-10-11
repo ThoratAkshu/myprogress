@@ -610,3 +610,14 @@ class OrganizationTests(TestCase):
             self.assertEqual(self.client.get(reverse("organizations:join_class", args=[self.organization.slug, live.pk]))["Location"], live.meeting_link)
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(room_url).status_code, 404)
+    def test_pages_people_cannot_open_say_why(self):
+        self.join(self.student)
+        self.client.force_login(self.outsider)
+        for slug in [self.organization.slug, "no-such-institute"]:
+            response = self.client.get(reverse("organizations:invite", args=[slug]))
+            self.assertContains(response, "You can't open this organization page", status_code=404)
+            self.assertContains(response, "outsider@example.com", status_code=404)
+            self.assertNotContains(response, "Sunrise Coding Institute", status_code=404)
+        self.client.force_login(self.student)
+        self.assertContains(self.client.get(reverse("organizations:invite", args=[self.organization.slug])), "This page is for teachers", status_code=404)
+        self.assertEqual(self.client.get(reverse("organizations:channel", args=[self.organization.slug])).status_code, 200)
