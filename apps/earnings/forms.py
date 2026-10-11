@@ -1,7 +1,8 @@
 import re
 from decimal import Decimal
 from django import forms
-from .models import CreatorAccount, EarningSettings, TreasuryEntry
+from django.utils import timezone
+from .models import CreatorAccount, EarningSettings, RevenueEntry, TreasuryEntry
 UPI_PATTERN = re.compile(r"^[A-Za-z0-9._-]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$")
 PAN_PATTERN = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 IFSC_PATTERN = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
@@ -66,6 +67,18 @@ class TreasuryEntryForm(forms.ModelForm):
         model = TreasuryEntry
         fields = ["kind", "amount", "reference", "note"]
         labels = {"reference": "Bank reference (UTR)"}
+class RevenueEntryForm(forms.ModelForm):
+    amount = forms.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"), label="Amount (₹)")
+    received_on = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Received on")
+    class Meta:
+        model = RevenueEntry
+        fields = ["source", "amount", "received_on", "reference", "note"]
+        labels = {"reference": "Invoice or bank reference"}
+    def clean_received_on(self):
+        received_on = self.cleaned_data["received_on"]
+        if received_on > timezone.localdate():
+            raise forms.ValidationError("Record money once it has arrived, not before.")
+        return received_on
 class AdjustmentForm(forms.Form):
     coins = forms.IntegerField(required=False, min_value=-100000, max_value=100000, initial=0)
     amount = forms.DecimalField(required=False, max_digits=10, decimal_places=2, min_value=Decimal("-100000"), max_value=Decimal("100000"), label="Rupees")

@@ -13,6 +13,7 @@
 <article class="fin-kpi"><span class="fin-kpi-icon green">{% icon "send" 18 %}</span><small>Paid this month</small><strong>{{ paid_month_total|inr }}</strong><p>{{ paid_month_count }} payout{{ paid_month_count|pluralize }}</p></article>
 </section>
 <section class="fin-minis">
+<a class="fin-mini-link" href="{% url 'finance:revenue' %}"><b>{{ revenue_month|inr }}</b><span>Revenue this month</span></a>
 <div><b>{{ earning_creators }}</b><span>Creators earning</span></div>
 <div><b>{{ new_creators }}</b><span>Unlocked this month</span></div>
 <div><b>{{ earned_month|inr }}</b><span>Credited to wallets this month</span></div>
@@ -26,7 +27,7 @@
 </section>
 <section class="fin-card"><div class="fin-card-head"><h2>Payments not yet confirmed</h2><a href="{% url 'finance:payouts' %}">Payments</a></div>
 {% for payout in pending_list %}<div class="fin-line"><span class="fin-avatar sm">{{ payout.user|initials }}</span><div><b>{{ payout.payout_name }}</b><small>{{ payout.destination|default:payout.upi_id }} · {{ payout.get_status_display }}{% if payout.run %} · {{ payout.run.month|date:"F" }}{% endif %}</small></div><strong>{{ payout.net_amount|inr }}</strong></div>
-{% empty %}<p class="fin-empty">{% icon "check-circle" 18 %}Every payment is confirmed. {{ pending_total|inr }} waiting.</p>{% endfor %}
+{% empty %}<p class="fin-empty">{% icon "check-circle" 18 %}Every payment is confirmed.</p>{% endfor %}
 </section>
 </div>
 

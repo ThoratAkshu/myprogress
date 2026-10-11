@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import audit_view, close_month_view, creator_detail_view, creators_view, finance_login_view, finance_logout_view, overview_view, payout_paid_view, payout_reject_view, payouts_csv_view, payouts_view, prepare_run_view, razorpayx_webhook_view, send_run_view, settings_view, sync_payments_view, treasury_view
+from .views import audit_view, close_month_view, creator_detail_view, creators_view, finance_login_view, finance_logout_view, overview_view, payout_paid_view, payout_reject_view, payouts_csv_view, payouts_view, prepare_run_view, razorpayx_webhook_view, revenue_csv_view, revenue_delete_view, revenue_view, send_run_view, settings_view, sync_payments_view, treasury_view
 app_name = "finance"
 urlpatterns = [
     path("", overview_view, name="overview"),
@@ -14,6 +14,9 @@ urlpatterns = [
     path("payments/<int:payout_id>/paid/", payout_paid_view, name="payout_paid"),
     path("payments/<int:payout_id>/return/", payout_reject_view, name="payout_reject"),
     path("webhooks/razorpayx/", razorpayx_webhook_view, name="razorpayx_webhook"),
+    path("revenue/", revenue_view, name="revenue"),
+    path("revenue/report.csv", revenue_csv_view, name="revenue_csv"),
+    path("revenue/<int:entry_id>/delete/", revenue_delete_view, name="revenue_delete"),
     path("treasury/", treasury_view, name="treasury"),
     path("rules/", settings_view, name="settings"),
     path("creators/", creators_view, name="creators"),

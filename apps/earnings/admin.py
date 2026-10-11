@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PayoutRequest, TreasuryEntry
+from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PayoutRequest, RevenueEntry, TreasuryEntry
 # Day-to-day money work happens in the finance console at /finance/; these are read-mostly views for support.
 @admin.register(EarningSettings)
 class EarningSettingsAdmin(admin.ModelAdmin):
@@ -28,6 +28,11 @@ class TreasuryEntryAdmin(admin.ModelAdmin):
     list_display = ["kind", "amount", "reference", "created_by", "created_at"]
     list_filter = ["kind"]
     readonly_fields = [field.name for field in TreasuryEntry._meta.fields]
+@admin.register(RevenueEntry)
+class RevenueEntryAdmin(admin.ModelAdmin):
+    list_display = ["received_on", "source", "amount", "reference", "created_by"]
+    list_filter = ["source"]
+    readonly_fields = [field.name for field in RevenueEntry._meta.fields]
 @admin.register(FinanceAuditLog)
 class FinanceAuditLogAdmin(admin.ModelAdmin):
     list_display = ["created_at", "actor", "action", "details"]

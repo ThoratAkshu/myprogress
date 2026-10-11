@@ -25,9 +25,10 @@ from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit
 from apps.core.models import EarningTransaction
 from apps.notifications.services import notify
 from . import services
-from .forms import AdjustmentForm, EarningSettingsForm, PaymentDetailsForm, TreasuryEntryForm
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, TreasuryEntry
+from .forms import AdjustmentForm, EarningSettingsForm, PaymentDetailsForm, RevenueEntryForm, TreasuryEntryForm
+from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
 from .payouts import get_provider, valid_webhook
+from .reports import PERIODS, revenue_report
 FINANCE_SESSION_KEY = "finance_unlocked_at"
 FINANCE_IDLE_SECONDS = 30 * 60
 FINANCE_LOGIN_FAILURES, FINANCE_LOGIN_WINDOW = 5, 900
@@ -140,6 +141,7 @@ def overview_view(request):
         "pending_total": waiting.aggregate(total=Sum("amount"))["total"] or 0, "pending_list": waiting.select_related("user__profile", "run")[:5],
         "paid_month_total": paid_month.aggregate(total=Sum("amount"))["total"] or 0, "paid_month_count": paid_month.count(),
         "earned_month": credits_month.aggregate(total=Sum("amount"))["total"] or 0, "next_run": next_run,
+        "revenue_month": RevenueEntry.objects.filter(received_on__gte=month_start).aggregate(total=Sum("amount"))["total"] or 0,
         "earning_creators": accounts.filter(eligible_since__isnull=False, suspended=False).count(), "new_creators": accounts.filter(eligible_since__date__gte=month_start).count(),
         "suspended_creators": accounts.filter(suspended=True).count(), "coins_out": CoinTransaction.objects.aggregate(total=Sum("amount"))["total"] or 0,
         "months": months, "recent_log": FinanceAuditLog.objects.select_related("actor")[:6],
@@ -250,6 +252,44 @@ def payout_reject_view(request, payout_id):
     except services.PayoutError as error:
         messages.error(request, str(error))
     return redirect(_payments_url(payout.run))
+
+@finance_required
+def revenue_view(request):
+    """The company's revenue against what creators cost: a simple profit and loss for the owner."""
+    period = request.GET.get("period") if request.GET.get("period") in dict(PERIODS) else "this_month"
+    form = RevenueEntryForm(request.POST or None, initial={"received_on": timezone.localdate(), "source": "recruiters"})
+    if request.method == "POST" and form.is_valid():
+        entry = form.save(commit=False)
+        entry.created_by = request.user
+        entry.save()
+        services.log(request.user, "revenue_recorded", f"{entry.get_source_display()}: {services.rupees(entry.amount)} received {entry.received_on:%b} {entry.received_on.day}, {entry.received_on.year} {entry.reference}".strip())
+        messages.success(request, f"Recorded {services.rupees(entry.amount)} from {entry.get_source_display().lower()}.")
+        return redirect(f'{reverse("finance:revenue")}?period={period}')
+    report = revenue_report(period)
+    entries = RevenueEntry.objects.filter(received_on__gte=report["start"], received_on__lt=report["end"]).select_related("created_by")
+    return _render(request, "revenue.html", "revenue", {"report": report, "periods": PERIODS, "form": form, "page": Paginator(entries, 20).get_page(request.GET.get("page")), "pager_extra": urlencode({"period": period})})
+@finance_required
+@require_POST
+def revenue_delete_view(request, entry_id):
+    entry = get_object_or_404(RevenueEntry, pk=entry_id)
+    services.log(request.user, "revenue_deleted", f"Deleted {entry.get_source_display()}: {services.rupees(entry.amount)} received {entry.received_on:%b} {entry.received_on.day}, {entry.received_on.year} {entry.reference}".strip())
+    entry.delete()
+    messages.success(request, "Revenue entry deleted.")
+    return redirect(request.POST.get("next") if url_has_allowed_host_and_scheme(request.POST.get("next", ""), allowed_hosts={request.get_host()}) else "finance:revenue")
+@finance_required
+def revenue_csv_view(request):
+    """Month-by-month profit and loss for the chosen period, for an accountant or a spreadsheet."""
+    period = request.GET.get("period") if request.GET.get("period") in dict(PERIODS) else "12m"
+    report = revenue_report(period)
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="myprogress-revenue-{report["start"]:%Y-%m}-to-{report["last_day"]:%Y-%m}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["month", "revenue_inr", "creator_cost_inr", "net_inr", "margin_percent", "paid_to_creators_inr"])
+    for row in report["months"]:
+        if report["start"] <= row["month"] < report["end"]:
+            writer.writerow([f"{row['month']:%Y-%m}", f"{row['revenue']:.2f}", f"{row['cost']:.2f}", f"{row['net']:.2f}", "" if row["margin"] is None else row["margin"], f"{row['paid']:.2f}"])
+    services.log(request.user, "exported", f"Downloaded the revenue report for {report['label']}")
+    return response
 
 @finance_required
 def treasury_view(request):

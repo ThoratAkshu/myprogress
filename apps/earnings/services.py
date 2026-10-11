@@ -13,6 +13,7 @@ from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAud
 from .payouts import ProviderError, RazorpayX, get_provider
 ZERO = Decimal("0")
 ADDS = ["credit", "adjustment", "refund"]
+BONUS_PREFIX = "Bonus for reaching"
 class PayoutError(Exception):
     """A payment step that can't go ahead, with a message safe to show."""
 def earnings_url():
@@ -77,7 +78,7 @@ def refresh_creator(user):
             now = timezone.now()
             account.eligible_since = now
             if account.follower_bonus_paid_at is None and rules.follower_bonus > 0:
-                EarningTransaction.objects.create(user=user, transaction_type="credit", amount=rules.follower_bonus, description=f"Bonus for reaching {rules.follower_goal} followers")
+                EarningTransaction.objects.create(user=user, transaction_type="credit", amount=rules.follower_bonus, description=f"{BONUS_PREFIX} {rules.follower_goal} followers")
                 account.follower_bonus_paid_at = now
             account.save(update_fields=["eligible_since", "follower_bonus_paid_at"])
             unlocked = True

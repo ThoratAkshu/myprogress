@@ -4,7 +4,7 @@ import io
 import itertools
 import json
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 from unittest import mock
@@ -18,7 +18,9 @@ from apps.accounts.models import Follow, Profile
 from apps.core.models import EarningTransaction, LearningPost
 from apps.notifications.models import Notification
 from . import services
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, TreasuryEntry
+from . import reports
+from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
+from .reports import months_back
 from .payouts import ProviderError, RazorpayX, get_provider
 from .views import FINANCE_SESSION_KEY
 PASSWORD = "StrongPass!482"
@@ -509,3 +511,56 @@ class FinanceConsoleTests(TestCase):
         call_command("create_finance_admin", "creator@example.com", "--revoke", stdout=StringIO())
         self.assertFalse(User.objects.get(pk=self.creator.pk).has_perm("earnings.access_finance"))
 
+class RevenueReportTests(TestCase):
+    """The owner's company revenue page: income recorded by finance against what creators cost."""
+    def setUp(self):
+        cache.clear()
+        self.owner = make_user("owner@example.com", "Own", "Er", is_staff=True, is_superuser=True)
+        self.client.post(reverse("finance:login"), {"email": self.owner.email, "password": PASSWORD})
+        self.creator = unlocked_creator()  # ₹150 follower bonus this month
+        services.adjust(self.creator, self.owner, amount=Decimal("50"), reason="Launch prize")
+    def record(self, **changes):
+        data = {"source": "recruiters", "amount": "1000", "received_on": timezone.localdate().isoformat(), "reference": "INV-1", "note": "", **changes}
+        return self.client.post(reverse("finance:revenue"), data, follow=True)
+    def test_profit_is_revenue_minus_creator_costs_and_funding_is_not_revenue(self):
+        TreasuryEntry.objects.create(kind="deposit", amount=Decimal("5000"))
+        self.assertContains(self.client.get(reverse("finance:revenue")), "No revenue recorded for this period")
+        self.assertContains(self.record(), "Recorded ₹1,000 from recruiter plans.")
+        self.record(source="ads", amount="250", reference="AD-7")
+        report = reports.revenue_report("this_month")
+        self.assertEqual((report["revenue"], report["costs"]["total"], report["net"], report["margin"]), (Decimal("1250"), Decimal("200"), Decimal("1050"), 84))
+        self.assertEqual((report["costs"]["bonuses"], report["costs"]["adjustments"], report["costs"]["conversions"]), (Decimal("150"), Decimal("50"), Decimal("0")))
+        self.assertEqual([(row["source"], row["percent"]) for row in report["by_source"]], [("Recruiter plans", 80), ("Advertising", 20)])
+        page = self.client.get(reverse("finance:revenue"))
+        self.assertContains(page, "₹1,050")
+        self.assertContains(page, "84%")
+        self.assertTrue(FinanceAuditLog.objects.filter(action="revenue_recorded", details__contains="₹1,000").exists())
+    def test_periods_and_the_financial_year(self):
+        self.record(amount="400", received_on=months_back(timezone.localdate().replace(day=1), 2).isoformat())
+        self.assertEqual(reports.revenue_report("this_month")["revenue"], Decimal("0"))
+        self.assertEqual(reports.revenue_report("3m")["revenue"], Decimal("400"))
+        self.assertEqual(reports.period_range("fy", date(2026, 10, 11))[:2], (date(2026, 4, 1), date(2026, 11, 1)))
+        self.assertEqual(reports.period_range("fy", date(2027, 2, 3))[:2], (date(2026, 4, 1), date(2027, 3, 1)))
+        self.assertEqual(reports.period_range("fy", date(2026, 10, 11))[2], "FY 2026–27")
+    def test_future_dates_and_bad_amounts_are_refused(self):
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        self.assertContains(self.record(received_on=tomorrow.isoformat()), "Record money once it has arrived")
+        self.assertContains(self.record(amount="-5"), "Ensure this value is greater than or equal to 0.01")
+        self.assertFalse(RevenueEntry.objects.exists())
+    def test_csv_and_deleting_a_mistake(self):
+        self.record()
+        body = self.client.get(reverse("finance:revenue_csv"), {"period": "this_month"}).content.decode()
+        self.assertIn(f"{timezone.localdate():%Y-%m},1000.00,200.00,800.00,80,0.00", body)
+        entry = RevenueEntry.objects.get()
+        self.client.post(reverse("finance:revenue_delete", args=[entry.pk]))
+        self.assertFalse(RevenueEntry.objects.exists())
+        self.assertTrue(FinanceAuditLog.objects.filter(action="revenue_deleted", details__contains="₹1,000").exists())
+    def test_months_of_cover_and_overview_link(self):
+        TreasuryEntry.objects.create(kind="deposit", amount=Decimal("600"))
+        last = services.previous_month(timezone.localdate().replace(day=1))
+        EarningTransaction.objects.filter(user=self.creator).update(created_at=services._midnight(last) + timedelta(days=3))
+        self.assertEqual(round(reports.revenue_report("this_month")["cover_months"], 1), Decimal("9.0"))
+        self.record(amount="300")
+        self.assertContains(self.client.get(reverse("finance:overview")), "Revenue this month")
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("finance:revenue")).status_code, 302)

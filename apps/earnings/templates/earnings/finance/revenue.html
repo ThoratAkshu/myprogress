@@ -1,0 +1,67 @@
+{% extends "earnings/finance/base.html" %}{% load ui money %}
+{% block title %}Revenue{% endblock %}
+{% block heading %}Revenue{% endblock %}
+{% block subheading %}What MyProgress earned, what creators cost, and what's left. {{ report.start|date:"M j, Y" }} to {{ report.last_day|date:"M j, Y" }}.{% endblock %}
+{% block content %}
+<div class="fin-toolbar">
+<nav class="fin-tabs" aria-label="Report period">{% for key, label in periods %}<a href="?period={{ key }}"{% if report.period == key %} aria-current="page"{% endif %}>{% if key == 'fy' and report.period == 'fy' %}{{ report.label }}{% else %}{{ label }}{% endif %}</a>{% endfor %}</nav>
+<a class="fin-btn ghost" href="{% url 'finance:revenue_csv' %}?period={{ report.period }}">{% icon "download" 16 %}Download report</a>
+</div>
+{% if not report.entry_count %}<div class="fin-alert">{% icon "info" 18 %}<div><b>No revenue recorded for this period</b><span>MyProgress doesn't charge anyone yet, so revenue is whatever you record below: recruiter plans, ads, sponsorships, or services. Money you add to the master account is funding, not revenue.</span></div></div>{% endif %}
+
+<section class="fin-kpis">
+<article class="fin-kpi feature"><span class="fin-kpi-icon">{% icon "trending-up" 18 %}</span><small>Revenue</small><strong>{{ report.revenue|inr }}</strong><p>{{ report.entry_count }} payment{{ report.entry_count|pluralize }} received</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "users" 18 %}</span><small>Creator costs</small><strong>{{ report.costs.total|inr }}</strong><p>Earned by {{ report.earning_creators }} creator{{ report.earning_creators|pluralize }}, paid or not</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon {% if report.net >= 0 %}green{% else %}red{% endif %}">{% icon "pie-chart" 18 %}</span><small>{% if report.net >= 0 %}Profit{% else %}Loss{% endif %}</small><strong class="{% if report.net >= 0 %}plus{% else %}minus{% endif %}">{{ report.net|inr }}</strong><p>Revenue minus creator costs</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "activity" 18 %}</span><small>Margin</small><strong>{% if report.margin is not None %}{{ report.margin }}%{% else %}—{% endif %}</strong><p>{% if report.margin is not None %}Of every ₹100 earned, ₹{% if report.margin > 0 %}{{ report.margin }}{% else %}0{% endif %} is kept{% else %}Needs revenue to work out{% endif %}</p></article>
+</section>
+<section class="fin-minis">
+<div><b>{{ report.paid|inr }}</b><span>Paid to creators in this period</span></div>
+<div><b>{{ report.balance|inr }}</b><span>In the master account now</span></div>
+<div><b>{{ report.owed|inr }}</b><span>Owed to creators now</span></div>
+<div><b>{% if report.cover_months is not None %}{{ report.cover_months|floatformat:1 }} months{% else %}—{% endif %}</b><span>Of creator costs the master account covers</span></div>
+<div><b>{{ report.tax_held|inr }}</b><span>Tax held back from payments</span></div>
+</section>
+
+<section class="fin-card"><div class="fin-card-head"><h2>Month by month</h2><span class="fin-legend"><i class="rev"></i>Revenue <i class="cost"></i>Creator costs</span></div>
+<div class="fin-bars tall">{% for row in report.months %}<div class="fin-bar{% if row.month < report.start %} is-outside{% endif %}"><div class="fin-bar-pair"><i class="rev" style="height:{{ row.revenue_height }}%" title="Revenue {{ row.revenue|inr }}"></i><i class="cost" style="height:{{ row.cost_height }}%" title="Creator costs {{ row.cost|inr }}"></i></div><small>{{ row.month|date:"M" }}</small><em class="{% if row.net >= 0 %}plus{% else %}minus{% endif %}">{% if row.revenue or row.cost %}{{ row.net|inr }}{% else %}·{% endif %}</em></div>{% endfor %}</div>
+<p class="fin-muted small">The number under each month is profit or loss. Faded months are outside the period you picked.</p>
+</section>
+
+<div class="fin-grid">
+<section class="fin-card"><div class="fin-card-head"><h2>Where revenue came from</h2></div>
+{% for row in report.by_source %}<div class="fin-split"><div><b>{{ row.source }}</b><span>{{ row.total|inr }} · {{ row.percent }}%</span></div><i style="width:{{ row.percent }}%"></i></div>
+{% empty %}<p class="fin-empty">Nothing recorded yet.</p>{% endfor %}
+</section>
+<section class="fin-card"><div class="fin-card-head"><h2>What creators cost</h2></div>
+<dl class="fin-rules">
+<div><dt>Coins turned into rupees</dt><dd>{{ report.costs.conversions|inr }}</dd></div>
+<div><dt>Follower bonuses</dt><dd>{{ report.costs.bonuses|inr }}</dd></div>
+<div><dt>Manual adjustments</dt><dd>{{ report.costs.adjustments|inr }}</dd></div>
+<div><dt>Posts published</dt><dd>{{ report.posts }}</dd></div>
+<div><dt>Cost per post</dt><dd>{% if report.cost_per_post is not None %}{{ report.cost_per_post|inr }}{% else %}—{% endif %}</dd></div>
+<div><dt>Cost per earning creator</dt><dd>{% if report.cost_per_creator is not None %}{{ report.cost_per_creator|inr }}{% else %}—{% endif %}</dd></div>
+</dl>
+</section>
+</div>
+
+<div class="fin-grid wide-left">
+<section class="fin-card flush"><div class="fin-card-head pad"><h2>Revenue received</h2><span class="fin-muted">{{ report.label }}</span></div>
+<div class="fin-table" role="table" aria-label="Revenue received"><div class="fin-tr head revenue" role="row"><span role="columnheader">Date</span><span role="columnheader">Source</span><span role="columnheader">Amount</span><span role="columnheader">Reference</span><span role="columnheader"><span class="fin-sr">Actions</span></span></div>
+{% for entry in page %}<div class="fin-tr revenue" role="row"><span role="cell">{{ entry.received_on|date:"M j, Y" }}</span><span role="cell"><em class="fin-pill">{{ entry.get_source_display }}</em></span><span role="cell" class="plus">+{{ entry.amount|inr }}</span><span role="cell">{{ entry.reference|default:"—" }}{% if entry.note %}<small class="fin-muted"> · {{ entry.note }}</small>{% endif %}</span><span role="cell"><form method="post" action="{% url 'finance:revenue_delete' entry.pk %}" data-confirm="Delete {{ entry.amount|inr }} from {{ entry.get_source_display|lower }}? This is recorded in the audit log.">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="fin-link-danger" aria-label="Delete {{ entry.amount|inr }} from {{ entry.get_source_display }}">{% icon "trash" 15 %}</button></form></span></div>
+{% empty %}<p class="fin-empty pad">No revenue in this period.</p>{% endfor %}
+</div></section>
+<section class="fin-card"><div class="fin-card-head"><h2>Record revenue</h2></div>
+<form method="post" class="fin-form">{% csrf_token %}
+{% for field in form %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
+<div><button class="fin-btn primary">Save revenue</button></div>
+<p class="fin-muted small">Record money when it reaches the company bank account. Amounts are as received; ask your accountant how to treat GST.</p>
+</form>
+</section>
+</div>
+{% include "earnings/finance/_pager.html" with extra=pager_extra %}
+
+{% if report.top_creators %}<section class="fin-card"><div class="fin-card-head"><h2>Top earning creators</h2><span class="fin-muted">{{ report.label }}</span></div>
+{% for row in report.top_creators %}<a class="fin-line link" href="{% url 'finance:creator' row.user.pk %}"><span class="fin-avatar sm">{{ row.user|initials }}</span><div><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.user.email }}</small></div><strong>{{ row.total|inr }}</strong></a>{% endfor %}
+</section>{% endif %}
+{% endblock %}

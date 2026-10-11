@@ -116,6 +116,19 @@ class TreasuryEntry(models.Model):
     class Meta:
         ordering = ["-created_at"]
         verbose_name_plural = "treasury entries"
+class RevenueEntry(models.Model):
+    """Money the company earned, recorded by finance for the revenue report. Money moved into the master account is not revenue."""
+    SOURCES = [("recruiters", "Recruiter plans"), ("ads", "Advertising"), ("sponsorships", "Sponsorships"), ("services", "Services"), ("other", "Other")]
+    source = models.CharField(max_length=20, choices=SOURCES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    received_on = models.DateField()
+    reference = models.CharField(max_length=100, blank=True, help_text="Invoice number or bank reference")
+    note = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["-received_on", "-id"]
+        verbose_name_plural = "revenue entries"
 class FinanceAuditLog(models.Model):
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     action = models.CharField(max_length=60)

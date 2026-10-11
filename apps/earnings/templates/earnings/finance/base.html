@@ -4,6 +4,7 @@
 <a class="fin-brand" href="{% url 'finance:overview' %}"><span class="fin-brand-mark">{% icon "shield" 18 %}</span><span><b>MyProgress</b><small>Finance console</small></span></a>
 <nav class="fin-nav" aria-label="Finance">
 <a href="{% url 'finance:overview' %}"{% if active == 'overview' %} aria-current="page"{% endif %}>{% icon "pie-chart" 18 %}<span>Overview</span></a>
+<a href="{% url 'finance:revenue' %}"{% if active == 'revenue' %} aria-current="page"{% endif %}>{% icon "trending-up" 18 %}<span>Revenue</span></a>
 <a href="{% url 'finance:payouts' %}"{% if active == 'payouts' %} aria-current="page"{% endif %}>{% icon "send" 18 %}<span>Payments</span>{% if pending_count %}<em aria-label="{{ pending_count }} waiting">{{ pending_count }}</em>{% endif %}</a>
 <a href="{% url 'finance:treasury' %}"{% if active == 'treasury' %} aria-current="page"{% endif %}>{% icon "database" 18 %}<span>Master account</span></a>
 <a href="{% url 'finance:settings' %}"{% if active == 'settings' %} aria-current="page"{% endif %}>{% icon "sliders" 18 %}<span>Earning rules</span></a>
