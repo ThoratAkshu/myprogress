@@ -64,14 +64,23 @@ class ChannelPostForm(forms.ModelForm):
             raise forms.ValidationError("Study material needs a file or a link.")
         return cleaned
 class TaskForm(forms.ModelForm):
+    publish_at = forms.DateTimeField(required=False, label="Release later (optional)", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
     due_at = forms.DateTimeField(required=False, label="Due", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
     class Meta:
         model = Task
-        fields = ["title", "instructions", "due_at", "points", "group", "resource_link", "attachment"]
+        fields = ["title", "instructions", "due_at", "points", "group", "publish_at", "resource_link", "attachment"]
         labels = {"group": "Only for batch (optional)", "resource_link": "Reference link (optional)", "attachment": "Attachment (optional)"}
         widgets = {"instructions": forms.Textarea(attrs={"rows": 6, "placeholder": "What to build, how it will be checked, and what to submit."}), "title": forms.TextInput(attrs={"placeholder": "Build a REST API for a todo app"})}
     def clean_attachment(self):
         return check_size(self.cleaned_data.get("attachment"))
+    def clean(self):
+        cleaned = super().clean()
+        publish_at, due_at = cleaned.get("publish_at"), cleaned.get("due_at")
+        if publish_at and publish_at <= timezone.now():
+            self.add_error("publish_at", "Pick a time in the future, or leave it empty to set the task now.")
+        elif publish_at and due_at and due_at <= publish_at:
+            self.add_error("due_at", "The due date has to come after the task is released.")
+        return cleaned
     def clean_points(self):
         points = self.cleaned_data["points"]
         if not 1 <= points <= 1000:

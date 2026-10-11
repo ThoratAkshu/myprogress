@@ -22,7 +22,7 @@ from apps.core.models import ArticleImage, ContentView, LearningPost, PostCommen
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
 from apps.earnings.services import reverse_post_coins, sync_post_coins
 from apps.notifications.services import notify
-from apps.organizations.services import membership, notify_members, staff_organizations
+from apps.organizations.services import announce_lesson, membership, staff_organizations
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
@@ -35,8 +35,10 @@ def _display_name(user):
     return user.get_full_name() or getattr(getattr(user, "profile", None), "handle", None) or "A developer"
 def _visible_post(request, post_id):
     post = get_object_or_404(LearningPost.objects.select_related("author__profile", "project__repository"), pk=post_id)
-    if not post.is_public and post.author != request.user and not (post.organization_id and membership(post.organization, request.user)):
-        raise Http404
+    if not post.is_public and post.author != request.user:
+        member = membership(post.organization, request.user) if post.organization_id else None
+        if member is None or (not member.is_staff and post.publish_at and post.publish_at > timezone.now()):
+            raise Http404  # outsiders, and students before a scheduled lecture's release
     return post
 def record_post_view(request, post):
     """Count one view per browser session per day; the author's own views never count."""
@@ -102,17 +104,16 @@ def post_create_view(request):
         refresh_rank(request.user)
         coins = sync_post_coins(post)
         earned = f" You earned {coins} coins." if coins else ""
-        if post.organization_id:
-            _share_with_organization(request, post)
+        if post.organization_id and post.publish_at:
+            when = timezone.localtime(post.publish_at)
+            messages.success(request, f"Scheduled for {post.organization.name} on {when:%a} {when:%b} {when.day}, {when.strftime('%I:%M %p').lstrip('0')}. Students can't see it until then.")
+        elif post.organization_id:
+            announce_lesson(post, request.user)
             messages.success(request, f"Shared with {post.organization.name}. Only its members can see it.")
         else:
             messages.success(request, f"Published. Share the link so other developers can learn from it.{earned}" if post.is_public else "Saved as a private draft.")
         return _published(request, post)
     return render(request, "learning/post_form.html", _form_context(request, form))
-def _share_with_organization(request, post):
-    """Tell the organization's members a new lecture or set of notes is in their channel."""
-    label = "lecture" if post.kind == "video" else "notes"
-    notify_members(post.organization, request.user, f"New {label} in {post.organization.name}: {post.title}", reverse("learning:detail", args=[post.pk]))
 def _published(request, post):
     """Studio uploads run in the background and get the post's address as JSON, so the success message waits for that page."""
     url = reverse("learning:detail", args=[post.pk])
@@ -254,8 +255,11 @@ def post_edit_view(request, post_id):
     if request.method == "POST" and form.is_valid():
         post = form.save()
         place_post_files(post)
-        if post.organization_id and post.organization_id != shared_before:
-            _share_with_organization(request, post)
+        if post.organization_id != shared_before:
+            type(post).objects.filter(pk=post.pk).update(announced_at=None)
+            post.announced_at = None
+        if post.organization_id and post.announced_at is None and not (post.publish_at and post.publish_at > timezone.now()):
+            announce_lesson(post, request.user)
         _delete_replaced_files(post, form, previous)
         refresh_rank(request.user)
         coins = sync_post_coins(post)

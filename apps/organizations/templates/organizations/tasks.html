@@ -10,7 +10,7 @@
 </form></details>
 <section class="org-task-list">
 {% for task in tasks %}<a class="card org-task" href="{% url 'organizations:task' organization.slug task.pk %}">
-<div class="org-task-main"><b>{{ task.title }}</b><small>{% if task.due_at %}{% if task.due_at < now %}Closed {% else %}Due {% endif %}{{ task.due_at|date:"D, M j · g:i a" }}{% else %}No due date{% endif %} · {{ task.points }} points{% if task.group %} · {{ task.group }}{% endif %}</small></div>
+<div class="org-task-main"><b>{{ task.title }}{% if task.publish_at and task.publish_at > now %} <em class="org-pill submitted">Released {{ task.publish_at|date:"M j, g:i a" }}</em>{% endif %}</b><small>{% if task.due_at %}{% if task.due_at < now %}Closed {% else %}Due {% endif %}{{ task.due_at|date:"D, M j · g:i a" }}{% else %}No due date{% endif %} · {{ task.points }} points{% if task.group %} · {{ task.group }}{% endif %}</small></div>
 <div class="org-task-progress"><span><b>{{ task.submitted }}</b> of {{ task.assigned }} handed in</span><i class="org-meter"><i style="width:{{ task.percent }}%"></i></i></div>
 {% if task.waiting %}<em class="org-pill submitted">{{ task.waiting }} to review</em>{% else %}<em class="org-pill approved">{{ task.approved }} approved</em>{% endif %}
 </a>{% empty %}<section class="card org-empty">{% icon "check-circle" 28 %}<h2>No tasks yet</h2><p class="muted">Tasks take the place of projects for your students: set one above, and track who hands it in.</p></section>{% endfor %}

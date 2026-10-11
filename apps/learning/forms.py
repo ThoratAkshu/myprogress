@@ -1,5 +1,6 @@
 import subprocess
 from django import forms
+from django.utils import timezone
 from apps.organizations.services import staff_organizations
 from apps.core.git_service import list_branches
 from apps.core.models import LearningPost
@@ -7,12 +8,13 @@ from .media import MAX_THUMBNAIL_BYTES, validate_video_file
 from .timeline import clean_captions, clean_chapters
 MIN_ARTICLE_LENGTH = 200
 class LearningPostForm(forms.ModelForm):
+    publish_at = forms.DateTimeField(required=False, label="Release to students later (optional)", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
     kind = forms.ChoiceField(choices=[("article", "Article"), ("video", "Video")], widget=forms.RadioSelect)
     video_file = forms.FileField(required=False, validators=[validate_video_file], widget=forms.ClearableFileInput(attrs={"accept": "video/mp4,video/webm"}))
     thumbnail = forms.ImageField(required=False, widget=forms.ClearableFileInput(attrs={"accept": "image/*"}))
     class Meta:
         model = LearningPost
-        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "chapters", "captions", "video_url", "video_file", "thumbnail", "is_public", "organization"]
+        fields = ["title", "kind", "project", "branch", "summary", "body", "video_script", "chapters", "captions", "video_url", "video_file", "thumbnail", "is_public", "organization", "publish_at"]
         labels = {"project": "Project this explains", "video_script": "Video script", "video_url": "Or link a video (YouTube or any https URL)", "is_public": "Publish publicly", "organization": "Share only with my organization"}
         help_texts = {"project": "", "video_script": "", "chapters": "", "captions": ""}
         widgets = {"summary": forms.Textarea(attrs={"rows": 3, "placeholder": "One or two sentences on what readers will learn."}), "body": forms.Textarea(attrs={"rows": 18, "placeholder": "## The problem\n\n## How I built it\n\n## What I'd do differently"}), "title": forms.TextInput(attrs={"placeholder": "How I built ..."}), "chapters": forms.Textarea(attrs={"rows": 5, "placeholder": "0:00 Intro\n1:20 The data model\n4:05 Deploying"}), "captions": forms.Textarea(attrs={"rows": 6, "placeholder": "WEBVTT", "spellcheck": "false"}), "video_script": forms.Textarea(attrs={"rows": 12, "placeholder": "INTRO\nHi, I'm ... In this video I'll show how I built ...\n\nDEMO\n[SHOW: the running app]"})}
@@ -49,6 +51,11 @@ class LearningPostForm(forms.ModelForm):
         cleaned = super().clean()
         if cleaned.get("organization"):
             cleaned["is_public"] = False  # organization posts never appear publicly
+        publish_at = cleaned.get("publish_at")
+        if publish_at and not cleaned.get("organization"):
+            self.add_error("publish_at", "Scheduling is for posts shared with your organization.")
+        elif publish_at and publish_at <= timezone.now() and publish_at != getattr(self.instance, "publish_at", None):
+            self.add_error("publish_at", "Pick a time in the future, or leave it empty to share now.")
         project, branch = cleaned.get("project"), (cleaned.get("branch") or "").strip()
         cleaned["branch"] = branch
         if branch:

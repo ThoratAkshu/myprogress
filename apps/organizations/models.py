@@ -107,11 +107,15 @@ class Task(models.Model):
     group = models.CharField(max_length=60, blank=True, help_text="Only this batch gets it; empty means every student")
     resource_link = models.URLField(blank=True)
     attachment = models.FileField(upload_to=private_upload, blank=True, validators=[FileExtensionValidator(MATERIAL_EXTENSIONS)])
+    publish_at = models.DateTimeField(null=True, blank=True, help_text="Hidden from students until then; empty means straight away")
+    announced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-created_at"]
     def __str__(self):
         return self.title
+    def is_scheduled(self, now):
+        return bool(self.publish_at and self.publish_at > now)
     @property
     def attachment_name(self):
         return PurePosixPath(self.attachment.name).name if self.attachment else ""

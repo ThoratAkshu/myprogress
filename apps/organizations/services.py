@@ -106,9 +106,10 @@ def _streak(days, today):
         cursor -= timedelta(days=1)
     return streak
 def task_load(organization, member, tasks=None):
-    """The tasks a student has been given so far."""
+    """The tasks a student has been given so far; tasks waiting for their release time don't count yet."""
     tasks = tasks if tasks is not None else list(Task.objects.filter(organization=organization))
-    return [task for task in tasks if not task.group or task.group.lower() == member.group.lower()]
+    now = timezone.now()
+    return [task for task in tasks if (not task.group or task.group.lower() == member.group.lower()) and not task.is_scheduled(now)]
 def student_growth(organization, group="", query="", sort="score", users=None):
     """One row per student with their growth: built in a handful of queries, so it stays quick for hundreds of students."""
     members = list(students_of(organization, group))
@@ -346,5 +347,34 @@ def publish_due_posts():
     count = 0
     for post in due:
         announce_post(post)
+        count += 1
+    return count
+def released(items):
+    """Lectures or tasks students may see now: released straight away, or whose release time has come."""
+    return items.filter(Q(publish_at__isnull=True) | Q(publish_at__lte=timezone.now()))
+def tasks_for(organization, member):
+    tasks = visible_to(Task.objects.filter(organization=organization), member)
+    return tasks if member and member.is_staff else released(tasks)
+def lessons_for(organization, member):
+    lessons = LearningPost.objects.filter(organization=organization)
+    return lessons if member and member.is_staff else released(lessons)
+def announce_lesson(post, actor=None):
+    """Tell the organization's members a new lecture or set of notes is in their channel, once."""
+    label = "lecture" if post.kind == "video" else "notes"
+    notify_members(post.organization, actor or post.author, f"New {label} in {post.organization.name}: {post.title}", reverse("learning:detail", args=[post.pk]))
+    type(post).objects.filter(pk=post.pk).update(announced_at=timezone.now())
+def announce_task(task, actor=None):
+    when = timezone.localtime(task.due_at) if task.due_at else None
+    due = f", due {when:%b} {when.day}" if when else ""
+    notify_members(task.organization, actor or task.created_by, f"New task in {task.organization.name}: {task.title}{due}", reverse("organizations:task", args=[task.organization.slug, task.pk]), task.group)
+    Task.objects.filter(pk=task.pk).update(announced_at=timezone.now())
+def release_due_items():
+    """Announce lectures and tasks whose release time has come. Returns how many were released."""
+    now, count = timezone.now(), 0
+    for post in LearningPost.objects.filter(organization__isnull=False, publish_at__lte=now, announced_at__isnull=True).select_related("organization", "author"):
+        announce_lesson(post)
+        count += 1
+    for task in Task.objects.filter(publish_at__lte=now, announced_at__isnull=True).select_related("organization", "created_by"):
+        announce_task(task)
         count += 1
     return count

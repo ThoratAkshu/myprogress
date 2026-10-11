@@ -186,7 +186,7 @@ def _channel_items(organization, member, kind=""):
     the posts still waiting for their scheduled time, kept apart from what students can see."""
     now = timezone.now()
     posts = services.channel_posts_for(organization, member).select_related("author__profile")
-    lessons = LearningPost.objects.filter(organization=organization).select_related("author__profile").annotate(comment_count=Count("comments", distinct=True))
+    lessons = services.lessons_for(organization, member).select_related("author__profile").annotate(comment_count=Count("comments", distinct=True))
     if kind in {"announcement", "material"}:
         lessons = lessons.none()
         posts = posts.filter(kind=kind)
@@ -196,7 +196,10 @@ def _channel_items(organization, member, kind=""):
     posts = list(posts[:200])
     scheduled = sorted([{"type": "post", "item": post, "when": post.publish_at, "pinned": False} for post in posts if post.is_scheduled(now)], key=lambda entry: entry["when"])
     items = [{"type": "post", "item": post, "when": post.shown_at, "pinned": post.pinned} for post in posts if not post.is_scheduled(now)]
-    items += [{"type": "lesson", "item": lesson, "when": lesson.published_at, "pinned": False} for lesson in lessons[:200]]
+    lessons = list(lessons[:200])
+    scheduled += [{"type": "lesson", "item": lesson, "when": lesson.publish_at, "pinned": False} for lesson in lessons if lesson.publish_at and lesson.publish_at > now]
+    scheduled.sort(key=lambda entry: entry["when"])
+    items += [{"type": "lesson", "item": lesson, "when": lesson.publish_at or lesson.published_at, "pinned": False} for lesson in lessons if not (lesson.publish_at and lesson.publish_at > now)]
     items.sort(key=lambda entry: entry["when"], reverse=True)
     return scheduled, [entry for entry in items if entry["pinned"]], [entry for entry in items if not entry["pinned"]]
 @login_required(login_url="landing:home")
@@ -263,7 +266,7 @@ def channel_file_view(request, slug, post_id):
 @login_required(login_url="landing:home")
 def task_file_view(request, slug, task_id):
     organization, member = _organization(request, slug)
-    task = get_object_or_404(services.visible_to(Task.objects.filter(organization=organization), member), pk=task_id)
+    task = get_object_or_404(services.tasks_for(organization, member), pk=task_id)
     return _send_file(task.attachment)
 @login_required(login_url="landing:home")
 def submission_file_view(request, slug, submission_id):
@@ -284,11 +287,14 @@ def tasks_view(request, slug):
             task = form.save(commit=False)
             task.organization, task.created_by = organization, request.user
             task.save()
-            due = f", due {timezone.localtime(task.due_at):%b} {timezone.localtime(task.due_at).day}" if task.due_at else ""
-            services.notify_members(organization, request.user, f"New task in {organization.name}: {task.title}{due}", reverse("organizations:task", args=[slug, task.pk]), task.group)
-            messages.success(request, "Task created. Students have been told.")
+            if task.publish_at:
+                when = timezone.localtime(task.publish_at)
+                messages.success(request, f"Task scheduled. Students see it, and are told, on {when:%a} {when:%b} {when.day} at {when.strftime('%I:%M %p').lstrip('0')}.")
+            else:
+                services.announce_task(task, request.user)
+                messages.success(request, "Task created. Students have been told.")
             return redirect("organizations:task", slug=slug, task_id=task.pk)
-    tasks = list(services.visible_to(Task.objects.filter(organization=organization), member).annotate(submitted=Count("submissions"), approved=Count("submissions", filter=Q(submissions__status="approved")), waiting=Count("submissions", filter=Q(submissions__status="submitted"))))
+    tasks = list(services.tasks_for(organization, member).annotate(submitted=Count("submissions"), approved=Count("submissions", filter=Q(submissions__status="approved")), waiting=Count("submissions", filter=Q(submissions__status="submitted"))))
     now = timezone.now()
     if member.is_staff:
         students = list(services.students_of(organization))
@@ -304,7 +310,7 @@ def tasks_view(request, slug):
 @login_required(login_url="landing:home")
 def task_detail_view(request, slug, task_id):
     organization, member = _organization(request, slug)
-    task = get_object_or_404(services.visible_to(Task.objects.filter(organization=organization), member), pk=task_id)
+    task = get_object_or_404(services.tasks_for(organization, member), pk=task_id)
     context = {"task": task, "instructions": render_article(task.instructions), "now": timezone.now()}
     if member.is_staff:
         students = [student for student in services.students_of(organization) if not task.group or student.group.lower() == task.group.lower()]
@@ -610,3 +616,25 @@ def channel_publish_view(request, slug, post_id):
         services.announce_post(post, request.user)
         messages.success(request, f"Published {post.title}.")
     return redirect("organizations:channel", slug=slug)
+@login_required(login_url="landing:home")
+@require_POST
+def release_now_view(request, slug, kind, item_id):
+    """Release a scheduled lecture or task straight away."""
+    organization, member = _organization(request, slug, staff=True)
+    now = timezone.now()
+    if kind == "lesson":
+        item = get_object_or_404(LearningPost, pk=item_id, organization=organization)
+        if item.announced_at is None:
+            LearningPost.objects.filter(pk=item.pk).update(publish_at=now)
+            services.announce_lesson(item, request.user)
+        target = reverse("organizations:channel", args=[slug])
+    elif kind == "task":
+        item = get_object_or_404(Task, pk=item_id, organization=organization)
+        if item.announced_at is None:
+            Task.objects.filter(pk=item.pk).update(publish_at=now)
+            services.announce_task(item, request.user)
+        target = reverse("organizations:task", args=[slug, item.pk])
+    else:
+        raise Http404
+    messages.success(request, f"Released {item.title}. Members have been told.")
+    return redirect(target)

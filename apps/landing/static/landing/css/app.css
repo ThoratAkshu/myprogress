@@ -1272,3 +1272,9 @@ a.org-item-title:hover{color:var(--violet)}
 .org-scheduled .org-item{border-style:dashed;background:var(--canvas)}
 .org-scheduled h3{color:#92400e}
 .org-item-meta .org-pill{display:inline-flex;align-items:center;gap:4px}
+/* Organizations: scheduled lectures and tasks */
+.org-scheduled-note{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;border:1px dashed #fcd34d;border-radius:12px;background:#fffbeb;color:#92400e;font-size:14px}
+.org-scheduled-note span{flex:1}
+.org-scheduled-note form{margin:0}
+.org-task-main b .org-pill{margin-left:6px;vertical-align:1px}
+.org-share.form-grid{align-items:start}

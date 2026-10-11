@@ -59,6 +59,8 @@ class LearningPost(models.Model):
     chapters = models.TextField(blank=True, help_text="One chapter per line, like 1:20 The data model")
     captions = models.TextField(blank=True, help_text="WebVTT captions for the video")
     organization = models.ForeignKey("organizations.Organization", on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_posts", help_text="Shared only with this organization's members")
+    publish_at = models.DateTimeField(null=True, blank=True, help_text="Organization posts stay hidden from students until then")
+    announced_at = models.DateTimeField(null=True, blank=True, help_text="When the organization's members were told about it")
     body = models.TextField(blank=True)
     views = models.PositiveIntegerField(default=0)
     earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
