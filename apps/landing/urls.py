@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 from apps.common.ratelimit import rate_limit
-from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, dismiss_verification_banner_view, health_view, search_view, project_detail_view
+from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, dismiss_verification_banner_view, health_view, search_view, project_detail_view, search_suggest_view
 app_name = "landing"
 urlpatterns = [
     path("", LandingPageView.as_view(), name="home"),
@@ -31,6 +31,7 @@ urlpatterns = [
     path("account/reset/done/", auth_views.PasswordResetCompleteView.as_view(template_name="landing/password_reset_complete.html"), name="password_reset_complete"),
     path("healthz", health_view, name="health"),
     path("search/", search_view, name="search"),
+    path("search/suggest/", search_suggest_view, name="search_suggest"),
     path("git/<int:owner_id>/<slug:slug>.git", git_http_view, {"service_path": ""}, name="git_root"),
     path("git/<int:owner_id>/<slug:slug>.git/<path:service_path>", git_http_view, name="git_http"),
 ]

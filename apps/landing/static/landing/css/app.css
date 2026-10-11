@@ -654,7 +654,8 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 @media(max-width:860px){.network-layout{grid-template-columns:minmax(0,1fr)}.network-side{position:static}.network-nav{display:flex;overflow-x:auto}.network-nav a{flex:none}.network-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.network-search-row{flex-direction:column}.people-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}}
 /* Pill-shaped search boxes show focus on the whole box, never as a second box around the text field */
-.app-search input,.toolbar-search input,.network-search-box input{height:100%;margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+.app-search input,.toolbar-search input,.network-search-box input{margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+.network-search-box input{height:100%}
 .app-search input:focus,.app-search input:focus-visible,.toolbar-search input:focus,.toolbar-search input:focus-visible,.network-search-box input:focus,.network-search-box input:focus-visible{outline:none;box-shadow:none}
 .app-search:focus-within{box-shadow:0 0 0 3px var(--violet-soft)}
 .network-filters input{margin:0}
@@ -755,3 +756,22 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 @media(max-width:1100px){.standing{grid-template-columns:minmax(0,1fr) auto}.standing-goals{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr))}.rankings-layout{grid-template-columns:minmax(0,1fr)}.rankings-side{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.standing{grid-template-columns:minmax(0,1fr);justify-items:center;padding:20px;text-align:center}.standing-move{justify-content:center}.standing-goals{width:100%;grid-template-columns:minmax(0,1fr);text-align:left}.rankings-side{grid-template-columns:minmax(0,1fr)}.ranking-row{grid-template-columns:28px 36px minmax(0,1fr) 40px 44px;gap:8px;padding:10px 12px}.ranking-lang{display:none}.ranking-score>i{display:none}.ranking-row .avatar{width:36px;height:36px}.podium{gap:6px;padding:22px 8px 0}.podium .avatar-lg{width:52px;height:52px;font-size:16px}.podium-1 .avatar-lg{width:64px;height:64px}}
 @media(prefers-reduced-motion:reduce){.ring-value{transition:none}}
+/* Header search: a clear, roomy box with a "/" hint and instant results */
+.app-search{position:relative;height:40px;width:320px;padding:0 8px 0 12px;border:1px solid var(--search-border);border-radius:10px;transition:width .2s ease,background-color .15s,border-color .15s,box-shadow .15s}
+.app-search>.icon{flex:none}
+.app-search input{height:100%;font-size:14px}
+.app-search:focus-within{width:440px;border-color:var(--violet);box-shadow:0 0 0 3px rgba(56,189,248,.28)}
+.app-search-key{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border:1px solid var(--search-border);border-radius:6px;color:var(--header-muted);font:600 12px/1 ui-monospace,Consolas,monospace}
+.app-search:focus-within .app-search-key,.app-search.has-text .app-search-key{display:none}
+.search-suggest{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;max-height:min(70vh,520px);padding:6px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);box-shadow:0 18px 40px rgba(15,23,42,.2)}
+.search-suggest-heading{margin:8px 10px 4px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.search-suggest-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--ink);text-decoration:none}
+.search-suggest-item:hover,.search-suggest-all:hover{background:var(--canvas)}
+.search-suggest-item.is-active,.search-suggest-all.is-active{background:var(--violet-soft);box-shadow:inset 3px 0 0 var(--violet)}
+.search-suggest-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--violet-soft);color:var(--violet);flex:none}
+.search-suggest-text{display:grid;min-width:0}
+.search-suggest-text b{overflow:hidden;font-size:14px;text-overflow:ellipsis;white-space:nowrap}
+.search-suggest-text small{overflow:hidden;color:var(--muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.search-suggest-all{display:block;margin-top:4px;padding:10px;border-top:1px solid var(--line);border-radius:0 0 8px 8px;color:var(--violet);font-size:13px;font-weight:700;text-decoration:none}
+@media(max-width:1180px){.app-search:focus-within{width:340px}}
+@media(max-width:780px){.app-search,.app-search:focus-within{width:auto;flex:1}.app-search-key{display:none}}

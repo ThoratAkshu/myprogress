@@ -33,6 +33,7 @@ from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioVie
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import IntegrityError
+from apps.common.templatetags.ui import avatar_tone, initials
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
@@ -589,9 +590,8 @@ def health_view(request):
     healthy = all(value == "ok" for value in checks.values())
     return JsonResponse({"status": "ok" if healthy else "error", **checks}, status=200 if healthy else 503)
 SEARCH_TYPES = {"people": "People", "repositories": "Repositories", "posts": "Posts"}
-def search_view(request):
-    query = request.GET.get("q", "").strip()[:100]
-    kind = request.GET.get("type") if request.GET.get("type") in SEARCH_TYPES else "all"
+def _search(query):
+    """People, public repositories, and public posts matching every word of the query."""
     people, repositories, posts = Profile.objects.none(), Repository.objects.none(), LearningPost.objects.none()
     if query:
         people = Profile.objects.select_related("user")
@@ -602,6 +602,21 @@ def search_view(request):
             repositories = repositories.filter(Q(slug__icontains=term) | Q(project__title__icontains=term) | Q(project__summary__icontains=term) | Q(owner__profile__handle__icontains=term))
             posts = posts.filter(Q(title__icontains=term) | Q(summary__icontains=term) | Q(body__icontains=term))
         people, repositories, posts = people.order_by("-score", "handle"), repositories.order_by("-updated_at"), posts.order_by("-published_at")
+    return people, repositories, posts
+@rate_limit("search-suggest", 120, 60, per="ip", methods=("GET",))
+def search_suggest_view(request):
+    """Instant results for the header search box, as you type."""
+    query = request.GET.get("q", "").strip()[:100]
+    people, repositories, posts = _search(query if len(query) >= 2 else "")
+    return JsonResponse({
+        "people": [{"name": profile.user.get_full_name() or profile.handle, "detail": profile.headline or profile.location or f"@{profile.handle}", "url": reverse("landing:public_profile", args=[profile.handle]), "initials": initials(profile.user), "tone": avatar_tone(profile.user)} for profile in people[:4]],
+        "repositories": [{"name": f"{repository.owner.profile.handle}/{repository.slug}", "detail": (repository.project.summary or "")[:90], "url": reverse("landing:repository", args=[repository.pk]), "language": next(iter(repository.languages or {}), "")} for repository in repositories[:3]],
+        "posts": [{"name": post.title, "detail": f"{post.get_kind_display()} by {post.author.get_full_name() or post.author.profile.handle}", "url": reverse("learning:detail", args=[post.pk]), "kind": post.kind} for post in posts[:3]],
+    })
+def search_view(request):
+    query = request.GET.get("q", "").strip()[:100]
+    kind = request.GET.get("type") if request.GET.get("type") in SEARCH_TYPES else "all"
+    people, repositories, posts = _search(query)
     limit = 20 if kind != "all" else 5
     following = set(request.user.following_relationships.values_list("following_id", flat=True)) if request.user.is_authenticated else set()
     context = {"section": "search", "search_query": query, "kind": kind, "types": SEARCH_TYPES, "counts": {"people": people.count(), "repositories": repositories.count(), "posts": posts.count()}, "people": people[:limit] if kind in {"all", "people"} else [], "repositories": repositories[:limit] if kind in {"all", "repositories"} else [], "posts": posts[:limit] if kind in {"all", "posts"} else [], "following": following}
