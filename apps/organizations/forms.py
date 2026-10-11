@@ -45,13 +45,19 @@ class MemberForm(forms.ModelForm):
         if not can_change_role:
             del self.fields["role"]
 class ChannelPostForm(forms.ModelForm):
+    publish_at = forms.DateTimeField(required=False, label="Publish later (optional)", widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"), input_formats=["%Y-%m-%dT%H:%M"])
     class Meta:
         model = ChannelPost
-        fields = ["kind", "title", "body", "file", "link", "group", "pinned"]
+        fields = ["kind", "title", "body", "file", "link", "group", "publish_at", "pinned"]
         labels = {"kind": "Type", "body": "Message", "file": "File (PDF, slides, notes, code… up to 25 MB)", "link": "Link (optional)", "group": "Only for batch (optional)", "pinned": "Pin to the top"}
         widgets = {"body": forms.Textarea(attrs={"rows": 4, "placeholder": "Today's lecture covers…"}), "title": forms.TextInput(attrs={"placeholder": "Week 3 notes: SQL joins"})}
     def clean_file(self):
         return check_size(self.cleaned_data.get("file"))
+    def clean_publish_at(self):
+        publish_at = self.cleaned_data.get("publish_at")
+        if publish_at and publish_at <= timezone.now():
+            raise forms.ValidationError("Pick a time in the future, or leave it empty to post now.")
+        return publish_at
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("kind") == "material" and not cleaned.get("file") and not cleaned.get("link"):

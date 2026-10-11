@@ -77,9 +77,16 @@ class ChannelPost(models.Model):
     link = models.URLField(blank=True)
     group = models.CharField(max_length=60, blank=True, help_text="Only this batch sees it; empty means everyone")
     pinned = models.BooleanField(default=False)
+    publish_at = models.DateTimeField(null=True, blank=True, help_text="Hidden from students until then; empty means straight away")
+    notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["-pinned", "-created_at"]
+    @property
+    def shown_at(self):
+        return self.publish_at or self.created_at
+    def is_scheduled(self, now):
+        return bool(self.publish_at and self.publish_at > now)
     @property
     def file_name(self):
         return PurePosixPath(self.file.name).name if self.file else ""

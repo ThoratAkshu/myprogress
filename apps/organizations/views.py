@@ -182,8 +182,10 @@ def leave_view(request, slug):
     return redirect("organizations:home")
 
 def _channel_items(organization, member, kind=""):
-    """Announcements, study material, and lectures and notes shared from the studio, newest first."""
-    posts = services.visible_to(ChannelPost.objects.filter(organization=organization).select_related("author__profile"), member)
+    """Announcements, study material, and lectures and notes shared from the studio, newest first. Teachers also get
+    the posts still waiting for their scheduled time, kept apart from what students can see."""
+    now = timezone.now()
+    posts = services.channel_posts_for(organization, member).select_related("author__profile")
     lessons = LearningPost.objects.filter(organization=organization).select_related("author__profile").annotate(comment_count=Count("comments", distinct=True))
     if kind in {"announcement", "material"}:
         lessons = lessons.none()
@@ -191,10 +193,12 @@ def _channel_items(organization, member, kind=""):
     elif kind in {"video", "article"}:
         posts = posts.none()
         lessons = lessons.filter(kind=kind)
-    items = [{"type": "post", "item": post, "when": post.created_at, "pinned": post.pinned} for post in posts[:200]]
+    posts = list(posts[:200])
+    scheduled = sorted([{"type": "post", "item": post, "when": post.publish_at, "pinned": False} for post in posts if post.is_scheduled(now)], key=lambda entry: entry["when"])
+    items = [{"type": "post", "item": post, "when": post.shown_at, "pinned": post.pinned} for post in posts if not post.is_scheduled(now)]
     items += [{"type": "lesson", "item": lesson, "when": lesson.published_at, "pinned": False} for lesson in lessons[:200]]
     items.sort(key=lambda entry: entry["when"], reverse=True)
-    return [entry for entry in items if entry["pinned"]], [entry for entry in items if not entry["pinned"]]
+    return scheduled, [entry for entry in items if entry["pinned"]], [entry for entry in items if not entry["pinned"]]
 @login_required(login_url="landing:home")
 def channel_view(request, slug):
     organization, member = _organization(request, slug)
@@ -207,10 +211,14 @@ def channel_view(request, slug):
             post = form.save(commit=False)
             post.organization, post.author = organization, request.user
             post.save()
-            services.notify_members(organization, request.user, f"{organization.name}: {post.title}", f"{services.channel_url(organization)}#post-{post.pk}", post.group)
-            messages.success(request, "Posted to the channel.")
+            if post.publish_at:
+                when = timezone.localtime(post.publish_at)
+                messages.success(request, f"Scheduled for {when:%a} {when:%b} {when.day}, {when.strftime('%I:%M %p').lstrip('0')}. Students can't see it until then.")
+            else:
+                services.announce_post(post, request.user)
+                messages.success(request, "Posted to the channel.")
             return redirect("organizations:channel", slug=slug)
-    pinned, items = _channel_items(organization, member, kind)
+    scheduled, pinned, items = _channel_items(organization, member, kind)
     page = Paginator(items, 20).get_page(request.GET.get("page"))
     today = timezone.localdate()
     def day_label(entry):
@@ -226,7 +234,7 @@ def channel_view(request, slug):
     watched = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
     return _render(request, "channel.html", organization, member, "channel", {
         "shared_with": member.parents.filter(revoked_at__isnull=True) if not member.is_staff else [],
-        "next_class": services.next_class(organization, member), "now": timezone.now(), "form": form, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
+        "next_class": services.next_class(organization, member), "now": timezone.now(), "form": form, "scheduled": scheduled, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
         "member_count": Membership.objects.filter(organization=organization, status="active").count(),
     })
 @login_required(login_url="landing:home")
@@ -250,7 +258,7 @@ def _send_file(field):
 @login_required(login_url="landing:home")
 def channel_file_view(request, slug, post_id):
     organization, member = _organization(request, slug)
-    post = get_object_or_404(services.visible_to(ChannelPost.objects.filter(organization=organization), member), pk=post_id)
+    post = get_object_or_404(services.channel_posts_for(organization, member), pk=post_id)
     return _send_file(post.file)
 @login_required(login_url="landing:home")
 def task_file_view(request, slug, task_id):
@@ -590,3 +598,15 @@ def import_template_view(request, slug):
     response = HttpResponse("email,name,batch,role\nasha@example.com,Asha Rao,Batch A 2026,student\nravi@example.com,Ravi Kumar,Batch A 2026,student\nteacher@example.com,Meera Joshi,,teacher\n", content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="students-template.csv"'
     return response
+@login_required(login_url="landing:home")
+@require_POST
+def channel_publish_view(request, slug, post_id):
+    """Publish a scheduled post straight away."""
+    organization, member = _organization(request, slug, staff=True)
+    post = get_object_or_404(ChannelPost, pk=post_id, organization=organization)
+    if post.notified_at is None:
+        post.publish_at = timezone.now()
+        post.save(update_fields=["publish_at"])
+        services.announce_post(post, request.user)
+        messages.success(request, f"Published {post.title}.")
+    return redirect("organizations:channel", slug=slug)

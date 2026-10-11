@@ -19,6 +19,7 @@ urlpatterns = [
     path("<slug:slug>/leave/", views.leave_view, name="leave"),
     path("<slug:slug>/channel/", views.channel_view, name="channel"),
     path("<slug:slug>/channel/<int:post_id>/delete/", views.channel_delete_view, name="channel_delete"),
+    path("<slug:slug>/channel/<int:post_id>/publish/", views.channel_publish_view, name="channel_publish"),
     path("<slug:slug>/channel/<int:post_id>/file/", views.channel_file_view, name="channel_file"),
     path("<slug:slug>/tasks/", views.tasks_view, name="tasks"),
     path("<slug:slug>/tasks/<int:task_id>/", views.task_detail_view, name="task"),

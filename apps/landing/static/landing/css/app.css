@@ -911,6 +911,7 @@ body.app .rank-banner,body.app .network-hero,body.app .earnings-hero{background:
 .org-page{display:grid;gap:16px}
 .org-page .card+.card{margin-top:0}
 .org-page input,.org-page select,.org-page textarea{margin-top:0;margin-bottom:0}
+.org-page label{margin:0}
 .org-page .card{padding:18px 20px}
 .org-page .card h2{margin:0 0 8px;font-size:17px}
 .button.danger{background:#dc2626;color:#fff;border-color:#dc2626}
@@ -1267,3 +1268,7 @@ a.org-item-title:hover{color:var(--violet)}
 .org-import-actions{margin-top:14px}
 .org-import-actions form{margin:0}
 @media(max-width:860px){.org-tr.import{grid-template-columns:40px 1fr 1fr}.org-tr.import>span:nth-child(3),.org-tr.import>span:nth-child(4){display:none}}
+/* Organizations: scheduled channel posts */
+.org-scheduled .org-item{border-style:dashed;background:var(--canvas)}
+.org-scheduled h3{color:#92400e}
+.org-item-meta .org-pill{display:inline-flex;align-items:center;gap:4px}

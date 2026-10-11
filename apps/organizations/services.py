@@ -173,7 +173,7 @@ def overview(organization):
         "to_review": Submission.objects.filter(task__organization=organization, status="submitted").select_related("student__profile", "task")[:6],
         "to_review_count": Submission.objects.filter(task__organization=organization, status="submitted").count(),
         "pending": Membership.objects.filter(organization=organization, status="pending").count(),
-        "posts_week": ChannelPost.objects.filter(organization=organization, created_at__gte=week_ago).count() + LearningPost.objects.filter(organization=organization, published_at__gte=week_ago).count(),
+        "posts_week": published(ChannelPost.objects.filter(organization=organization, created_at__gte=week_ago)).count() + LearningPost.objects.filter(organization=organization, published_at__gte=week_ago).count(),
         "top": rows[:5], "quiet": [row for row in rows if not row["last_active"] or row["last_active"] < week_ago][:5],
         "upcoming": Task.objects.filter(organization=organization, due_at__gte=timezone.now()).order_by("due_at")[:5],
     }
@@ -185,7 +185,7 @@ def student_summary(user):
         given = task_load(organization, member)
         submitted = set(Submission.objects.filter(task__organization=organization, student=user).values_list("task_id", flat=True))
         open_tasks = sorted([task for task in given if task.id not in submitted], key=lambda task: (task.due_at is None, task.due_at or timezone.now()))
-        latest = visible_to(ChannelPost.objects.filter(organization=organization), member).first()
+        latest = channel_posts_for(organization, member).first()
         summary.append({"organization": organization, "member": member, "open_tasks": open_tasks[:3], "open_count": len(open_tasks), "latest": latest, "next_class": next_class(organization, member)})
     return summary
 
@@ -329,3 +329,22 @@ def invite_rows(organization, actor, rows, send):
         created.append(invite)
         invited.add(row["email"])
     return created
+def published(posts):
+    """Channel posts students may see now: posted straight away, or whose scheduled time has come."""
+    return posts.filter(Q(publish_at__isnull=True) | Q(publish_at__lte=timezone.now()))
+def channel_posts_for(organization, member):
+    posts = visible_to(ChannelPost.objects.filter(organization=organization), member)
+    return posts if member and member.is_staff else published(posts)
+def announce_post(post, actor=None):
+    """Tell members about a channel post, once."""
+    notify_members(post.organization, actor or post.author, f"{post.organization.name}: {post.title}", f"{channel_url(post.organization)}#post-{post.pk}", post.group)
+    post.notified_at = timezone.now()
+    post.save(update_fields=["notified_at"])
+def publish_due_posts():
+    """Announce scheduled posts whose time has come. Returns how many were published."""
+    due = ChannelPost.objects.filter(publish_at__lte=timezone.now(), notified_at__isnull=True).select_related("organization", "author")
+    count = 0
+    for post in due:
+        announce_post(post)
+        count += 1
+    return count
