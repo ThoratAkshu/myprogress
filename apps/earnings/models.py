@@ -2,6 +2,7 @@
 from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 class EarningSettings(models.Model):
     """The earning rules, editable from the finance console. There is only ever one row."""
     program_enabled = models.BooleanField(default=True, help_text="Turn earning on or off for everyone")
@@ -103,18 +104,51 @@ class PayoutRequest(models.Model):
     @property
     def net_amount(self):
         return self.amount - self.tds_amount
+class CompanyAccount(models.Model):
+    """The business behind the master account: its legal details and the bank account creator money is kept in. Only ever one row."""
+    ACCOUNT_TYPES = [("current", "Current account"), ("savings", "Savings account")]
+    business_name = models.CharField(max_length=150, blank=True, help_text="Registered name of the business")
+    pan = models.CharField(max_length=10, blank=True, help_text="Business PAN")
+    gstin = models.CharField(max_length=15, blank=True)
+    billing_email = models.EmailField(blank=True)
+    address = models.CharField(max_length=300, blank=True)
+    account_holder = models.CharField(max_length=150, blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
+    account_number = models.CharField(max_length=18, blank=True)
+    ifsc = models.CharField(max_length=11, blank=True)
+    branch = models.CharField(max_length=100, blank=True)
+    account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPES, default="current")
+    upi_id = models.CharField(max_length=100, blank=True, help_text="UPI ID linked to this account, for quick top-ups")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    class Meta:
+        verbose_name_plural = "company account"
+    @classmethod
+    def current(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+    @property
+    def is_set_up(self):
+        return bool(self.business_name and self.account_number and self.ifsc)
+    @property
+    def masked_account(self):
+        return f"••••{self.account_number[-4:]}" if self.account_number else ""
 class TreasuryEntry(models.Model):
     """The master account: money the owner adds, takes back, or pays out to creators."""
     KINDS = [("deposit", "Money added"), ("withdrawal", "Money taken out"), ("payout", "Creator payout"), ("tax", "Tax paid to government")]
+    METHODS = [("neft", "NEFT / RTGS"), ("imps", "IMPS"), ("upi", "UPI"), ("cheque", "Cheque"), ("cash", "Cash deposit")]
+    SOURCES = [("founders", "Founders' own money"), ("investors", "Investors"), ("revenue", "Business revenue"), ("loan", "Loan"), ("other", "Other")]
     kind = models.CharField(max_length=20, choices=KINDS)
     amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="Always positive; the kind decides the direction")
+    entry_date = models.DateField(default=timezone.localdate, help_text="When the money actually moved")
+    method = models.CharField(max_length=10, choices=METHODS, blank=True)
+    source = models.CharField(max_length=10, choices=SOURCES, blank=True, help_text="Where added money came from")
     reference = models.CharField(max_length=100, blank=True)
     note = models.CharField(max_length=200, blank=True)
     payout = models.OneToOneField(PayoutRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name="treasury_entry")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-entry_date", "-created_at"]
         verbose_name_plural = "treasury entries"
 class RevenueEntry(models.Model):
     """Money the company earned, recorded by finance for the revenue report. Money moved into the master account is not revenue."""

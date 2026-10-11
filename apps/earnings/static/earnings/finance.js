@@ -6,6 +6,21 @@
     });
   });
 
+  // Dialogs: open from a button, close from Cancel, the close button, or a click outside; reopen after a save with errors.
+  document.querySelectorAll("[data-open-dialog]").forEach(button => button.addEventListener("click", () => document.getElementById(button.dataset.openDialog)?.showModal()));
+  document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => button.closest("dialog")?.close()));
+  document.querySelectorAll("dialog.fin-dialog").forEach(dialog => dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close(); }));
+  document.querySelector("dialog[data-open-on-load]")?.showModal();
+  document.querySelectorAll("[data-copy]").forEach(button => button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = "Copied";
+      setTimeout(() => { button.textContent = "Copy"; }, 1500);
+    } catch {
+      button.textContent = "Select and copy";
+    }
+  }));
+
   const form = document.querySelector("[data-rules-form]");
   if (!form) return;
   const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 2 });

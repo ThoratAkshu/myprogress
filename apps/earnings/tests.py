@@ -19,7 +19,7 @@ from apps.core.models import EarningTransaction, LearningPost
 from apps.notifications.models import Notification
 from . import services
 from . import reports
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
+from .models import CoinTransaction, CompanyAccount, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
 from .reports import months_back
 from .payouts import ProviderError, RazorpayX, get_provider
 from .views import FINANCE_SESSION_KEY
@@ -170,6 +170,10 @@ class FakeProvider:
         return {"id": f"pout_{payout.pk}", "status": self.status, "utr": ""}
     def fetch(self, provider_payout_id):
         return {"id": provider_payout_id, "status": "processed", "utr": "UTR777", "reason": ""}
+def money(kind, **fields):
+    """Form data for one of the master account dialogs."""
+    data = {"amount": "1000", "entry_date": timezone.localdate().isoformat(), "method": "neft", "source": "founders", "reference": "", "note": "", **fields}
+    return {"form_kind": kind, **{f"{kind}-{key}": value for key, value in data.items()}}
 class PaymentCycleTests(TestCase):
     """Monthly payments like YouTube's: close on the 1st, pay on payment day, hold when details are missing."""
     def setUp(self):
@@ -445,9 +449,9 @@ class FinanceConsoleTests(TestCase):
         self.assertTrue(FinanceAuditLog.objects.filter(action="rules_changed", details__contains="follower_goal 100 → 50").exists())
         self.assertContains(self.client.post(reverse("finance:settings"), {**rules, "follower_goal": "0"}), "Must be at least 1.")
         self.assertContains(self.client.post(reverse("finance:settings"), {**rules, "payout_day": "31"}), "Pick a day from 1 to 28")
-        self.client.post(reverse("finance:treasury"), {"kind": "deposit", "amount": "500", "reference": "NEFT1", "note": "October budget"})
+        self.client.post(reverse("finance:treasury"), money("deposit", amount="500", reference="NEFT1", note="October budget"))
         self.assertEqual(services.treasury_balance(), Decimal("500"))
-        self.assertContains(self.client.post(reverse("finance:treasury"), {"kind": "withdrawal", "amount": "900", "reference": "", "note": ""}), "only holds ₹500")
+        self.assertContains(self.client.post(reverse("finance:treasury"), money("withdrawal", amount="900", note="Office rent")), "only holds ₹500")
         EarningSettings.objects.update(follower_goal=1, follower_bonus=0)
         add_followers(self.creator, 1)
         services.refresh_creator(self.creator)
@@ -564,3 +568,53 @@ class RevenueReportTests(TestCase):
         self.assertContains(self.client.get(reverse("finance:overview")), "Revenue this month")
         self.client.logout()
         self.assertEqual(self.client.get(reverse("finance:revenue")).status_code, 302)
+class MasterAccountTests(TestCase):
+    """Company bank details, and adding money, taking it out, and paying tax from the master account page."""
+    def setUp(self):
+        cache.clear()
+        self.owner = make_user("owner@example.com", "Own", "Er", is_staff=True, is_superuser=True)
+        self.client.post(reverse("finance:login"), {"email": self.owner.email, "password": PASSWORD})
+    def company(self, **changes):
+        data = {"business_name": "MyProgress Technologies Private Limited", "pan": "aaacm1234q", "gstin": "27aaacm1234q1z5", "billing_email": "accounts@myprogress.example", "address": "Pune, Maharashtra", "account_holder": "MyProgress Technologies Pvt Ltd", "bank_name": "HDFC Bank", "account_number": "50200012345678", "account_number_confirm": "50200012345678", "ifsc": "hdfc0000123", "branch": "Baner", "account_type": "current", "upi_id": "myprogress@hdfcbank", **changes}
+        return self.client.post(reverse("finance:company_account"), data, follow=True)
+    def test_owner_sets_up_the_company_account(self):
+        page = self.client.get(reverse("finance:treasury"))
+        self.assertContains(page, "Set up your company account")
+        self.assertContains(page, "Add your company account first")
+        self.assertContains(self.company(pan="12345"), "A PAN looks like ABCDE1234F.")
+        self.assertContains(self.company(account_number_confirm="50200012345679"), "The account numbers don&#x27;t match.")
+        self.assertContains(self.company(ifsc="HDFC123"), "An IFSC looks like HDFC0001234.")
+        self.assertFalse(CompanyAccount.current().is_set_up)
+        page = self.company()
+        self.assertContains(page, "Company account saved.")
+        self.assertContains(page, "HDFC Bank · Current account ••••5678 · IFSC HDFC0000123")
+        self.assertContains(page, "AAACM1234Q")
+        self.assertContains(page, "50200012345678")  # shown in the Add money dialog so the owner knows where to send money
+        self.assertNotContains(self.client.get(reverse("finance:company_account")), "50200012345678")  # but never put back in the edit form
+        self.company(account_number="", account_number_confirm="", branch="Hinjewadi")
+        company = CompanyAccount.current()
+        self.assertEqual((company.account_number, company.branch, company.updated_by), ("50200012345678", "Hinjewadi", self.owner))
+        log = FinanceAuditLog.objects.filter(action="company_account_changed").order_by("created_at").first()
+        self.assertIn("••••5678", log.details)
+        self.assertNotIn("50200012345678", log.details)
+    def test_add_money_take_it_out_and_pay_tax(self):
+        page = self.client.post(reverse("finance:treasury"), money("deposit", amount="5000", method="imps", source="investors", reference="UTR123"), follow=True)
+        self.assertContains(page, "Added ₹5,000 to the master account.")
+        entry = TreasuryEntry.objects.get()
+        self.assertEqual((entry.kind, entry.method, entry.source, entry.reference, entry.entry_date), ("deposit", "imps", "investors", "UTR123", timezone.localdate()))
+        self.assertContains(page, "Investors · IMPS")
+        self.assertTrue(FinanceAuditLog.objects.filter(action="treasury_deposit", details__contains="Investors · IMPS · UTR123").exists())
+        self.assertContains(self.client.post(reverse("finance:treasury"), money("deposit", source="")), "This field is required.")
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        self.assertContains(self.client.post(reverse("finance:treasury"), money("deposit", entry_date=tomorrow.isoformat())), "Record money once it has moved")
+        page = self.client.post(reverse("finance:treasury"), money("withdrawal", amount="1500", note=""))
+        self.assertContains(page, "data-open-on-load")
+        self.assertContains(self.client.post(reverse("finance:treasury"), money("withdrawal", amount="1500", note="Office rent"), follow=True), "Took ₹1,500 out of the master account.")
+        self.assertContains(self.client.post(reverse("finance:treasury"), money("tax", amount="20", method="", reference="")), "This field is required.")
+        self.client.post(reverse("finance:treasury"), money("tax", amount="20", method="", reference="CIN-998877", note="TDS for October 2026"))
+        self.assertEqual(services.treasury_balance(), Decimal("3480"))
+        self.assertEqual(TreasuryEntry.objects.filter(kind="tax").get().reference, "CIN-998877")
+        filtered = self.client.get(reverse("finance:treasury"), {"kind": "tax"})
+        self.assertContains(filtered, "CIN-998877")
+        self.assertNotContains(filtered, "UTR123")
+

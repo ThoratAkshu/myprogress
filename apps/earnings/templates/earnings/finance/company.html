@@ -1,0 +1,38 @@
+{% extends "earnings/finance/base.html" %}{% load ui money %}
+{% block title %}Company account{% endblock %}
+{% block heading %}Company account{% endblock %}
+{% block subheading %}The business and bank account behind the master account. Only finance staff can see this.{% endblock %}
+{% block content %}
+<a class="fin-back" href="{% url 'finance:treasury' %}">{% icon "chevron-right" 14 %}Master account</a>
+<div class="fin-grid wide-left">
+<form method="post" class="fin-card fin-settings" novalidate>{% csrf_token %}
+{% for error in form.non_field_errors %}<p class="fin-flash error">{{ error }}</p>{% endfor %}
+<fieldset><legend>Business</legend><div class="fin-form two">
+<label class="span"><span>{{ form.business_name.label }}<span class="fin-req" aria-hidden="true">*</span></span>{{ form.business_name }}<small>As registered, for example "MyProgress Technologies Private Limited".</small>{% for error in form.business_name.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.pan.label }}{{ form.pan }}{% for error in form.pan.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.gstin.label }}{{ form.gstin }}<small>Leave empty if you aren't registered for GST.</small>{% for error in form.gstin.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.billing_email.label|capfirst }}{{ form.billing_email }}{% for error in form.billing_email.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.address.label|capfirst }}{{ form.address }}{% for error in form.address.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+</div></fieldset>
+<fieldset><legend>Bank account (the master account)</legend><div class="fin-form two">
+<label><span>{{ form.account_holder.label }}<span class="fin-req" aria-hidden="true">*</span></span>{{ form.account_holder }}{% for error in form.account_holder.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label><span>{{ form.bank_name.label|capfirst }}<span class="fin-req" aria-hidden="true">*</span></span>{{ form.bank_name }}{% for error in form.bank_name.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label><span>{{ form.account_number.label }}<span class="fin-req" aria-hidden="true">*</span></span>{{ form.account_number }}{% if company.account_number %}<small>Leave empty to keep the saved number.</small>{% endif %}{% for error in form.account_number.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.account_number_confirm.label }}{{ form.account_number_confirm }}{% for error in form.account_number_confirm.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label><span>{{ form.ifsc.label }}<span class="fin-req" aria-hidden="true">*</span></span>{{ form.ifsc }}{% for error in form.ifsc.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.branch.label|capfirst }}{{ form.branch }}{% for error in form.branch.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.account_type.label|capfirst }}{{ form.account_type }}{% for error in form.account_type.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.upi_id.label }}{{ form.upi_id }}<small>Linked to this account, for quick top-ups.</small>{% for error in form.upi_id.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>
+</div></fieldset>
+<div class="fin-form-foot"><button class="fin-btn primary">Save company account</button>{% if company.updated_by %}<small class="fin-muted">Last changed {{ company.updated_at|timesince }} ago by {{ company.updated_by.email }}</small>{% endif %}</div>
+</form>
+<aside class="fin-card fin-guide"><div class="fin-card-head"><h2>Good to know</h2></div>
+<ol>
+<li><b>Use a current account in the business's name.</b> Keeping creator money apart from personal money makes tax and audits simple.</li>
+<li><b>This doesn't connect to your bank.</b> MyProgress never moves money in or out of this account by itself. You transfer money, then record it on the Master account page.</li>
+<li><b>Payout provider</b> {% if provider %}{{ provider.name }} is connected (account {{ provider_account }}). Top up its balance from this account so payment day has enough to send.{% else %}Not connected, so payments are sent by hand. Add RazorpayX keys to the server settings to pay creators automatically.{% endif %}</li>
+<li><b>Changes are audited.</b> Every edit is recorded in the audit log, with the account number masked.</li>
+</ol>
+</aside>
+</div>
+{% endblock %}

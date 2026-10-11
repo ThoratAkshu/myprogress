@@ -1,36 +1,73 @@
 {% extends "earnings/finance/base.html" %}{% load ui money %}
 {% block title %}Master account{% endblock %}
 {% block heading %}Master account{% endblock %}
-{% block subheading %}The company money that pays creators. Record every top-up and withdrawal so this matches your bank.{% endblock %}
+{% block subheading %}The company bank account that pays creators. Record every top-up and withdrawal so this matches your bank statement.{% endblock %}
 {% block content %}
+{% if company.is_set_up %}
+<section class="fin-company">
+<span class="fin-company-mark">{% icon "database" 20 %}</span>
+<div class="fin-company-main"><small>Company account</small><b>{{ company.business_name }}</b><span>{{ company.bank_name }} · {{ company.get_account_type_display }} {{ company.masked_account }} · IFSC {{ company.ifsc }}{% if company.branch %} · {{ company.branch }}{% endif %}</span></div>
+<dl class="fin-company-facts"><div><dt>PAN</dt><dd>{{ company.pan|default:"—" }}</dd></div><div><dt>GSTIN</dt><dd>{{ company.gstin|default:"—" }}</dd></div><div><dt>UPI</dt><dd>{{ company.upi_id|default:"—" }}</dd></div></dl>
+<a class="fin-btn ghost" href="{% url 'finance:company_account' %}">{% icon "edit" 16 %}Edit details</a>
+</section>
+{% else %}
+<section class="fin-company is-empty">
+<span class="fin-company-mark">{% icon "database" 20 %}</span>
+<div class="fin-company-main"><b>Set up your company account</b><span>Add the business name, PAN, GSTIN, and the bank account creator money is kept in. It shows here and on the Add money form, so you always know where to send money.</span></div>
+<a class="fin-btn primary" href="{% url 'finance:company_account' %}">{% icon "plus" 16 %}Add company details</a>
+</section>
+{% endif %}
+
 <section class="fin-kpis">
 <article class="fin-kpi feature"><span class="fin-kpi-icon">{% icon "database" 18 %}</span><small>Balance</small><strong>{{ balance|inr }}</strong><p>Added {{ totals.deposit|default:0|inr }} · taken out {{ totals.withdrawal|default:0|inr }} · paid {{ totals.payout|default:0|inr }} · tax {{ totals.tax|default:0|inr }}</p></article>
-<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "credit-card" 18 %}</span><small>Owed to creators</small><strong>{{ owed|inr }}</strong><p>What creators could withdraw today</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon amber">{% icon "credit-card" 18 %}</span><small>Owed to creators</small><strong>{{ owed|inr }}</strong><p>Balances plus payments not yet sent</p></article>
 <article class="fin-kpi"><span class="fin-kpi-icon {% if balance >= owed %}green{% else %}red{% endif %}">{% icon "shield" 18 %}</span><small>{% if balance >= owed %}Covered{% else %}Short{% endif %}</small><strong>{% if balance >= owed %}Yes{% else %}{{ shortfall|inr }}{% endif %}</strong><p>{% if balance >= owed %}The balance covers everything owed.{% else %}Add money to cover every balance.{% endif %}</p></article>
-<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "file-text" 18 %}</span><small>Tax to pay the government</small><strong>{{ tax_due|inr }}</strong><p>Held back from creator payments. Record it here once paid.</p></article>
+<article class="fin-kpi"><span class="fin-kpi-icon violet">{% icon "file-text" 18 %}</span><small>Tax to pay the government</small><strong>{{ tax_due|inr }}</strong><p>Held back from creator payments</p></article>
 </section>
-<div class="fin-grid wide-left">
-<section class="fin-card"><div class="fin-card-head"><h2>Record money in or out</h2></div>
-<form method="post" class="fin-form two">{% csrf_token %}
-{% for field in form %}<label{% if field.name == 'note' %} class="span"{% endif %}>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
-{% for error in form.non_field_errors %}<small class="fin-error span">{{ error }}</small>{% endfor %}
-<div class="span"><button class="fin-btn primary">Save entry</button></div>
-</form>
+
+<section class="fin-actions" aria-label="Master account actions">
+<button class="fin-action add" type="button" data-open-dialog="money-deposit"><span>{% icon "plus" 20 %}</span><div><b>Add money</b><small>Record money you put into the company account</small></div></button>
+<button class="fin-action out" type="button" data-open-dialog="money-withdrawal"><span>{% icon "arrow-up-right" 20 %}</span><div><b>Take money out</b><small>Move money out for other company use</small></div></button>
+<button class="fin-action tax" type="button" data-open-dialog="money-tax"><span>{% icon "file-text" 20 %}</span><div><b>Pay tax</b><small>{% if tax_due > 0 %}{{ tax_due|inr }} is waiting to be paid{% else %}Nothing held back right now{% endif %}</small></div></button>
 </section>
-<section class="fin-card fin-guide"><div class="fin-card-head"><h2>Setting up the master account</h2></div>
-<ol>
-<li><b>Open a company current account.</b> Keep creator money in a bank account in the business's name, separate from personal money. This is the master account.</li>
-<li><b>Add a payout provider when volume grows.</b> RazorpayX, Cashfree Payouts, and similar services let you top up a payout balance from that account and send money to UPI IDs in bulk. Add the keys to the server settings and payment day sends everything for you.</li>
-<li><b>Until then, pay by hand.</b> Send each withdrawal from net banking or UPI, then mark it paid here with the UTR.</li>
-<li><b>Check tax rules before going live.</b> Paying creators can mean collecting PAN and deducting tax at source. Set the rate under Earning rules, pay what's held back to the government, and record it here as "Tax paid to government". Ask a chartered accountant what applies to your business.</li>
-<li><b>Reconcile monthly.</b> The balance here should match the bank statement for the money you set aside.</li>
-</ol>
-</section>
-</div>
-<section class="fin-card flush"><div class="fin-card-head pad"><h2>Ledger</h2></div>
-<div class="fin-table" role="table" aria-label="Master account ledger"><div class="fin-tr head" role="row"><span role="columnheader">Date</span><span role="columnheader">Type</span><span role="columnheader">Amount</span><span role="columnheader">Reference</span><span role="columnheader">Note</span><span role="columnheader">By</span></div>
-{% for entry in page %}<div class="fin-tr" role="row"><span role="cell">{{ entry.created_at|date:"M j, Y" }}</span><span role="cell"><em class="fin-pill {% if entry.kind == 'deposit' %}green{% elif entry.kind == 'payout' %}violet{% elif entry.kind == 'tax' %}red{% else %}amber{% endif %}">{{ entry.get_kind_display }}</em></span><span role="cell" class="{% if entry.kind == 'deposit' %}plus{% else %}minus{% endif %}">{% if entry.kind == 'deposit' %}+{% else %}−{% endif %}{{ entry.amount|inr }}</span><span role="cell">{{ entry.reference|default:"—" }}</span><span role="cell">{{ entry.note|default:"—" }}</span><span role="cell">{{ entry.created_by.email|default:"—" }}</span></div>
-{% empty %}<p class="fin-empty pad">No entries yet. Start by recording the money you've put in the master account.</p>{% endfor %}
+
+<section class="fin-card flush"><div class="fin-card-head pad"><h2>Ledger</h2>
+<nav class="fin-tabs small" aria-label="Filter ledger"><a href="?"{% if not kind %} aria-current="page"{% endif %}>All</a>{% for value, label in kinds %}<a href="?kind={{ value }}"{% if kind == value %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav></div>
+<div class="fin-table" role="table" aria-label="Master account ledger"><div class="fin-tr head ledger" role="row"><span role="columnheader">Date</span><span role="columnheader">Type</span><span role="columnheader">Amount</span><span role="columnheader">Details</span><span role="columnheader">Reference</span><span role="columnheader">By</span></div>
+{% for entry in page %}<div class="fin-tr ledger" role="row"><span role="cell">{{ entry.entry_date|date:"M j, Y" }}</span><span role="cell"><em class="fin-pill {% if entry.kind == 'deposit' %}green{% elif entry.kind == 'payout' %}violet{% elif entry.kind == 'tax' %}red{% else %}amber{% endif %}">{{ entry.get_kind_display }}</em></span><span role="cell" class="{% if entry.kind == 'deposit' %}plus{% else %}minus{% endif %}"><b>{% if entry.kind == 'deposit' %}+{% else %}−{% endif %}{{ entry.amount|inr }}</b></span><span role="cell">{% if entry.source %}{{ entry.get_source_display }}{% endif %}{% if entry.source and entry.method %} · {% endif %}{% if entry.method %}{{ entry.get_method_display }}{% endif %}{% if entry.note %}<small class="fin-muted">{{ entry.note }}</small>{% endif %}{% if not entry.source and not entry.method and not entry.note %}—{% endif %}</span><span role="cell">{{ entry.reference|default:"—" }}</span><span role="cell">{{ entry.created_by.email|default:"Automatic" }}</span></div>
+{% empty %}<p class="fin-empty pad">{% if kind %}Nothing of this type yet.{% else %}No entries yet. Press Add money to record what you've put into the company account.{% endif %}</p>{% endfor %}
 </div></section>
-{% include "earnings/finance/_pager.html" %}
+{% include "earnings/finance/_pager.html" with extra=pager_extra %}
+
+<details class="fin-card fin-guide"><summary><h2>How to run the master account</h2></summary>
+<ol>
+<li><b>Open a company current account.</b> Keep creator money in a bank account in the business's name, separate from personal money, and add its details above.</li>
+<li><b>Add money, then record it.</b> Transfer money into that account by NEFT, IMPS or UPI, then press Add money with the UTR so the balance here matches your bank.</li>
+<li><b>Add a payout provider when volume grows.</b> RazorpayX and similar services let you top up a payout balance from this account and pay creators automatically on payment day.</li>
+<li><b>Pay tax that's held back.</b> If you deduct tax from creator payments, pay it to the government and record it with Pay tax and the challan number. Ask a chartered accountant what applies to your business.</li>
+<li><b>Reconcile monthly.</b> Compare this ledger with the bank statement and record anything missing.</li>
+</ol>
+</details>
+
+{% for key, form in forms.items %}
+<dialog class="fin-dialog" id="money-{{ key }}"{% if open_dialog == key %} data-open-on-load{% endif %} aria-labelledby="money-{{ key }}-title">
+<form method="post" class="fin-form two" novalidate>{% csrf_token %}<input type="hidden" name="form_kind" value="{{ key }}">
+<div class="fin-dialog-head span"><div><span class="fin-kicker">{% if key == 'deposit' %}MONEY IN{% elif key == 'withdrawal' %}MONEY OUT{% else %}TAX{% endif %}</span><h2 id="money-{{ key }}-title">{% if key == 'deposit' %}Add money{% elif key == 'withdrawal' %}Take money out{% else %}Pay tax to the government{% endif %}</h2>
+<p class="fin-muted">{% if key == 'deposit' %}First send the money to the company account, then record it here with the bank reference.{% elif key == 'withdrawal' %}The master account holds {{ balance|inr }}. Money for creators should stay in it.{% else %}{% if tax_due > 0 %}{{ tax_due|inr }} has been held back from creator payments.{% endif %} Record the payment with its challan number.{% endif %}</p></div>
+<button class="fin-dialog-close" type="button" data-close-dialog aria-label="Close">{% icon "x" 18 %}</button></div>
+{% if key == 'deposit' %}{% if company.is_set_up %}<div class="fin-transfer span"><small>Send money to</small>
+<dl>
+<div><dt>Account holder</dt><dd>{{ company.account_holder }}</dd></div>
+<div><dt>Account number</dt><dd><span>{{ company.account_number }}</span><button type="button" class="fin-copy" data-copy="{{ company.account_number }}">Copy</button></dd></div>
+<div><dt>IFSC</dt><dd><span>{{ company.ifsc }}</span><button type="button" class="fin-copy" data-copy="{{ company.ifsc }}">Copy</button></dd></div>
+<div><dt>Bank</dt><dd>{{ company.bank_name }}{% if company.branch %}, {{ company.branch }}{% endif %}</dd></div>
+{% if company.upi_id %}<div><dt>UPI</dt><dd><span>{{ company.upi_id }}</span><button type="button" class="fin-copy" data-copy="{{ company.upi_id }}">Copy</button></dd></div>{% endif %}
+</dl></div>
+{% else %}<div class="fin-alert span">{% icon "info" 18 %}<div><b>Add your company account first</b><span>Then its bank details show here, so you know where to send money.</span></div><a class="fin-btn ghost" href="{% url 'finance:company_account' %}">Add details</a></div>{% endif %}{% endif %}
+{% for field in form %}<label{% if field.name == 'note' %} class="span"{% endif %}><span>{{ field.label }}{% if field.field.required %}<span class="fin-req" aria-hidden="true">*</span>{% endif %}</span>{{ field }}{% for error in field.errors %}<small class="fin-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
+{% for error in form.non_field_errors %}<small class="fin-error span">{{ error }}</small>{% endfor %}
+<div class="fin-dialog-actions span"><button class="fin-btn ghost" type="button" data-close-dialog>Cancel</button><button class="fin-btn primary">{% if key == 'deposit' %}Add money{% elif key == 'withdrawal' %}Take money out{% else %}Record tax payment{% endif %}</button></div>
+</form>
+</dialog>
+{% endfor %}
 {% endblock %}

@@ -5,6 +5,7 @@ import time
 from datetime import date
 from functools import wraps
 from urllib.parse import urlencode
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -25,8 +26,8 @@ from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit
 from apps.core.models import EarningTransaction
 from apps.notifications.services import notify
 from . import services
-from .forms import AdjustmentForm, EarningSettingsForm, PaymentDetailsForm, RevenueEntryForm, TreasuryEntryForm
-from .models import CoinTransaction, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
+from .forms import AdjustmentForm, CompanyAccountForm, EarningSettingsForm, PaymentDetailsForm, RevenueEntryForm, TreasuryEntryForm
+from .models import CoinTransaction, CompanyAccount, CreatorAccount, EarningSettings, FinanceAuditLog, PaymentRun, PayoutRequest, RevenueEntry, TreasuryEntry
 from .payouts import get_provider, valid_webhook
 from .reports import PERIODS, revenue_report
 FINANCE_SESSION_KEY = "finance_unlocked_at"
@@ -124,7 +125,7 @@ def overview_view(request):
     for back in range(5, -1, -1):
         year, month = divmod(month_start.year * 12 + month_start.month - 1 - back, 12)
         start = date(year, month + 1, 1)
-        entries = TreasuryEntry.objects.filter(created_at__date__gte=start, created_at__date__lt=services.next_month(start))
+        entries = TreasuryEntry.objects.filter(entry_date__gte=start, entry_date__lt=services.next_month(start))
         months.append({"label": start.strftime("%b"), "deposits": entries.filter(kind="deposit").aggregate(total=Sum("amount"))["total"] or 0, "payouts": entries.filter(kind="payout").aggregate(total=Sum("amount"))["total"] or 0})
     peak = max([max(item["deposits"], item["payouts"]) for item in months] + [1])
     for item in months:
@@ -291,23 +292,50 @@ def revenue_csv_view(request):
     services.log(request.user, "exported", f"Downloaded the revenue report for {report['label']}")
     return response
 
+TREASURY_MESSAGES = {"deposit": "Added {amount} to the master account.", "withdrawal": "Took {amount} out of the master account.", "tax": "Recorded a tax payment of {amount}."}
 @finance_required
 def treasury_view(request):
-    form = TreasuryEntryForm(request.POST or None)
-    balance = services.treasury_balance()
-    if request.method == "POST" and form.is_valid():
-        entry = form.save(commit=False)
-        if entry.kind in {"withdrawal", "tax"} and entry.amount > balance:
+    """The master account: the company's bank account details, money added and taken out, and the full ledger."""
+    balance, tax_due = services.treasury_balance(), services.tax_to_deposit()
+    posted = request.POST.get("form_kind") if request.method == "POST" and request.POST.get("form_kind") in TreasuryEntryForm.KINDS else None
+    forms = {kind: TreasuryEntryForm(request.POST if kind == posted else None, kind=kind, initial={"amount": tax_due} if kind == "tax" and tax_due > 0 else {}) for kind in ["deposit", "withdrawal", "tax"]}
+    if posted and forms[posted].is_valid():
+        form = forms[posted]
+        if posted != "deposit" and form.cleaned_data["amount"] > balance:
             form.add_error("amount", f"The master account only holds {services.rupees(balance)}.")
         else:
+            entry = form.save(commit=False)
             entry.created_by = request.user
             entry.save()
-            services.log(request.user, f"treasury_{entry.kind}", f"{entry.get_kind_display()}: {services.rupees(entry.amount)} {entry.reference}".strip())
-            messages.success(request, f"{'Added' if entry.kind == 'deposit' else 'Recorded tax payment of' if entry.kind == 'tax' else 'Took out'} {services.rupees(entry.amount)}.")
+            detail = " · ".join(part for part in [entry.get_source_display() if entry.source else "", entry.get_method_display() if entry.method else "", entry.reference] if part)
+            services.log(request.user, f"treasury_{entry.kind}", f"{entry.get_kind_display()}: {services.rupees(entry.amount)} on {entry.entry_date:%b} {entry.entry_date.day}, {entry.entry_date.year}{' (' + detail + ')' if detail else ''}")
+            messages.success(request, TREASURY_MESSAGES[entry.kind].format(amount=services.rupees(entry.amount)))
             return redirect("finance:treasury")
-    totals = TreasuryEntry.objects.values("kind").annotate(total=Sum("amount"))
+    kind = request.GET.get("kind") if request.GET.get("kind") in dict(TreasuryEntry.KINDS) else ""
+    entries = TreasuryEntry.objects.select_related("created_by", "payout__user")
+    totals = {row["kind"]: row["total"] for row in TreasuryEntry.objects.values("kind").annotate(total=Sum("amount"))}
     owed = services.owed_to_creators()
-    return _render(request, "treasury.html", "treasury", {"form": form, "balance": balance, "owed": owed, "shortfall": max(owed - balance, 0), "tax_due": services.tax_to_deposit(), "totals": {row["kind"]: row["total"] for row in totals}, "page": Paginator(TreasuryEntry.objects.select_related("created_by", "payout__user"), 25).get_page(request.GET.get("page"))})
+    return _render(request, "treasury.html", "treasury", {
+        "forms": forms, "open_dialog": posted, "company": CompanyAccount.current(), "balance": balance, "owed": owed, "shortfall": max(owed - balance, 0), "tax_due": tax_due, "totals": totals,
+        "kind": kind, "kinds": TreasuryEntry.KINDS, "page": Paginator(entries.filter(kind=kind) if kind else entries, 25).get_page(request.GET.get("page")), "pager_extra": urlencode({"kind": kind}) if kind else "",
+    })
+@finance_required
+def company_account_view(request):
+    """Where the owner sets up the business and bank account behind the master account."""
+    company = CompanyAccount.current()
+    before = {"name": company.business_name, "bank": f"{company.bank_name} {company.masked_account} {company.ifsc}".strip(), "pan": company.pan, "gstin": company.gstin, "upi": company.upi_id}
+    form = CompanyAccountForm(request.POST or None, instance=company)
+    if request.method == "POST" and form.is_valid():
+        company = form.save(commit=False)
+        company.updated_by = request.user
+        company.save()
+        after = {"name": company.business_name, "bank": f"{company.bank_name} {company.masked_account} {company.ifsc}".strip(), "pan": company.pan, "gstin": company.gstin, "upi": company.upi_id}
+        changes = [f"{key} {before[key] or 'empty'} → {after[key] or 'empty'}" for key in after if before[key] != after[key]]
+        services.log(request.user, "company_account_changed", "; ".join(changes) or "Saved without changes")
+        messages.success(request, "Company account saved.")
+        return redirect("finance:treasury")
+    provider = get_provider()
+    return _render(request, "company.html", "treasury", {"form": form, "company": company, "provider": provider, "provider_account": f"••••{settings.RAZORPAYX_ACCOUNT_NUMBER[-4:]}" if provider else ""})
 
 @finance_required
 def settings_view(request):
