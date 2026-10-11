@@ -73,6 +73,15 @@ class LearningPost(models.Model):
     @property
     def reading_minutes(self):
         return max(1, round(len(self.body.split()) / 200))
+class RankSnapshot(models.Model):
+    """A developer's rank and score on one day, so the leaderboard can show who climbed this week."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rank_snapshots")
+    day = models.DateField()
+    rank = models.PositiveIntegerField()
+    score = models.PositiveIntegerField()
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "day"], name="unique_daily_rank_snapshot")]
+        indexes = [models.Index(fields=["day"])]
 class ArticleImage(models.Model):
     """An image an author uploaded to use inside their articles."""
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="article_images")

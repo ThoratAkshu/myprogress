@@ -13,18 +13,28 @@ def complete_daily_step(user, step):
 def active_coding_days(user, days=90):
     since = timezone.now() - timedelta(days=days)
     return len({timezone.localdate(value) for value in ActivityEvent.objects.filter(user=user, action__in=CODE_ACTIONS, created_at__gte=since).values_list("created_at", flat=True)})
-def score_breakdown(user):
-    """Score only work that leaves evidence: pushed code, published content, and a complete profile. Logins and button clicks never count."""
+def progress_facts(user):
+    """The counts the score and achievements are built from."""
     projects = list(user.projects.select_related("repository"))
     verified = [project for project in projects if project.has_verified_code]
     shipped = sum(1 for project in verified if project.status == "complete")
-    building = len(verified) - shipped
-    coding_days = active_coding_days(user)
-    post_count = user.learning_posts.filter(is_public=True).count()
-    unique_views = ContentView.objects.filter(post__author=user, post__is_public=True, viewer__isnull=False).exclude(viewer=user).values("post", "viewer").distinct().count()
-    followers = user.follower_relationships.count()
     profile = Profile.objects.filter(user=user).first()
     profile_checks = [bool(profile and profile.headline), bool(profile and profile.bio), bool(profile and profile.skills), bool(profile and profile.location), any(project.is_public for project in projects)]
+    return {
+        "shipped": shipped,
+        "building": len(verified) - shipped,
+        "coding_days": active_coding_days(user),
+        "posts": user.learning_posts.filter(is_public=True).count(),
+        "readers": ContentView.objects.filter(post__author=user, post__is_public=True, viewer__isnull=False).exclude(viewer=user).values("post", "viewer").distinct().count(),
+        "followers": user.follower_relationships.count(),
+        "profile_sections": sum(profile_checks),
+        "pushed_code": ActivityEvent.objects.filter(user=user, action__in=CODE_ACTIONS).exists(),
+    }
+def score_breakdown(user, facts=None):
+    """Score only work that leaves evidence: pushed code, published content, and a complete profile. Logins and button clicks never count."""
+    facts = facts or progress_facts(user)
+    shipped, building, coding_days, post_count, unique_views, followers = facts["shipped"], facts["building"], facts["coding_days"], facts["posts"], facts["readers"], facts["followers"]
+    profile_checks = [True] * facts["profile_sections"]
     components = [
         {"key": "shipped", "label": "Verified shipped work", "points": min(shipped * 12 + building * 4, 35), "max": 35, "detail": f"{shipped} shipped and {building} in progress with pushed code", "hint": "Push code to a project repository, then complete its milestones."},
         {"key": "consistency", "label": "Coding consistency", "points": min(coding_days, 25), "max": 25, "detail": f"{coding_days} active coding day{'s' if coding_days != 1 else ''} in the last 90", "hint": "Push commits on more days rather than more commits on one day."},
@@ -51,6 +61,57 @@ def leaderboard(language=None, limit=25):
     if language:
         profiles = profiles.filter(user__repositories__languages__has_key=language).distinct()
     return profiles.order_by("-score", "user__date_joined")[:limit]
+def coding_streak(user):
+    """Consecutive days with pushed code, ending today (or yesterday, so the streak survives until tonight)."""
+    days = {timezone.localdate(value) for value in ActivityEvent.objects.filter(user=user, action__in=CODE_ACTIONS, created_at__gte=timezone.now() - timedelta(days=400)).values_list("created_at", flat=True)}
+    cursor = timezone.localdate()
+    if cursor not in days:
+        cursor -= timedelta(days=1)
+    streak = 0
+    while cursor in days:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+def record_rank_snapshots(day=None, replace=False):
+    """Save today's rank and score for every ranked developer, for weekly movement. `replace` rewrites today's."""
+    from .models import RankSnapshot
+    day = day or timezone.localdate()
+    if replace:
+        RankSnapshot.objects.filter(day=day).delete()
+    existing = set(RankSnapshot.objects.filter(day=day).values_list("user_id", flat=True))
+    missing = Profile.objects.filter(role="developer", score__gt=0, rank__isnull=False).exclude(user_id__in=existing).values_list("user_id", "rank", "score")
+    RankSnapshot.objects.bulk_create([RankSnapshot(user_id=user_id, day=day, rank=rank, score=score) for user_id, rank, score in missing], ignore_conflicts=True)
+def weekly_movement(user_ids, days=7):
+    """{user_id: {"rank": places climbed (negative if dropped), "score": points gained}} against about a week ago."""
+    from .models import RankSnapshot
+    today = timezone.localdate()
+    earliest = {}
+    for snapshot in RankSnapshot.objects.filter(user_id__in=user_ids, day__gte=today - timedelta(days=days), day__lt=today).order_by("day"):
+        earliest.setdefault(snapshot.user_id, snapshot)
+    current = dict(Profile.objects.filter(user_id__in=list(earliest)).values_list("user_id", "rank"))
+    scores = dict(Profile.objects.filter(user_id__in=list(earliest)).values_list("user_id", "score"))
+    return {user_id: {"rank": snapshot.rank - (current.get(user_id) or snapshot.rank), "score": (scores.get(user_id) or 0) - snapshot.score} for user_id, snapshot in earliest.items()}
+ACHIEVEMENTS = [
+    ("first_push", "First push", "Push code to a MyProgress repository.", "git-commit", "pushed_code", 1),
+    ("on_a_roll", "On a roll", "Push code on 7 different days in 90 days.", "zap", "coding_days", 7),
+    ("marathon", "Marathon coder", "Push code on 30 different days in 90 days.", "activity", "coding_days", 30),
+    ("shipper", "Shipper", "Ship a project with verified code.", "check-circle", "shipped", 1),
+    ("serial_shipper", "Serial shipper", "Ship 3 projects with verified code.", "box", "shipped", 3),
+    ("teacher", "Teacher", "Publish your first learning post.", "book-open", "posts", 1),
+    ("mentor", "Mentor", "Publish 5 learning posts.", "award", "posts", 5),
+    ("audience", "Audience", "Reach 50 signed-in readers.", "eye", "readers", 50),
+    ("rising_voice", "Rising voice", "Get 10 followers.", "users", "followers", 10),
+    ("all_set", "All set", "Complete all 5 profile sections.", "user", "profile_sections", 5),
+    ("top_ten", "Top 10", "Reach the global top 10.", "trending-up", "top_ten", 1),
+]
+def achievements(facts, profile):
+    """Badges earned from real work, with progress toward the ones still locked."""
+    values = {**facts, "pushed_code": int(facts["pushed_code"]), "top_ten": int(bool(profile.score and profile.rank and profile.rank <= 10))}
+    badges = []
+    for key, title, description, icon, fact, goal in ACHIEVEMENTS:
+        value = min(values[fact], goal)
+        badges.append({"key": key, "title": title, "description": description, "icon": icon, "earned": value >= goal, "value": value, "goal": goal, "percent": round(value * 100 / goal)})
+    return badges
 def platform_languages():
     totals = {}
     for languages in Repository.objects.filter(owner__profile__role="developer", owner__profile__recruiter_visible=True).values_list("languages", flat=True):

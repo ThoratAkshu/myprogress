@@ -90,6 +90,65 @@ class ScoringTests(TestCase):
         self.assertContains(page, "Top Python developers")
         self.assertContains(page, "Py Dev")
         self.assertNotContains(page, "Hid Den")
+class RankingsPageTests(TestCase):
+    def setUp(self):
+        self.me = make_developer("me@example.com", "Mira", "Kapoor", location="Pune, India")
+        self.leo = make_developer("leo@example.com", "Leo", "Fernandes", location="Goa")
+        self.asha = make_developer("asha@example.com", "Asha", "Rao", location="Pune")
+        self.zed = make_developer("zed@example.com", "Zed", "Shah", location="Delhi")
+        add_project(self.me, "Mine", status="building", languages={"Python": 10})
+        add_project(self.leo, "Leo app", status="complete", languages={"Go": 10})
+        add_project(self.asha, "Asha app", status="complete", languages={"Python": 10})
+        add_project(self.asha, "Asha two", status="complete", languages={"Python": 10})
+        add_project(self.zed, "Zed app", status="building", languages={"Rust": 10})
+        for days_ago in [0, 1, 2]:
+            push_on(self.me, days_ago)
+        push_on(self.me, 5)
+        Follow.objects.create(follower=self.me, following=self.leo)
+        call_command("refresh_scores", stdout=StringIO())
+        self.url = reverse("landing:workspace_section", args=["rankings"])
+        self.client.force_login(self.me)
+    def test_standing_shows_rank_streak_weekly_change_and_next_target(self):
+        from apps.core.models import RankSnapshot
+        from apps.core.services import coding_streak
+        self.assertEqual(coding_streak(self.me), 3)
+        me = Profile.objects.get(user=self.me)
+        RankSnapshot.objects.create(user=self.me, day=timezone.localdate() - timedelta(days=5), rank=me.rank + 2, score=max(me.score - 4, 0))
+        page = self.client.get(self.url)
+        self.assertContains(page, f"#{me.rank}")
+        self.assertContains(page, "Up 2 places this week")
+        self.assertContains(page, "+4 this week")
+        self.assertContains(page, "3-day coding streak")
+        above = Profile.objects.filter(role="developer", score__gt=me.score).order_by("score").first()
+        self.assertContains(page, f"{above.score - me.score + 1} point")
+        self.assertContains(page, "Fastest way up")
+        self.assertContains(page, "of 11 earned")
+        self.assertContains(page, "First push")
+        self.assertTrue(RankSnapshot.objects.filter(user=self.leo, day=timezone.localdate()).exists())
+    def test_scopes_compare_with_people_you_follow_your_city_and_this_weeks_climbers(self):
+        from apps.core.models import RankSnapshot
+        following = self.client.get(self.url, {"scope": "following"})
+        names = [entry.user for entry in [*following.context["podium"], *following.context["leaderboard"]]]
+        self.assertEqual(set(names), {self.me, self.leo})
+        nearby = self.client.get(self.url, {"scope": "nearby"})
+        self.assertEqual({entry.user for entry in [*nearby.context["podium"], *nearby.context["leaderboard"]]}, {self.me, self.asha})
+        self.assertContains(nearby, "Top developers in Pune")
+        zed = Profile.objects.get(user=self.zed)
+        RankSnapshot.objects.create(user=self.zed, day=timezone.localdate() - timedelta(days=3), rank=zed.rank + 3, score=zed.score)
+        rising = self.client.get(self.url, {"scope": "rising"})
+        self.assertEqual([entry.user for entry in rising.context["leaderboard"]], [self.zed])
+        self.assertContains(rising, "▲ 3")
+        overall = self.client.get(self.url)
+        self.assertEqual(len(overall.context["podium"]), 3)
+        self.assertEqual([entry.is_me for entry in overall.context["podium"]], [False, False, True])
+        self.assertContains(overall, 'class="podium-3 is-me"')
+    def test_recruiters_see_the_leaderboard_without_a_personal_standing(self):
+        recruiter = make_developer("hr@example.com", "Hana", "Iyer", role="recruiter")
+        self.client.force_login(recruiter)
+        page = self.client.get(self.url)
+        self.assertContains(page, "Developer leaderboard")
+        self.assertNotContains(page, "Your global rank")
+        self.assertNotContains(page, "Achievements")
 class ProjectUpdateTests(TestCase):
     def test_completing_all_milestones_ships_the_project(self):
         user = make_developer("ship@example.com")

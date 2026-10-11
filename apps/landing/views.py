@@ -4,12 +4,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.core.paginator import Paginator
-from django.db.models import Count, Max, Q, Sum
+from django.db.models import Count, Max, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from datetime import timedelta
+import math
 from collections import Counter
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
@@ -25,7 +26,7 @@ from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
-from apps.core.services import complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, record_activity, refresh_rank, score_breakdown
+from apps.core.services import achievements, coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view
 from apps.notifications.services import notify
 from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioView, ShortlistEntry
@@ -130,6 +131,66 @@ def _workspace_context(request, section="overview"):
         cursor -= timedelta(days=1)
     loop_steps = set(request.user.daily_loop_completions.filter(completed_on=today).values_list("step", flat=True))
     return {"section": section, "profile": profile, "projects": projects, "posts": posts, "own_posts": own_posts, "project_count": project_count, "completed_count": completed_count, "learning_count": own_posts.count(), "total_views": ContentView.objects.filter(post__author=request.user).count(), "total_earnings": earning_balance(request.user), "transactions": request.user.earning_transactions.all()[:10], "follower_count": request.user.follower_relationships.count(), "following_count": request.user.following_relationships.count(), "weekly_days": weekly_days, "weekly_active_count": sum(day["active"] for day in weekly_days), "streak": streak, "loop_steps": loop_steps, "loop_completed_count": len(loop_steps), "setup_percent": sum(setup_items) * 25, "initials": ((request.user.first_name[:1] + request.user.last_name[:1]) or request.user.username[:2]).upper()}
+RANKING_SCOPES = {"global": "Global", "following": "Following", "nearby": "Near you", "rising": "Rising this week"}
+def _rankings_context(request, profile):
+    """The leaderboard (global, people you follow, your city, or this week's climbers) and, for developers, their standing."""
+    is_recruiter = profile.role in RECRUITER_ROLES
+    scope = request.GET.get("scope") if request.GET.get("scope") in RANKING_SCOPES else "global"
+    language = request.GET.get("language", "").strip()[:40]
+    city = (profile.location or "").split(",")[0].strip()
+    record_rank_snapshots()
+    repositories = Repository.objects.only("id", "owner_id", "languages")
+    people = Profile.objects.filter(role="developer", score__gt=0).filter(Q(recruiter_visible=True) | Q(user=request.user)).select_related("user").prefetch_related(Prefetch("user__repositories", queryset=repositories))
+    if language:
+        people = people.filter(user__in=Repository.objects.filter(languages__has_key=language).values("owner"))
+    if scope == "following":
+        people = people.filter(user_id__in=[*request.user.following_relationships.values_list("following_id", flat=True), request.user.pk])
+    elif scope == "nearby":
+        people = people.filter(location__icontains=city) if city else people.none()
+    ordered = people.order_by("-score", "user__date_joined")
+    if scope == "rising":
+        candidates = list(ordered[:500])
+        movement = weekly_movement([entry.user_id for entry in candidates])
+        board = sorted((entry for entry in candidates if movement.get(entry.user_id, {}).get("rank", 0) > 0), key=lambda entry: (-movement[entry.user_id]["rank"], -entry.score))[:25]
+    else:
+        board = list(ordered[:50])
+        movement = weekly_movement([entry.user_id for entry in board])
+    previous_score, position = None, 0
+    for index, entry in enumerate(board, start=1):
+        if scope == "rising" or entry.score != previous_score:
+            position = index
+        previous_score, entry.position = entry.score, position
+        totals = Counter()
+        for repository in entry.user.repositories.all():
+            totals.update(repository.languages or {})
+        entry.top_language = totals.most_common(1)[0][0] if totals else ""
+        change = movement.get(entry.user_id, {})
+        entry.climb, entry.drop, entry.gained = max(change.get("rank", 0), 0), max(-change.get("rank", 0), 0), change.get("score", 0)
+        entry.is_me = entry.user_id == request.user.pk
+    context = {"ranking_scope": scope, "ranking_scopes": RANKING_SCOPES, "ranking_city": city, "leaderboard_language": language, "languages": platform_languages(), "is_recruiter": is_recruiter,
+               "podium": board[:3] if scope != "rising" and len(board) >= 3 else [], "leaderboard": board[3:] if scope != "rising" and len(board) >= 3 else board}
+    if is_recruiter:
+        return context
+    if profile.score and scope != "rising" and not any(entry.is_me for entry in board) and people.filter(user=request.user).exists():
+        profile.position = ordered.filter(score__gt=profile.score).count() + 1
+        context["my_row"] = profile
+    facts = progress_facts(request.user)
+    components = score_breakdown(request.user, facts)
+    for component in components:
+        component["available"] = component["max"] - component["points"]
+    ranked = Profile.objects.filter(role="developer", score__gt=0).count()
+    target = Profile.objects.filter(role="developer", score__gt=profile.score).select_related("user").order_by("score", "rank").first()
+    mine = weekly_movement([request.user.pk]).get(request.user.pk, {})
+    badges = achievements(facts, profile)
+    circumference = 2 * math.pi * 52
+    context.update({
+        "score_components": components, "best_move": max(components, key=lambda component: component["available"]), "badges": badges, "badges_earned": sum(badge["earned"] for badge in badges),
+        "ranked_total": ranked, "top_percent": max(1, math.ceil(profile.rank * 100 / ranked)) if profile.score and profile.rank and ranked else None,
+        "rank_change": mine.get("rank", 0), "score_change": mine.get("score", 0), "streak": coding_streak(request.user),
+        "target": target, "target_gap": target.score - profile.score + 1 if target else 0, "target_percent": round(profile.score * 100 / (target.score + 1)) if target else 100,
+        "ring_circumference": round(circumference, 2), "ring_offset": round(circumference * (1 - min(profile.score, 100) / 100), 2),
+    })
+    return context
 def network_url(view="discover"):
     """Where the Network tab lives: under Learn."""
     return f'{reverse("landing:workspace_section", args=["learning"])}?tab=network' + (f"&view={view}" if view != "discover" else "")
@@ -178,12 +239,7 @@ def workspace_section_view(request, section):
             project.milestones_done = sum(milestone.is_complete for milestone in project.milestones.all())
         context["new_git_token"] = request.session.pop("new_git_token", None)
     if section == "rankings":
-        language = request.GET.get("language", "").strip()
-        board = list(leaderboard(language or None))
-        for entry in board:
-            top = language_breakdown([repository.languages for repository in entry.user.repositories.all()], limit=1)
-            entry.top_language = top[0]["name"] if top else ""
-        context.update({"score_components": score_breakdown(request.user), "leaderboard": board, "leaderboard_language": language, "languages": platform_languages(), "is_recruiter": context["profile"].role in RECRUITER_ROLES})
+        context.update(_rankings_context(request, context["profile"]))
     if section == "learning":
         pending = request.user.contact_requests.filter(status="pending").count()
         tabs = [("for-you", "For you"), ("following", "Following"), ("mine", f"My content {context['learning_count']}"), ("network", f"Network {pending}" if pending else "Network")]

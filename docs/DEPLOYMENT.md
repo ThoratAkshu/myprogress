@@ -93,7 +93,7 @@ compressed.
 
 | Schedule | Command | Why |
 |---|---|---|
-| Daily | `python manage.py refresh_scores` | Scores use a 90-day window and must decay over time |
+| Daily | `python manage.py refresh_scores` | Scores use a 90-day window and must decay over time; it also saves each day's ranks so Rankings can show weekly movement and climbers |
 | After restores | `python manage.py refresh_languages` | Rebuilds language data from repositories |
 
 ## 6. Backups
