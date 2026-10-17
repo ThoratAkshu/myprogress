@@ -23,6 +23,7 @@ from apps.core.models import ArticleImage, ContentView, LearningPost, PostCommen
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
 from apps.earnings.services import reverse_post_coins, sync_post_coins
 from apps.notifications.services import notify
+from apps.organizations.models import ClassRecording
 from apps.organizations.services import announce_lesson, membership, staff_organizations
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
@@ -266,6 +267,9 @@ def studio_assist_view(request):
 @login_required(login_url="landing:home")
 def post_edit_view(request, post_id):
     post = get_object_or_404(LearningPost, pk=post_id, author=request.user)
+    recording = ClassRecording.objects.filter(post=post).select_related("live_class__organization").first()
+    if recording:  # a class recording is edited where it's cut, so the lecture and its recording never disagree
+        return redirect("organizations:recording_edit", slug=recording.live_class.organization.slug, class_id=recording.live_class_id, recording_id=recording.pk)
     previous = {"video_file": post.video_file.name, "thumbnail": post.thumbnail.name}
     shared_before = post.organization_id
     form = LearningPostForm(request.POST or None, request.FILES or None, user=request.user, instance=post)

@@ -1,0 +1,35 @@
+{% extends "organizations/base.html" %}{% load static ui %}
+{% block title %}Edit recording · {{ live.title }}{% endblock %}
+{% block content %}<div class="section-page org-page rec-edit-page">
+<a class="org-back" href="{% url 'organizations:live_class' organization.slug live.pk %}">{% icon "chevron-right" 14 %}{{ live.title }}</a>
+<header class="rec-edit-head">
+<div><span class="kicker">Class recording · {{ recording.finished_at|date:"D, M j · g:i a" }}</span><h1>Edit and publish</h1><p class="muted">Trim the start and end, cut out anything students don't need, then publish it.</p></div>
+<div class="rec-edit-state"><span class="rec-status is-{{ recording.status }}">{% if recording.status == 'draft' %}{% icon "lock" 14 %}Draft: students can't see it yet{% elif recording.status == 'public' %}{% icon "globe" 14 %}Public on {{ channel_name }}'s channel{% else %}{% icon "users" 14 %}Published for your students{% endif %}</span>{% if recording.post %}<a class="button soft" href="{% url 'learning:detail' recording.post.pk %}" target="_blank" rel="noopener">{% icon "play" 15 %}View the lecture</a>{% endif %}</div>
+</header>
+{% if missing %}<p class="rec-edit-alert">{% icon "alert-circle" 16 %} This recording's video file is gone (it may have been deleted with its lecture), so it can't be edited or published again.</p>{% endif %}
+<form method="post" enctype="multipart/form-data" class="rec-edit" data-recording-editor>{% csrf_token %}{{ editor|json_script:"recording-editor-data" }}{{ form.parts }}
+<section class="rec-edit-studio" aria-label="Recording">
+<video class="rec-edit-video" data-rec-video controls playsinline preload="auto"{% if not missing %} src="{{ video_url }}"{% endif %}></video>
+{% if recording.can_cut and not missing %}<div class="clip-editor" data-clip-editor>
+{% include "learning/_clip_editor.html" %}
+<p class="clip-hint">Drag across the strip to select a part, then cut it, or press I and O to mark it while you watch. Drag the yellow handles to trim the start and end. Cuts land on the nearest keyframe (one every 2 seconds), so what plays here is exactly what students get.</p>
+</div>{% elif not missing %}<p class="rec-edit-note">{% icon "info" 15 %} This recording can't be cut here{% if recording.extension != 'webm' %}: it was made in a browser that records MP4{% else %}: it has too few keyframes{% endif %}. You can still set its details and publish it.</p>{% endif %}
+<p class="rec-edit-say" data-rec-say role="status" aria-live="polite"></p>
+</section>
+<aside class="card rec-edit-details">
+{% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}{% for error in form.parts.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<label class="rec-field">Title{{ form.title }}{% for error in form.title.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<label class="rec-field">{{ form.summary.label }}{{ form.summary }}{% for error in form.summary.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<div class="rec-field"><span class="rec-field-head"><label for="{{ form.chapters.id_for_label }}">Chapters</label><button type="button" class="org-link-button" data-rec-chapter>{% icon "bookmark" 14 %}Add one at the playhead</button></span>{{ form.chapters }}<small class="muted">Times are on the recording as it plays here; they move to match your cuts when you publish.</small>{% for error in form.chapters.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</div>
+<div class="rec-field"><span class="rec-field-head"><span>Thumbnail</span><button type="button" class="org-link-button" data-rec-frame>{% icon "image" 14 %}Use the frame on screen</button></span>
+<div class="rec-thumb"><img data-rec-thumb alt=""{% if thumbnail_url %} src="{{ thumbnail_url }}"{% else %} hidden{% endif %}><span class="rec-thumb-empty" data-rec-thumb-empty{% if thumbnail_url %} hidden{% endif %}>{% icon "image" 22 %}</span><input type="file" name="thumbnail" accept="image/png,image/jpeg,image/webp" data-rec-thumb-input aria-label="Upload a thumbnail"></div>{% for error in form.thumbnail.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</div>
+<fieldset class="rec-audience"><legend>Who can watch</legend>
+<label class="rec-choice"><input type="radio" name="audience" value="members"{% if form.audience.value != 'public' %} checked{% endif %}><span><b>{% icon "users" 16 %}Your students</b><small>Members of {{ organization.name }}{% if live.group %} in {{ live.group }}{% endif %}, in the class page and channel.</small></span></label>
+<label class="rec-choice"><input type="radio" name="audience" value="public"{% if form.audience.value == 'public' %} checked{% endif %}><span><b>{% icon "globe" 16 %}Everyone</b><small>On {{ channel_name }}'s public channel. Your students can still watch it from the class page.</small></span></label>
+</fieldset>
+<div class="rec-edit-actions">{% if recording.post %}<button class="button primary large" name="action" value="publish" data-busy="Saving…"{% if missing %} disabled{% endif %}>{% icon "check" 16 %}Save changes</button>{% else %}<button class="button primary large" name="action" value="publish" data-busy="Publishing…"{% if missing %} disabled{% endif %}>{% icon "send" 16 %}Publish</button><button class="button soft" name="action" value="draft" data-busy="Saving…"{% if missing %} disabled{% endif %}>Save draft</button>{% endif %}</div>
+<small class="muted">{% if recording.post %}Changes reach the published lecture straight away.{% else %}Students are told when you publish. Cutting an hour-long class takes a few seconds.{% endif %}</small>
+</aside>
+</form>
+</div>{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'landing/js/recorder-editor.js' %}"></script><script src="{% static 'landing/js/class-recording.js' %}"></script>{% endblock %}

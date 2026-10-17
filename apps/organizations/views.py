@@ -1,11 +1,14 @@
 """Organization workspace: home, students' growth, the private channel, tasks, invites and settings."""
 import csv
 import logging
+import os
+import secrets
 from datetime import timedelta
 from itertools import groupby
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.files import File
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -20,16 +23,18 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
 from apps.common.ratelimit import rate_limit
 from apps.common.templatetags.ui import public_name
+from apps.common.views import ranged_file_response, stored_file_response
 from apps.core.models import ContentView, LearningPost
 from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
 from apps.learning.media import MAX_THUMBNAIL_BYTES, place_post_files
-from apps.learning.timeline import clean_captions, clean_chapters
+from apps.learning.timeline import clean_captions, clean_chapters, format_stamp, remap_captions, remap_chapters
 from apps.learning.views import studio_options
+from apps.earnings.services import sync_post_coins
 from apps.notifications.services import notify
 from . import recordings, services
 from .middleware import OrganizationUnavailable
-from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
+from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, RecordingForm, ReviewForm, SubmissionForm, TaskForm
 from .models import Attendance, Certificate, ChannelPost, ClassMessage, ClassRecording, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
@@ -467,7 +472,7 @@ def class_detail_view(request, slug, class_id):
     context = {"live": live, "state": live.state(now), "now": now, "position": services.series_position(live), "in_app": services.video_room(live) is not None, "jitsi_domain": settings.JITSI_DOMAIN}
     if member.is_staff:
         roster = services.class_roster(live)
-        context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30]})
+        context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30], "class_recordings": _finished_recordings(live)})
     else:
         context["mine"] = Attendance.objects.filter(live_class=live, student=request.user).first()
     return _render(request, "class_detail.html", organization, member, "classes", context)
@@ -519,6 +524,12 @@ def class_calendar_view(request, slug, class_id):
     response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{name}.ics"'
     return response
+def _finished_recordings(live):
+    """A class's recordings from the teaching board, newest first, each with its length to show."""
+    finished = list(live.recordings.filter(finished_at__isnull=False).select_related("post"))
+    for item in finished:
+        item.length = format_stamp(item.duration_ms / 1000) if item.duration_ms else ""
+    return finished
 def _teaching_class(request, slug, class_id):
     """A class its teachers run: only staff of the class's organization get here."""
     organization, member = _organization(request, slug, staff=True)
@@ -535,7 +546,7 @@ def teaching_board_view(request, slug, class_id):
     response = render(request, "organizations/teaching_board.html", {
         **studio_options(), "organization": organization, "member": member, "live": live, "section": "organization",
         "studio_host": "live", "studio_upload": upload, "join_url": reverse("organizations:join_class", args=[slug, live.pk]),
-        "past_recordings": live.recordings.filter(post__isnull=False).select_related("post")[:5],
+        "past_recordings": _finished_recordings(live)[:5],
     })
     response["Cache-Control"] = "private, no-store"
     return response
@@ -578,18 +589,19 @@ def recording_piece_view(request, slug, class_id):
 @login_required(login_url="landing:home")
 @require_POST
 def recording_finish_view(request, slug, class_id):
-    """Turn the uploaded pieces into the class's recording: a members-only lecture video with chapters and captions."""
+    """End a recording: write the seekable copy the teacher trims and cuts, and keep what the board sent with it
+    (chapters, captions, a thumbnail). Nothing is shared until the teacher publishes it from the editor."""
     organization, member, live = _teaching_class(request, slug, class_id)
     with transaction.atomic():
         recording = get_object_or_404(ClassRecording.objects.select_for_update(), token=request.POST.get("recording", ""), live_class=live, created_by=request.user, finished_at__isnull=True)
         if not recording.pieces or not recordings.starts_like_video(recording):
             return JsonResponse({"error": "Nothing playable was uploaded for this recording."}, status=400)
+        broadcast = recording.is_live
         recording.finished_at = timezone.now()
         recording.is_live = False
         recording.save(update_fields=["finished_at", "is_live"])
     milliseconds = request.POST.get("duration_ms", "")
-    if recording.extension == "webm" and milliseconds.isdigit():
-        recordings.add_duration(recordings.file_path(recording), min(int(milliseconds), 24 * 3600 * 1000))
+    recording.duration_ms = min(int(milliseconds), 24 * 3600 * 1000) if milliseconds.isdigit() else 0
 
     def cleaned(clean, value):
         try:
@@ -597,23 +609,152 @@ def recording_finish_view(request, slug, class_id):
         except ValueError:
             return ""
     when = timezone.localtime(live.starts_at)
-    post = LearningPost.objects.create(
-        author=request.user, organization=organization, kind="video", is_public=False, title=f"{live.title} (class recording)"[:180],
-        summary=f"Recorded live in class on {when:%a} {when:%b} {when.day}." + (f" For {live.group}." if live.group else ""),
-        chapters=cleaned(clean_chapters, request.POST.get("chapters", "")[:3000]), captions=cleaned(clean_captions, request.POST.get("captions", "")),
-        video_file=recording.file_name,
-    )
+    recording.title = f"{live.title} (class recording)"[:180]
+    recording.summary = f"Recorded live in class on {when:%a} {when:%b} {when.day}." + (f" For {live.group}." if live.group else "")
+    recording.chapters = cleaned(clean_chapters, request.POST.get("chapters", "")[:3000])
+    recording.captions = cleaned(clean_captions, request.POST.get("captions", ""))
+    if recordings.prepare_source(recording, recording.duration_ms):
+        # Students watching the broadcast may still be a few seconds behind; the upload goes once they can't be.
+        recording.upload_kept_until = timezone.now() + (UPLOAD_KEPT_FOR if broadcast else timedelta(0))
+    elif recording.extension == "webm" and recording.duration_ms:
+        recordings.add_duration(recordings.file_path(recording), recording.duration_ms)  # at least show its length
     thumbnail = request.FILES.get("thumbnail")
     if thumbnail and thumbnail.size <= MAX_THUMBNAIL_BYTES and thumbnail.content_type in {"image/jpeg", "image/png", "image/webp"}:
-        post.thumbnail.save(f"{recording.token}.jpg", thumbnail, save=True)
-        place_post_files(post)  # the thumbnail joins the video in the private folder
+        recording.thumbnail.save(f"{recording.token}.jpg", thumbnail, save=False)
+    recording.save()
+    return JsonResponse({"edit_url": reverse("organizations:recording_edit", args=[slug, live.pk, recording.pk]), "size": recording.size})
+UPLOAD_KEPT_FOR = timedelta(minutes=10)
+def _class_recording(request, slug, class_id, recording_id):
+    """A finished recording of a class, for that class's teachers."""
+    organization, member, live = _teaching_class(request, slug, class_id)
+    recording = get_object_or_404(ClassRecording.objects.select_related("post"), pk=recording_id, live_class=live, finished_at__isnull=False)
+    return organization, member, live, recording
+@login_required(login_url="landing:home")
+def recording_file_view(request, slug, class_id, recording_id, which):
+    """The whole recording, or its thumbnail, for the teachers editing it. Students only ever get the published lecture."""
+    organization, member, live, recording = _class_recording(request, slug, class_id, recording_id)
+    if which == "video":
+        path = recordings.source_path(recording)
+        if not os.path.isfile(path):
+            raise Http404
+        response = ranged_file_response(request, path)
+        response["Cache-Control"] = "private, no-store"
+        return response
+    field = recording.thumbnail or (recording.post.thumbnail if recording.post_id else None)
+    if which != "thumbnail" or not field:
+        raise Http404
+    return stored_file_response(request, field)
+def _kept_parts(recording, parts):
+    """The parts to keep, moved to where the recording can be cut; [] keeps all of it, and None (the timeline sent
+    nothing) keeps the last edit. ValueError when nothing would be left."""
+    if parts is None:
+        return recording.parts
+    if not recording.can_cut or not parts:
+        return []
+    marks = [*recording.keyframes, recording.duration_ms]
+    snapped = recordings.snap_parts(parts, marks)
+    if not snapped:
+        raise ValueError("Keep at least part of the recording.")
+    return [] if snapped == [[min(marks), max(marks)]] else snapped
+def _publish_recording(request, organization, live, recording, published_parts, new_thumbnail):
+    """Make or update the lecture students (or everyone) watch: the kept parts in a file of their own, with the
+    chapters and captions moved to match. `published_parts` are the parts its file has now. True if it's new."""
+    post = recording.post
+    public = recording.audience == "public"
+    previous = post.video_file.name if post else ""
+    if post is None or recording.parts != published_parts or public != post.is_public:
+        extension = "webm" if recording.source_name else recording.extension
+        name = f"{'' if public else 'private/'}learning/videos/class-{recording.token[:16]}-{secrets.token_hex(4)}.{extension}"
+        if recording.parts:
+            recordings.write_copy(recordings.source_path(recording), recordings.media_path(name), recording.parts, recording.duration_ms)
+        else:
+            recordings.place_whole(recordings.source_path(recording), recordings.media_path(name))
+    else:
+        name = previous
+    seconds = [[start / 1000, end / 1000] for start, end in recording.parts]
+    created = post is None
+    if created:
+        post = LearningPost(author=recording.created_by or request.user, kind="video")
+    post.title, post.summary = recording.title, recording.summary
+    post.chapters = remap_chapters(recording.chapters, seconds) if seconds else recording.chapters
+    post.captions = remap_captions(recording.captions, seconds) if seconds else recording.captions
+    post.organization, post.is_public = (None, True) if public else (organization, False)  # organization lectures are never public
+    post.video_file.name = name
+    post.save()
+    if recording.thumbnail and (created or new_thumbnail):
+        old = post.thumbnail.name
+        with recording.thumbnail.open("rb") as handle:
+            post.thumbnail.save(f"class-{recording.token[:16]}.jpg", File(handle), save=True)
+        if old:
+            post.thumbnail.storage.delete(old)
+    place_post_files(post)  # the thumbnail goes into, or out of, the private folder with the video
+    if previous and previous != name and previous not in {recording.file_name, recording.source_name}:
+        post.video_file.storage.delete(previous)
     recording.post = post
-    recording.save(update_fields=["post"])
-    live.recording = post
-    live.save(update_fields=["recording"])
-    LearningPost.objects.filter(pk=post.pk).update(announced_at=timezone.now())
-    services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[post.pk]), live.group)
-    return JsonResponse({"post_url": reverse("learning:detail", args=[post.pk]), "size": recording.size})
+    if live.recording_id is None:
+        live.recording = post
+        live.save(update_fields=["recording"])
+    if created:
+        services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[post.pk]), live.group)
+        LearningPost.objects.filter(pk=post.pk).update(announced_at=timezone.now())
+    sync_post_coins(post)
+    return created
+@login_required(login_url="landing:home")
+@rate_limit("recording-edit", 60, 3600)
+def recording_edit_view(request, slug, class_id, recording_id):
+    """The class recording in the studio editor: trim the start and end, cut out parts, set its details, and
+    publish it to the class's students or to everyone on the teacher's channel."""
+    organization, member, live, recording = _class_recording(request, slug, class_id, recording_id)
+    if not recording.source_name and recording.extension == "webm" and os.path.isfile(recordings.file_path(recording)):
+        if recordings.prepare_source(recording, recording.duration_ms):  # recorded before the editor: make its copy now
+            recording.save(update_fields=["source_name", "duration_ms", "keyframes"])
+    if not recording.title:  # recorded before the editor: start from its lecture
+        post = recording.post
+        recording.title = (post.title if post else f"{live.title} (class recording)")[:180]
+        if post:
+            recording.summary, recording.chapters, recording.captions, recording.audience = post.summary, post.chapters, post.captions, "public" if post.is_public else "members"
+        recording.save(update_fields=["title", "summary", "chapters", "captions", "audience"])
+    missing = not os.path.isfile(recordings.source_path(recording))
+    form = RecordingForm(request.POST or None, request.FILES or None, initial={"title": recording.title, "summary": recording.summary, "chapters": recording.chapters, "audience": recording.audience})
+    if request.method == "POST" and missing:
+        form.add_error(None, "The recording's video file is gone, so it can't be published.")
+    elif request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        try:
+            parts = _kept_parts(recording, data["parts"])
+        except ValueError as error:
+            form.add_error(None, str(error))
+        else:
+            with transaction.atomic():
+                recording = ClassRecording.objects.select_for_update().select_related("post").get(pk=recording.pk)
+                published_parts = recording.parts
+                recording.title, recording.summary, recording.chapters, recording.audience, recording.parts = data["title"], data["summary"], data["chapters"], data["audience"], parts
+                if data["thumbnail"]:
+                    if recording.thumbnail:
+                        recording.thumbnail.storage.delete(recording.thumbnail.name)
+                    recording.thumbnail.save(f"{recording.token}.jpg", data["thumbnail"], save=False)
+                publish = request.POST.get("action") == "publish" or recording.post_id
+                created = publish and _publish_recording(request, organization, live, recording, published_parts, bool(data["thumbnail"]))
+                recording.save()
+            if not publish:
+                messages.success(request, "Draft saved. Students can't see it until you publish it.")
+            elif recording.audience == "public":
+                messages.success(request, f"{'Published' if created else 'Saved'}: everyone can watch it on your channel{', and your students were told' if created else ''}.")
+            else:
+                messages.success(request, f"{'Published' if created else 'Saved'}: your students can watch it{' and were told' if created else ''}.")
+            return redirect("organizations:recording_edit", slug=slug, class_id=live.pk, recording_id=recording.pk)
+    seconds = lambda ms: round(ms / 1000, 3)  # noqa: E731
+    context = {
+        "live": live, "recording": recording, "form": form,
+        "video_url": reverse("organizations:recording_file", args=[slug, live.pk, recording.pk, "video"]),
+        "thumbnail_url": reverse("organizations:recording_file", args=[slug, live.pk, recording.pk, "thumbnail"]) if recording.thumbnail or (recording.post_id and recording.post.thumbnail) else "",
+        "editor": {"duration": seconds(recording.duration_ms), "marks": [seconds(ms) for ms in recording.keyframes] if recording.can_cut else [], "parts": [[seconds(a), seconds(b)] for a, b in recording.parts]},
+        "channel_name": public_name(recording.post.author if recording.post_id else recording.created_by or request.user),
+        "missing": missing,
+    }
+    response = _render(request, "recording_edit.html", organization, member, "classes", context)
+    response["Cache-Control"] = "private, no-store"
+    return response
 def _watchable(request, slug, class_id):
     """A class this member may watch: their organization's, for their batch."""
     organization, member = _organization(request, slug)
@@ -637,10 +778,12 @@ def watch_view(request, slug, class_id):
     response["Cache-Control"] = "private, no-store"
     return response
 def _stream_state(recording):
-    if recording is None or recording.stream_state.get("init") is None:
+    if recording is None:
         return "waiting"
-    if recording.finished_at or not recording.is_live:
+    if recording.finished_at or (not recording.is_live and recording.stream_state.get("init") is not None):
         return "ended"
+    if recording.stream_state.get("init") is None:
+        return "waiting"
     if recording.last_piece_at and timezone.now() - recording.last_piece_at > timedelta(seconds=12):
         return "paused"
     return "live" if recording.stream_state.get("recent") else "starting"
@@ -671,9 +814,12 @@ def stream_bytes_view(request, slug, class_id):
     if start >= stop:
         response = HttpResponse(status=204)
     else:
-        with open(recordings.file_path(recording), "rb") as handle:
-            handle.seek(start)
-            response = HttpResponse(handle.read(stop - start), content_type="application/octet-stream")
+        try:
+            with open(recordings.file_path(recording), "rb") as handle:
+                handle.seek(start)
+                response = HttpResponse(handle.read(stop - start), content_type="application/octet-stream")
+        except FileNotFoundError:
+            raise Http404  # the class ended a while ago and only its seekable copy is kept
     response["X-Stream-Size"] = str(recording.size)
     response["X-Stream-State"] = _stream_state(recording)
     response["Cache-Control"] = "private, no-store"

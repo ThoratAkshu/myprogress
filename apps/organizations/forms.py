@@ -1,9 +1,12 @@
+import json
 from datetime import timedelta
 from django import forms
 from django.utils import timezone
 from django.core.validators import validate_email
 from apps.core.models import Repository
-from .models import MAX_FILE_BYTES, Certificate, ParentAccess, ChannelPost, LiveClass, Membership, Organization, Submission, Task
+from apps.learning.media import MAX_THUMBNAIL_BYTES
+from apps.learning.timeline import clean_chapters
+from .models import MAX_FILE_BYTES, Certificate, ClassRecording, ParentAccess, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
@@ -164,3 +167,33 @@ class ParentForm(forms.ModelForm):
         model = ParentAccess
         fields = ["name", "email", "relation"]
         labels = {"name": "Parent or guardian's name", "relation": "Relation"}
+class RecordingForm(forms.Form):
+    """A class recording's details in the editor, with the parts kept (seconds, from the timeline)."""
+    title = forms.CharField(max_length=180)
+    summary = forms.CharField(required=False, max_length=5000, label="Description", widget=forms.Textarea(attrs={"rows": 3, "placeholder": "What the class covered, for students looking for it later."}))
+    chapters = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 5, "placeholder": "0:00 Introduction\n4:30 Inner joins"}))
+    thumbnail = forms.ImageField(required=False)
+    audience = forms.ChoiceField(choices=ClassRecording.AUDIENCES, widget=forms.RadioSelect)
+    parts = forms.CharField(required=False, widget=forms.HiddenInput)
+    def clean_chapters(self):
+        try:
+            return clean_chapters(self.cleaned_data.get("chapters"))
+        except ValueError as error:
+            raise forms.ValidationError(str(error))
+    def clean_thumbnail(self):
+        thumbnail = self.cleaned_data.get("thumbnail")
+        if thumbnail and thumbnail.size > MAX_THUMBNAIL_BYTES:
+            raise forms.ValidationError("Thumbnails must be 5 MB or smaller.")
+        return thumbnail
+    def clean_parts(self):
+        """[[start, end], ...] in milliseconds, or None when the timeline didn't send any (keep the last edit)."""
+        text = self.cleaned_data.get("parts", "")
+        if not text:
+            return None
+        try:
+            parts = json.loads(text)
+            if not isinstance(parts, list) or len(parts) > 1000:
+                raise ValueError
+            return [[max(0, round(float(start) * 1000)), max(0, round(float(end) * 1000))] for start, end in parts]
+        except (TypeError, ValueError):
+            raise forms.ValidationError("The edit couldn't be read. Reload the page and edit again.")

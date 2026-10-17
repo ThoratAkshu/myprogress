@@ -44,6 +44,48 @@ def parse_captions(text):
                     cues.append({"seconds": int(start), "stamp": format_stamp(start), "text": words})
                 break
     return cues
+def _map_time(seconds, parts):
+    """Where a moment of the original lands once only `parts` ([start, end] seconds) are kept; a moment in a removed
+    part moves to where the next kept part starts. None past the end."""
+    offset = 0
+    for start, end in parts:
+        if seconds < start:
+            return offset
+        if seconds <= end:
+            return offset + seconds - start
+        offset += end - start
+    return None
+def remap_chapters(text, parts):
+    """Chapters moved to match a video cut down to `parts`; when two land on the same second, the later one wins."""
+    total = sum(end - start for start, end in parts)
+    moved = {}
+    for chapter in parse_chapters(text):
+        seconds = _map_time(chapter["seconds"], parts)
+        if seconds is not None and seconds < total - 1:
+            moved[int(seconds)] = chapter["title"]
+    return "\n".join(f"{format_stamp(seconds)} {title}" for seconds, title in sorted(moved.items()))
+def _vtt_stamp(seconds):
+    hours, rest = divmod(round(seconds * 1000), 3_600_000)
+    minutes, rest = divmod(rest, 60_000)
+    return f"{hours:02d}:{minutes:02d}:{rest // 1000:02d}.{rest % 1000:03d}"
+def remap_captions(text, parts):
+    """WebVTT captions for a video cut down to `parts`: cues in removed parts dropped, the rest moved to match."""
+    cues = []
+    for block in re.split(r"\r?\n\s*\r?\n", text or ""):
+        lines = [line.rstrip() for line in block.strip().splitlines()]
+        for index, line in enumerate(lines):
+            match = CUE_TIMING.match(line.strip())
+            if not match:
+                continue
+            words = "\n".join(part for part in lines[index + 1:] if part.strip())
+            start, end = _vtt_seconds(match.group(1)), _vtt_seconds(match.group(2))
+            kept = [(a, b) for a, b in parts if b > start and a < end]
+            if words and kept:
+                new_start, new_end = _map_time(max(start, kept[0][0]), parts), _map_time(min(end, kept[-1][1]), parts)
+                if new_end - new_start >= 0.2:
+                    cues.append(f"{len(cues) + 1}\n{_vtt_stamp(new_start)} --> {_vtt_stamp(new_end)}\n{words}")
+            break
+    return "WEBVTT\n\n" + "\n\n".join(cues) + "\n" if cues else ""
 def clean_captions(text):
     text = (text or "").strip().replace("\r\n", "\n")
     if not text:

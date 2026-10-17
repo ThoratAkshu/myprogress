@@ -545,7 +545,7 @@
     state.bytes = 0;
     state.elapsed = 0;
     state.resumedAt = performance.now();
-    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS, ...(broadcast && { videoKeyFrameIntervalDuration: 2000 }) });
+    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS, ...(liveHost && { videoKeyFrameIntervalDuration: 2000 }) });
     state.recorder.addEventListener("dataavailable", event => {
       if (event.data.size) {
         if (uploader) uploader.push(event.data);
@@ -622,8 +622,9 @@
     return window.StudioScene.thumbnail(live, settings.thumbStyle, { title: titleField.value, name: sceneOptions().name, background: settings.background });
   }
 
-  // Teaching board: send what's left, then MyProgress turns the pieces into the class recording. The board stays
-  // open, so the teacher can keep teaching or record again.
+  // Teaching board: send what's left, then MyProgress turns the pieces into the class recording, a draft only
+  // teachers see, and the board opens it in the editor to trim, cut and publish. (Class recordings have a keyframe
+  // every 2 seconds, which is where the editor can cut them.)
   async function finishLive() {
     const vtt = state.captions?.vtt() || "";
     state.captions = null;
@@ -633,10 +634,14 @@
     const saved = find("[data-recorder-saved]");
     try {
       const result = await uploader.finish({ duration_ms: Math.round(state.elapsed), chapters: chaptersText(state.chapters), captions: vtt, thumbnail });
-      saved.querySelector("[data-saved-text]").textContent = `${broadcast ? "Class ended. " : ""}Saved ${formatTime(state.elapsed / 1000)} (${formatSize(result.size)}) as the class recording. Students are told it's ready.`;
-      saved.querySelector("[data-saved-link]").href = result.post_url;
+      saved.querySelector("[data-saved-text]").textContent = `${broadcast ? "Class ended. " : ""}Saved ${formatTime(state.elapsed / 1000)} (${formatSize(result.size)}). Opening it in the editor, so you can trim it and publish it…`;
+      const link = saved.querySelector("[data-saved-link]");
+      link.href = result.edit_url;
+      link.textContent = "Edit and publish";
+      link.removeAttribute("target");
       saved.hidden = false;
       say("");
+      setTimeout(() => window.location.assign(result.edit_url), 1500);
     } catch (error) {
       say(error.message, "error");
     }

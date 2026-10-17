@@ -46,5 +46,7 @@ urlpatterns = [
     path("<slug:slug>/live/<int:class_id>/recording/start/", views.recording_start_view, name="recording_start"),
     path("<slug:slug>/live/<int:class_id>/recording/piece/", views.recording_piece_view, name="recording_piece"),
     path("<slug:slug>/live/<int:class_id>/recording/finish/", views.recording_finish_view, name="recording_finish"),
+    path("<slug:slug>/live/<int:class_id>/recordings/<int:recording_id>/", views.recording_edit_view, name="recording_edit"),
+    path("<slug:slug>/live/<int:class_id>/recordings/<int:recording_id>/<str:which>/", views.recording_file_view, name="recording_file"),
     path("<slug:slug>/live/<int:class_id>/cancel/", views.class_delete_view, name="cancel_class"),
 ]

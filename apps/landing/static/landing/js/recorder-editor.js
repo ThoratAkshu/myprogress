@@ -218,8 +218,9 @@ window.StudioEditor = (() => {
    * The timeline under the review player.
    * root: the [data-clip-editor] element; video: the review player.
    * onChange(): the edit changed. say(text, tone): show a status message.
+   * snap(time, duration): optional; where an edit may land instead, for videos that can only be cut at keyframes.
    */
-  function create(root, { video, onChange, say }) {
+  function create(root, { video, onChange, say, snap }) {
     const track = root.querySelector("[data-clip-track]");
     const strip = root.querySelector("[data-clip-strip]");
     const marks = root.querySelector("[data-clip-marks]");
@@ -248,6 +249,11 @@ window.StudioEditor = (() => {
     const hasEdits = () => edit.duration > 0 && (edit.start > 0.05 || edit.end < edit.duration - 0.05 || parts().length > 1);
 
     function normalize() {
+      if (snap) {
+        edit.start = snap(edit.start, edit.duration);
+        edit.end = snap(edit.end, edit.duration);
+        edit.cuts = edit.cuts.map(([a, b]) => [snap(a, edit.duration), snap(b, edit.duration)]);
+      }
       const cuts = edit.cuts.map(([a, b]) => [clamp(Math.min(a, b), 0, edit.duration), clamp(Math.max(a, b), 0, edit.duration)]).filter(([a, b]) => b - a >= MIN_CUT).sort((x, y) => x[0] - y[0]);
       edit.cuts = cuts.reduce((merged, cut) => {
         const last = merged[merged.length - 1];
@@ -508,6 +514,16 @@ window.StudioEditor = (() => {
       },
       hasEdits,
       parts,
+      // Start from an edit saved earlier: the parts it keeps, as [start, end] seconds.
+      setParts(kept) {
+        if (!edit.duration || !kept?.length) return;
+        edit.start = clamp(kept[0][0], 0, edit.duration);
+        edit.end = clamp(kept[kept.length - 1][1], edit.start, edit.duration);
+        edit.cuts = kept.slice(1).map((part, index) => [kept[index][1], part[0]]);
+        normalize();
+        history = [];
+        refresh();
+      },
       // Editing shortcuts in review. Returns true when the key was used.
       keydown(event) {
         const key = event.key.toLowerCase();

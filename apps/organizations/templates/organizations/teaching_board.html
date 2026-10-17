@@ -5,15 +5,15 @@
 {% if live.in_myprogress %}<ol class="board-steps">
 <li><span>1</span><div><b>Pick what to show</b><small>A whiteboard, your screen, your camera, or a mix, with the video studio's pen, zoom, spotlight and notes.</small></div></li>
 <li><span>2</span><div><b>Go live</b><small>Students watch from their dashboard and the class page, a few seconds behind you. Read their questions and raised hands in the Class tab.</small></div></li>
-<li><span>3</span><div><b>End the class</b><small>The class is recorded as you teach. When you end it, the recording is saved for the class, with chapters and captions.</small></div></li>
+<li><span>3</span><div><b>End the class</b><small>The class is recorded as you teach. When you end it, it opens in the editor: trim it, cut out what students don't need, and publish it to them or to your channel.</small></div></li>
 </ol>{% else %}<ol class="board-steps">
 <li><span>1</span><div><b>Pick what to show</b><small>A whiteboard, your screen, your camera, or a mix. Draw, zoom, spotlight and show notes on it, the same tools as the video studio.</small></div></li>
 <li><span>2</span><div><b>Share it with the class</b><small>Press <em>Share board</em> at the top of the board. It opens in its own window: in the call, choose Share screen, then that window.</small></div></li>
-<li><span>3</span><div><b>Record if you like</b><small>Start recording on the board. It saves as you go, and when you stop it becomes this class's recording, with chapters and captions.</small></div></li>
+<li><span>3</span><div><b>Record if you like</b><small>Start recording on the board. It saves as you go, and when you stop it opens in the editor to trim, cut and publish, with its chapters and captions.</small></div></li>
 </ol>{% endif %}
 {% include "learning/_record_modes.html" %}
 <p class="recorder-note" data-recorder-unsupported hidden></p>
-{% if past_recordings %}<section class="card board-recordings"><h2>{% icon "film" 18 %} Recordings of this class</h2><ul>{% for item in past_recordings %}<li><a href="{% url 'learning:detail' item.post.pk %}">{{ item.post.title }}</a><small>{{ item.finished_at|date:"M j, g:i a" }}</small></li>{% endfor %}</ul></section>{% endif %}
+{% if past_recordings %}<section class="card board-recordings"><h2>{% icon "film" 18 %} Recordings of this class</h2><ul>{% for item in past_recordings %}<li><a href="{% url 'organizations:recording_edit' organization.slug live.pk item.pk %}">{{ item.title|default:live.title }}</a><small>{{ item.finished_at|date:"M j, g:i a" }}{% if item.length %} · {{ item.length }}{% endif %} · {% if item.status == 'draft' %}Draft, not published yet{% elif item.status == 'public' %}Public{% else %}Published for students{% endif %}</small></li>{% endfor %}</ul></section>{% endif %}
 <textarea data-board-script hidden>{{ live.agenda }}</textarea>
 </div>
 {% include "learning/_studio_dialog.html" %}{% endblock %}

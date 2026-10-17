@@ -1,4 +1,5 @@
 """The teaching board: the video studio inside a live class, shared into the call and recorded as the class recording."""
+import json
 import os
 import shutil
 import struct
@@ -44,6 +45,8 @@ def read_duration(data):
     _, _, start, size, _ = recordings._element(data, 0)
     _, _, at, _, _ = recordings._element(data, start + size)
     element_id, _, start, size, _ = recordings._element(data, at)
+    if element_id == recordings.SEEK_HEAD:
+        element_id, _, start, size, _ = recordings._element(data, start + size)
     assert element_id == recordings.INFO
     child = start
     while child < start + size:
@@ -107,37 +110,43 @@ class TeachingBoardTests(TestCase):
         self.assertNotContains(self.client.get(self.url("live_class")), "Open teaching board")
         self.assertEqual(self.client.post(self.url("recording_start")).status_code, 404)
 
-    def test_a_recording_uploads_in_pieces_and_becomes_the_class_recording(self):
+    def test_a_recording_uploads_in_pieces_and_waits_as_a_draft(self):
         self.client.force_login(self.owner)
         token = self.client.post(self.url("recording_start"), {"type": "video/webm"}).json()["recording"]
-        data = browser_webm(cluster_bytes=3000)
-        pieces = [data[:1000], data[1000:2200], data[2200:]]
+        data = class_webm()
+        pieces = [data[:150], data[150:260], data[260:]]
         send = lambda seq, piece: self.client.post(self.url("recording_piece"), {"recording": token, "seq": str(seq), "piece": SimpleUploadedFile(f"piece-{seq}.webm", piece, content_type="video/webm")})
         self.assertEqual(send(0, pieces[0]).json(), {"received": 1})
         self.assertEqual(send(0, pieces[0]).json(), {"received": 1})  # a retry is acknowledged, not appended twice
         self.assertEqual(send(2, pieces[2]).status_code, 409)
-        self.assertEqual(send(1, pieces[1]).json(), {"received": 2})
-        self.assertEqual(send(2, pieces[2]).json(), {"received": 3})
         recording = ClassRecording.objects.get(token=token)
-        self.assertEqual(recording.size, len(data))
+        with open(recordings.file_path(recording), "ab") as handle:
+            handle.write(pieces[1])  # a request wrote piece 1, then failed before it was counted
+        self.assertEqual(send(1, pieces[1]).json(), {"received": 2})  # so the retry replaces it instead of adding it twice
+        self.assertEqual(send(2, pieces[2]).json(), {"received": 3})
+        with open(recordings.file_path(recording), "rb") as handle:
+            self.assertEqual(handle.read(), data)
         thumbnail = SimpleUploadedFile("thumbnail.jpg", b"\xff\xd8\xff\xe0" + b"\x00" * 64, content_type="image/jpeg")
-        response = self.client.post(self.url("recording_finish"), {"recording": token, "duration_ms": "1800000", "chapters": "0:00 Intro\n12:30 Left joins", "captions": "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello class", "thumbnail": thumbnail})
-        post = LearningPost.objects.get(title="SQL joins (class recording)")
-        self.assertEqual(response.json()["post_url"], reverse("learning:detail", args=[post.pk]))
-        self.assertEqual((post.organization, post.is_public, post.kind, post.chapters), (self.organization, False, "video", "0:00 Intro\n12:30 Left joins"))
-        self.assertTrue(post.video_file.name.startswith("private/class-recordings/"))
-        self.assertTrue(post.thumbnail.name.startswith("private/"))
-        with open(post.video_file.path, "rb") as handle:
-            self.assertEqual(read_duration(handle.read()), 1_800_000)
-        self.live.refresh_from_db()
-        self.assertEqual(self.live.recording, post)
-        self.assertTrue(Notification.objects.filter(recipient=self.student, text="Recording of SQL joins is ready").exists())
+        response = self.client.post(self.url("recording_finish"), {"recording": token, "duration_ms": "50000", "chapters": "0:00 Intro\n0:15 Inner joins", "captions": "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello class", "thumbnail": thumbnail})
+        recording.refresh_from_db()
+        self.assertEqual(response.json()["edit_url"], reverse("organizations:recording_edit", args=[self.organization.slug, self.live.pk, recording.pk]))
+        # Nothing is shared yet: it waits for the teacher in the editor.
+        self.assertFalse(LearningPost.objects.exists())
+        self.assertFalse(Notification.objects.filter(recipient=self.student, text__startswith="Recording of").exists())
+        self.assertEqual((recording.title, recording.chapters, recording.status), ("SQL joins (class recording)", "0:00 Intro\n0:15 Inner joins", "draft"))
+        self.assertTrue(recording.thumbnail.name.startswith("private/class-recordings/"))
+        self.assertEqual((recording.duration_ms, recording.keyframes), (50_000, [0, 20_000, 40_000]))
+        with open(recordings.source_path(recording), "rb") as handle:
+            self.assertEqual(read_duration(handle.read()), 50_000)  # the copy has a length players can show
         self.assertEqual(send(3, b"more").status_code, 404)  # finished recordings take no more pieces
+        services.run_due_jobs()
+        self.assertFalse(os.path.exists(recordings.file_path(recording)))  # no one was watching, so only the copy is kept
+        self.assertTrue(os.path.exists(recordings.source_path(recording)))
         self.client.force_login(self.student)
-        self.assertEqual(self.client.get(reverse("learning:media", args=[post.pk, "video"])).status_code, 200)  # members can watch it
-        outsider = make_user("outsider@example.com")
-        self.client.force_login(outsider)
-        self.assertEqual(self.client.get(reverse("learning:media", args=[post.pk, "video"])).status_code, 404)
+        edit = reverse("organizations:recording_edit", args=[self.organization.slug, self.live.pk, recording.pk])
+        self.assertEqual(self.client.get(edit).status_code, 404)
+        self.assertEqual(self.client.get(f"{edit}video/").status_code, 404)
+        self.assertNotContains(self.client.get(self.url("live_class")), "Watch the recording")
 
     def test_recordings_stay_with_their_teacher_and_their_size_limit(self):
         self.client.force_login(self.owner)
@@ -168,6 +177,16 @@ def stream_webm():
     return head, clusters
 
 
+def class_webm(keyframes=(True, False, True, False, True), step=10_000):
+    """A class recorded the way browsers do it: clusters of unknown size `step` ms apart, each with a video frame
+    (a keyframe or not) and a bit of audio. Each frame carries its own letter (A, B, C...), so what a cut kept can
+    be checked."""
+    head, _ = stream_webm()
+    frame = lambda index, key: element(b"\xa0", element(b"\xa1", b"\x81\x00\x00\x00" + bytes([65 + index]) * 30) + (b"" if key else element(b"\xfb", b"\xfe")))
+    audio = element(b"\xa3", b"\x82\x00\x10\x80" + b"a" * 12)
+    return head + b"".join(b"\x1f\x43\xb6\x75" + UNKNOWN_SIZE + element(b"\xe7", (index * step).to_bytes(2, "big")) + frame(index, key) + audio for index, key in enumerate(keyframes))
+
+
 class StreamIndexTests(SimpleTestCase):
     def test_keyframes_are_found_as_pieces_arrive(self):
         folder = tempfile.mkdtemp()
@@ -192,8 +211,6 @@ class StreamIndexTests(SimpleTestCase):
             self.assertEqual(state["recent"], [[first, 0], [third, 2000]])
             self.assertEqual(recordings.join_point(state, behind_ms=1500), first)
             self.assertEqual(recordings.join_point(state, behind_ms=0), third)
-            with open(recordings.keyframes_path(recording)) as handle:
-                self.assertEqual(handle.read().split(), [str(first), "0", str(third), "2000"])
 
 
 @override_settings(MEDIA_ROOT=MEDIA, ORGANIZATION_JOBS_EVERY_SECONDS=0)
@@ -249,11 +266,22 @@ class LiveInMyProgressTests(TestCase):
         ClassRecording.objects.filter(pk=recording.pk).update(last_piece_at=timezone.now() - timedelta(seconds=30))
         self.assertEqual(self.client.get(self.url("class_stream")).json()["state"], "paused")
         self.client.force_login(self.owner)
-        self.client.post(self.url("recording_finish"), {"recording": token, "duration_ms": "3000"})
+        edit_url = self.client.post(self.url("recording_finish"), {"recording": token, "duration_ms": "3000"}).json()["edit_url"]
         self.client.force_login(self.student)
         ended = self.client.get(self.url("class_stream")).json()
-        self.assertEqual(ended["state"], "ended")
-        self.assertTrue(ended["recording_url"])
+        self.assertEqual((ended["state"], ended["recording_url"]), ("ended", ""))  # a draft until the teacher publishes it
+        tail = self.client.get(self.url("class_stream_bytes"), {"recording": token, "from": str(init)})
+        self.assertEqual(len(tail.content), size - init)  # students a few seconds behind still get the end of the class
+        services.run_due_jobs()
+        self.assertEqual(len(self.client.get(self.url("class_stream_bytes"), {"recording": token, "from": str(init)}).content), size - init)
+        ClassRecording.objects.filter(pk=recording.pk).update(upload_kept_until=timezone.now())
+        services.run_due_jobs()  # ten minutes on, only the seekable copy is kept
+        self.assertEqual(self.client.get(self.url("class_stream_bytes"), {"recording": token, "from": str(init)}).status_code, 404)
+        self.assertEqual(self.client.get(self.url("class_stream")).json()["state"], "ended")
+        self.client.force_login(self.owner)
+        self.client.post(edit_url, {"title": "SQL joins", "audience": "members", "action": "publish"})
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(self.url("class_stream")).json()["recording_url"], reverse("learning:detail", args=[LearningPost.objects.get().pk]))
         outsider = make_user("outsider@example.com")
         self.client.force_login(outsider)
         self.assertEqual(self.client.get(self.url("class_stream")).status_code, 404)
@@ -297,3 +325,179 @@ class LiveInMyProgressTests(TestCase):
         auto.refresh_from_db()
         zoom.refresh_from_db()
         self.assertEqual((auto.meeting_link, zoom.meeting_link), ("", "https://zoom.us/j/123"))
+
+
+class CutTests(SimpleTestCase):
+    """Cutting a recording without re-encoding it: whole keyframe runs are kept or left out."""
+    def test_cuts_are_held_to_keyframes(self):
+        marks = [0, 2000, 4000, 6000, 7000]
+        self.assertEqual(recordings.snap_parts([[300, 2900], [3100, 5100], [5900, 9000]], marks), [[0, 2000], [4000, 7000]])
+        self.assertEqual(recordings.snap_parts([[2500, 2700]], marks), [])  # too short to land anywhere
+
+    def test_a_copy_has_a_length_and_a_keyframe_index_players_can_seek_with(self):
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder, True)
+        source, copy = os.path.join(folder, "class.webm"), os.path.join(folder, "copy.webm")
+        with open(source, "wb") as handle:
+            handle.write(class_webm())
+        result = recordings.write_copy(source, copy, [[0, 20_000], [40_000, 50_000]], 50_000)
+        self.assertEqual((result["duration_ms"], result["keyframes_ms"]), (30_000, [0, 20_000]))
+        with open(copy, "rb") as handle:
+            data = handle.read()
+        self.assertEqual(len(data), result["size"])
+        _, _, start, size, _ = recordings._element(data, 0)
+        element_id, _, segment, segment_size, unknown = recordings._element(data, start + size)
+        self.assertEqual((element_id, unknown, segment + segment_size), (recordings.SEGMENT, False, len(data)))  # its size is known
+        seek_id, _, seek_start, seek_size, _ = recordings._element(data, segment)
+        self.assertEqual(seek_id, recordings.SEEK_HEAD)
+        positions = {}
+        for _, entry_start, entry_size in recordings._children(data, seek_start, seek_start + seek_size):
+            fields = {child_id: data[child_start:child_start + child_size] for child_id, child_start, child_size in recordings._children(data, entry_start, entry_start + entry_size)}
+            positions[int.from_bytes(fields[recordings.SEEK_ID], "big")] = int.from_bytes(fields[recordings.SEEK_POSITION], "big")
+        self.assertEqual(recordings._element(data, segment + positions[recordings.INFO])[0], recordings.INFO)
+        cues_id, _, cues_start, cues_size, _ = recordings._element(data, segment + positions[recordings.CUES])
+        self.assertEqual(cues_id, recordings.CUES)
+        cue_points = []
+        for _, point_start, point_size in recordings._children(data, cues_start, cues_start + cues_size):
+            fields = dict((child_id, (child_start, child_size)) for child_id, child_start, child_size in recordings._children(data, point_start, point_start + point_size))
+            time = recordings._uint(data, *fields[recordings.CUE_TIME])
+            track_start, track_size = fields[recordings.CUE_TRACK_POSITIONS]
+            where = {child_id: recordings._uint(data, child_start, child_size) for child_id, child_start, child_size in recordings._children(data, track_start, track_start + track_size)}
+            cue_points.append((time, where[recordings.CUE_TRACK], data[segment + where[recordings.CUE_CLUSTER_POSITION]:][:4]))
+        self.assertEqual(cue_points, [(0, 1, b"\x1f\x43\xb6\x75"), (20_000, 1, b"\x1f\x43\xb6\x75")])  # each points at its cluster
+        layout = recordings._scan(copy)
+        self.assertEqual([(cluster["ticks"], cluster["key"]) for cluster in layout["clusters"]], [(0, True), (10_000, False), (20_000, True)])  # the last part moved up
+        self.assertEqual([letter for letter in "ABCDE" if letter.encode() * 30 in data], ["A", "B", "E"])
+
+
+CHAPTERS = "0:00 Intro\n0:15 Inner joins\n0:25 Left joins\n0:45 Wrap up"
+CAPTIONS = "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello class\n\n00:00:25.000 --> 00:00:27.000\nThis part is cut\n\n00:00:41.000 --> 00:00:43.500\nAnd we're back\n"
+EDITOR_MEDIA = tempfile.mkdtemp()
+
+
+def png(name="frame.png"):
+    from io import BytesIO
+    from PIL import Image
+    buffer = BytesIO()
+    Image.new("RGB", (64, 36), "#0369a1").save(buffer, "PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
+
+
+@override_settings(MEDIA_ROOT=EDITOR_MEDIA, ORGANIZATION_JOBS_EVERY_SECONDS=0)
+class RecordingEditorTests(TestCase):
+    """After the class, the recording waits as a draft for its teacher: trimmed and cut in the editor, then
+    published to the class's students or to everyone."""
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(EDITOR_MEDIA, ignore_errors=True)
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.owner = make_user("office@institute.example", role="organization", first_name="Sunrise", last_name="Office")
+        self.organization = services.create_organization(self.owner, {"name": "Sunrise Coding Institute", "kind": "institute", "city": "Pune", "about": "", "website": "", "join_requires_approval": False})
+        self.student = make_user("asha@example.com")
+        services.join(self.organization, self.student)
+        self.live = LiveClass.objects.create(organization=self.organization, created_by=self.owner, title="SQL joins", starts_at=timezone.now() - timedelta(hours=2), duration_minutes=60)
+        self.url = lambda name: reverse(f"organizations:{name}", args=[self.organization.slug, self.live.pk])
+        self.client.force_login(self.owner)
+        token = self.client.post(self.url("recording_start"), {"type": "video/webm"}).json()["recording"]
+        self.client.post(self.url("recording_piece"), {"recording": token, "seq": "0", "piece": SimpleUploadedFile("piece.webm", class_webm(), content_type="video/webm")})
+        self.edit = self.client.post(self.url("recording_finish"), {"recording": token, "duration_ms": "50000", "chapters": CHAPTERS, "captions": CAPTIONS}).json()["edit_url"]
+        self.recording = ClassRecording.objects.get(token=token)
+
+    def publish(self, url=None, **fields):
+        return self.client.post(url or self.edit, {"title": "SQL joins, recorded", "summary": "Inner and left joins.", "chapters": CHAPTERS, "audience": "members", "action": "publish", **fields})
+
+    def test_the_cut_parts_are_left_out_of_the_published_lecture(self):
+        page = self.client.get(self.edit)
+        self.assertContains(page, "Draft: students can't see it yet")
+        self.assertContains(page, '"marks": [0.0, 20.0, 40.0]')  # where the timeline lets cuts land
+        self.assertContains(page, 'data-clip-track')
+        whole = self.client.get(f"{self.edit}video/", HTTP_RANGE="bytes=0-3")
+        self.assertEqual((whole.status_code, b"".join(whole.streaming_content)), (206, b"\x1a\x45\xdf\xa3"))
+        # A draft keeps the edit, held to keyframes, and shares nothing.
+        self.client.post(self.edit, {"title": "SQL joins, recorded", "audience": "members", "action": "draft", "parts": json.dumps([[0, 12], [39, 50]])})
+        self.recording.refresh_from_db()
+        self.assertEqual(self.recording.parts, [[0, 20_000], [40_000, 50_000]])
+        self.assertFalse(LearningPost.objects.exists())
+        self.assertContains(self.client.get(self.edit), '"parts": [[0.0, 20.0], [40.0, 50.0]]')
+        # Publishing makes the lecture: only the kept parts, with chapters and captions moved to match.
+        response = self.publish(thumbnail=png())
+        self.assertRedirects(response, self.edit)
+        post = LearningPost.objects.get()
+        self.assertEqual((post.title, post.summary, post.organization, post.is_public, post.author, post.kind), ("SQL joins, recorded", "Inner and left joins.", self.organization, False, self.owner, "video"))
+        self.assertEqual(post.chapters, "0:00 Intro\n0:15 Inner joins\n0:20 Left joins\n0:25 Wrap up")
+        self.assertEqual(post.captions, "WEBVTT\n\n1\n00:00:01.000 --> 00:00:03.000\nHello class\n\n2\n00:00:21.000 --> 00:00:23.500\nAnd we're back\n")
+        self.assertTrue(post.video_file.name.startswith("private/learning/videos/class-"))
+        self.assertTrue(post.thumbnail.name.startswith("private/"))
+        with open(post.video_file.path, "rb") as handle:
+            video = handle.read()
+        self.assertEqual(read_duration(video), 30_000)
+        self.assertEqual([letter for letter in "ABCDE" if letter.encode() * 30 in video], ["A", "B", "E"])
+        self.live.refresh_from_db()
+        self.assertEqual(self.live.recording, post)
+        self.assertEqual(Notification.objects.filter(recipient=self.student, text="Recording of SQL joins is ready").count(), 1)
+        self.assertContains(self.client.get(self.edit), "Published for your students")
+        self.assertRedirects(self.client.get(reverse("learning:edit", args=[post.pk])), self.edit)  # its lecture is edited here too
+        self.client.force_login(self.student)
+        self.assertEqual(self.client.get(reverse("learning:media", args=[post.pk, "video"])).status_code, 200)
+        self.assertContains(self.client.get(self.url("live_class")), "Watch the recording")
+        # Restoring the cut part and making it public replaces the lecture's video; the whole class is kept.
+        self.client.force_login(self.owner)
+        old = post.video_file.path
+        self.publish(parts=json.dumps([[0, 50]]), audience="public")
+        post.refresh_from_db()
+        self.assertEqual((post.organization, post.is_public, post.chapters), (None, True, CHAPTERS))
+        self.assertTrue(post.video_file.name.startswith("learning/videos/class-"))
+        self.assertFalse(post.thumbnail.name.startswith("private/"))
+        self.assertFalse(os.path.exists(old))
+        with open(post.video_file.path, "rb") as handle:
+            self.assertEqual(read_duration(handle.read()), 50_000)
+        self.assertTrue(os.path.exists(recordings.source_path(self.recording)))
+        self.assertEqual(Notification.objects.filter(recipient=self.student, text="Recording of SQL joins is ready").count(), 1)  # told once
+        self.client.logout()
+        self.assertContains(self.client.get(reverse("learning:detail", args=[post.pk])), "SQL joins, recorded")
+
+    def test_a_cut_that_leaves_nothing_is_refused(self):
+        self.assertContains(self.publish(parts=json.dumps([[25, 27]])), "Keep at least part of the recording.")
+        self.assertContains(self.publish(parts="not json"), "The edit couldn&#x27;t be read.")
+        self.assertFalse(LearningPost.objects.exists())
+
+    def test_only_the_class_teachers_reach_the_editor(self):
+        video = f"{self.edit}video/"
+        teacher = make_user("teacher@example.com", first_name="Meera", last_name="Joshi")
+        services.join(self.organization, teacher).__class__.objects.filter(user=teacher).update(role="teacher")
+        self.client.force_login(teacher)
+        self.assertEqual(self.client.get(self.edit).status_code, 200)
+        other_owner = make_user("admin@other.example", role="organization", first_name="Other", last_name="Office")
+        services.create_organization(other_owner, {"name": "Other Institute", "kind": "institute", "city": "Pune", "about": "", "website": "", "join_requires_approval": False})
+        for user in [self.student, other_owner, make_user("outsider@example.com")]:
+            self.client.force_login(user)
+            for url in [self.edit, video, f"{self.edit}thumbnail/"]:
+                self.assertEqual(self.client.get(url).status_code, 404, (user.email, url))
+            self.assertEqual(self.publish().status_code, 404)
+        other_class = LiveClass.objects.create(organization=self.organization, title="Another class", starts_at=timezone.now())
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("organizations:recording_edit", args=[self.organization.slug, other_class.pk, self.recording.pk])).status_code, 404)
+        self.assertFalse(LearningPost.objects.exists())
+
+    def test_recordings_from_before_the_editor_open_in_it(self):
+        old = ClassRecording.objects.create(live_class=self.live, created_by=self.owner, finished_at=timezone.now(), pieces=1)
+        with open(recordings.file_path(old), "wb") as handle:
+            handle.write(class_webm())
+        post = LearningPost.objects.create(author=self.owner, organization=self.organization, kind="video", is_public=False, title="Old recording", chapters="0:00 Start", captions="WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHi\n", video_file=old.file_name)
+        ClassRecording.objects.filter(pk=old.pk).update(post=post)
+        edit = reverse("organizations:recording_edit", args=[self.organization.slug, self.live.pk, old.pk])
+        self.assertContains(self.client.get(edit), 'value="Old recording"')
+        old.refresh_from_db()
+        self.assertEqual((old.title, old.captions, old.status, old.keyframes), ("Old recording", post.captions, "members", [0, 20_000, 40_000]))
+        self.publish(edit, title="Old recording", chapters="0:00 Start")
+        post.refresh_from_db()
+        self.assertEqual(post.video_file.name, old.file_name)  # nothing new to cut: the lecture keeps its video
+        self.publish(edit, title="Old recording", chapters="0:00 Start", parts=json.dumps([[0, 20]]))
+        post.refresh_from_db()
+        self.assertNotEqual(post.video_file.name, old.file_name)
+        self.assertTrue(os.path.exists(recordings.file_path(old)))  # the file it used before is the source: kept
+        self.assertEqual(post.captions, "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHi\n")

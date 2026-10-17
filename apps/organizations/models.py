@@ -246,13 +246,34 @@ class ClassRecording(models.Model):
     size = models.PositiveBigIntegerField(default=0)
     started_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
-    post = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    upload_kept_until = models.DateTimeField(null=True, blank=True, help_text="Students may still be catching up on the broadcast until then; the upload is deleted after")
+    # After the class: a seekable copy, edited and published by the teacher. Students see nothing until it's published.
+    source_name = models.CharField(max_length=255, blank=True, help_text="The seekable copy the editor plays and cuts; empty for older recordings")
+    duration_ms = models.PositiveIntegerField(default=0)
+    keyframes = models.JSONField(default=list, blank=True, help_text="Where the recording can be cut, in milliseconds")
+    parts = models.JSONField(default=list, blank=True, help_text="The parts kept, as [start, end] milliseconds; empty keeps it all")
+    title = models.CharField(max_length=180, blank=True)
+    summary = models.TextField(blank=True)
+    chapters = models.TextField(blank=True, help_text="On the recording's own timeline; moved to match the cuts when published")
+    captions = models.TextField(blank=True, help_text="WebVTT on the recording's own timeline")
+    thumbnail = models.ImageField(upload_to="private/class-recordings/", blank=True)
+    AUDIENCES = [("members", "Students"), ("public", "Everyone")]
+    audience = models.CharField(max_length=10, choices=AUDIENCES, default="members")
+    post = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+", help_text="The published lecture; none while it's a draft")
     class Meta:
         ordering = ["-started_at"]
     @property
     def file_name(self):
         """Where the upload lands in media storage: the private folder, which only members-only views serve."""
         return f"private/class-recordings/{self.token}.{self.extension}"
+    @property
+    def can_cut(self):
+        return bool(self.source_name and len(self.keyframes) > 1)
+    @property
+    def status(self):
+        if not self.post_id:
+            return "draft"
+        return "public" if self.post.is_public else "members"
 class ClassMessage(models.Model):
     """A chat message during a class held inside MyProgress. Members only, kept with the class."""
     live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name="messages")

@@ -91,20 +91,24 @@
     while (queue.length || buffer.updating) await wait(100);
   }
 
+  // The recording link appears once the teacher has trimmed it and published it.
+  function showRecording(data) {
+    const link = stage.querySelector("[data-watch-recording]");
+    if (!data?.recording_url || !link.hidden) return;
+    link.href = data.recording_url;
+    link.hidden = false;
+    stage.querySelector("[data-watch-ended-note]").textContent = "The recording is ready.";
+  }
+
   async function ended() {
     setState("ended");
-    const data = await getJson(streamUrl).catch(() => null);
-    if (data?.recording_url) {
-      const link = stage.querySelector("[data-watch-recording]");
-      link.href = data.recording_url;
-      link.hidden = false;
-      stage.querySelector("[data-watch-ended-note]").textContent = "The recording is ready.";
-    }
+    showRecording(await getJson(streamUrl).catch(() => null));
     // If the teacher goes live again (a second part of the class), pick it up.
     while (true) {
       await wait(5000);
       const again = await getJson(streamUrl).catch(() => null);
       if (again && again.recording && again.recording !== token && again.state !== "ended") return connect();
+      showRecording(again);
     }
   }
 

@@ -23,7 +23,8 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
-from .models import Attendance, Certificate, ChannelPost, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
+from . import recordings
+from .models import Attendance, Certificate, ChannelPost, ClassRecording, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 # Class points: task points earned, plus these for each class attended and each coding day in the last 30.
 POINTS_PER_CLASS = 5
@@ -234,10 +235,19 @@ def send_class_reminders():
         notify_members(live.organization, None, f"{live.title} starts at {starts}. Join from {live.organization.name}.", reverse("organizations:live_class", args=[live.organization.slug, live.pk]), live.group)
         count += 1
     return count
+def remove_class_uploads():
+    """Delete classes as they were uploaded once no student can still be catching up on the broadcast; the seekable
+    copy the teacher edits stays. Returns how many were removed."""
+    count = 0
+    for recording in ClassRecording.objects.filter(upload_kept_until__lte=timezone.now()):
+        if recordings.remove_upload(recording):  # a file still being read (Windows) is tried again next time
+            ClassRecording.objects.filter(pk=recording.pk).update(upload_kept_until=None)
+            count += 1
+    return count
 def run_due_jobs():
-    """Everything that happens on a schedule: scheduled posts, lectures and tasks, and class reminders.
-    Returns (published, released, reminded)."""
-    return publish_due_posts(), release_due_items(), send_class_reminders()
+    """Everything that happens on a schedule: scheduled posts, lectures and tasks, class reminders, and removing
+    class uploads that have a seekable copy. Returns (published, released, reminded, removed)."""
+    return publish_due_posts(), release_due_items(), send_class_reminders(), remove_class_uploads()
 def upcoming_classes(user, days=7, limit=6):
     """Live classes for someone's dashboard: live now or starting within `days`, from every organization they're in.
     Each has .organization, .member and .current (the state now) set; students also get .mine (their attendance)."""
