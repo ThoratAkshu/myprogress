@@ -3,12 +3,14 @@
 // screens, drawing tools and on-screen notes (recorder-ink.js), chapter markers, and optional live captions.
 // After recording, the video can be trimmed and cut (recorder-editor.js). The video, a styled thumbnail,
 // chapters, and captions are then attached to the post form. Also shows upload progress when a post with a
-// video file is published.
+// video file is published. On a live class's teaching board (data-host="live") there's no form: the board is
+// shared into the call from its own window, and a recording uploads while the class happens (recorder-live.js).
 (() => {
   const card = document.querySelector("[data-recorder]");
   const dialog = document.getElementById("recorder-dialog");
   const form = card?.closest("form");
-  if (!card || !dialog || !form || !window.StudioScene || !window.StudioInk || !window.StudioEditor) return;
+  const liveHost = dialog?.dataset.host === "live";
+  if (!card || !dialog || (!form && !liveHost) || !window.StudioScene || !window.StudioInk || !window.StudioEditor) return;
   const MAX_BYTES = 195 * 1024 * 1024; // the server accepts videos up to 200 MB
   const AUDIO_BPS = 128_000;
   const QUALITIES = { 720: { width: 1280, height: 720, bps: 2_000_000 }, 1080: { width: 1920, height: 1080, bps: 3_000_000 } };
@@ -16,10 +18,11 @@
   const MIME_TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
   const SETTINGS_KEY = "myprogress-studio-recorder";
   const Captions = window.StudioCaptions || { supported: false, LANGUAGES: [] };
-  const videoInput = form.elements.video_file;
-  const thumbnailInput = form.elements.thumbnail;
-  const scriptField = form.elements.video_script;
-  const titleField = form.elements.title;
+  const videoInput = form?.elements.video_file;
+  const thumbnailInput = form?.elements.thumbnail;
+  // On the teaching board, the class agenda is the script and the class title names the recording.
+  const scriptField = form ? form.elements.video_script : card.querySelector("[data-board-script]");
+  const titleField = form ? form.elements.title : { value: dialog.dataset.title || "" };
   const authorName = card.dataset.authorName || "";
   const find = selector => dialog.querySelector(selector);
   const live = find("[data-recorder-live]"); // the recording canvas, shown as the preview
@@ -54,11 +57,21 @@
   const seconds = () => (state.elapsed + (state.phase === "recording" ? performance.now() - state.resumedAt : 0)) / 1000;
   const quality = () => QUALITIES[settings.quality] || QUALITIES[720];
   // Longest recording that stays under the upload limit at the chosen quality, in whole minutes, at most 10.
-  const maxSeconds = () => Math.min(600, Math.floor((MAX_BYTES * 8) / (quality().bps + AUDIO_BPS) / 60) * 60);
+  const maxSeconds = () => (liveHost ? Number(dialog.dataset.maxMinutes || 120) * 60 : Math.min(600, Math.floor((MAX_BYTES * 8) / (quality().bps + AUDIO_BPS) / 60) * 60));
+  // Teaching board recordings go up piece by piece while the class happens.
+  const uploader = liveHost && window.StudioLiveUpload ? window.StudioLiveUpload.create({
+    urls: { start: dialog.dataset.startUrl, piece: dialog.dataset.chunkUrl, finish: dialog.dataset.finishUrl },
+    csrf: card.querySelector("[name=csrfmiddlewaretoken]")?.value || "",
+    onProgress: progress => {
+      if (progress.error) say(progress.error, "error");
+      else if (!recording()) say(progress.retrying ? `Connection trouble: still saving (${formatSize(progress.bytes)} saved so far)…` : `Saving the recording: ${formatSize(progress.bytes)} saved${progress.waiting ? `, ${progress.waiting} piece${progress.waiting === 1 ? "" : "s"} to go` : ""}…`);
+      else if (progress.retrying) say(`Connection trouble: the recording keeps going and will catch up (${formatSize(progress.bytes)} saved).`, "warn");
+    },
+  }) : null;
 
   if (!canRecord) {
     card.querySelectorAll("[data-record-mode]").forEach(button => { button.disabled = true; });
-    card.querySelector(".recorder-file").hidden = true;
+    if (card.querySelector(".recorder-file")) card.querySelector(".recorder-file").hidden = true;
     const note = card.querySelector("[data-recorder-unsupported]");
     note.textContent = window.isSecureContext ? "This browser can't record video. Use Chrome, Edge, or Firefox on a computer, or upload a file below." : "Recording needs a secure connection (https). Upload a file below instead.";
     note.hidden = false;
@@ -141,7 +154,7 @@
     if (!lines.join("").trim()) {
       const empty = document.createElement("p");
       empty.className = "teleprompter-empty";
-      empty.textContent = "Write a video script in the form, or use Draft with AI, and it scrolls here while you record.";
+      empty.textContent = liveHost ? "The class agenda shows here. Add one to the class to read it while you teach." : "Write a video script in the form, or use Draft with AI, and it scrolls here while you record.";
       elements.push(empty);
     }
     else for (const line of lines) {
@@ -448,7 +461,7 @@
     release();
     state.mode = mode;
     dialog.dataset.mode = mode;
-    heading.textContent = mode === "board" ? "Explain on the whiteboard" : "Record your walkthrough";
+    heading.textContent = liveHost ? `Teaching: ${titleField.value || "live class"}` : mode === "board" ? "Explain on the whiteboard" : "Record your walkthrough";
     ink.reset({ board: mode === "board" });
     renderScript();
     clock.textContent = `0:00 / ${formatTime(maxSeconds())}`;
@@ -496,6 +509,17 @@
     await floating;
     const mimeType = MIME_TYPES.find(type => MediaRecorder.isTypeSupported(type)) || "";
     const limit = maxSeconds();
+    if (uploader) {
+      try {
+        await uploader.begin(mimeType.split(";")[0] || "video/webm");
+      } catch (error) {
+        setPhase("ready");
+        return say(error.message, "error");
+      }
+      state.liveThumbnail = null;
+      clearTimeout(state.thumbnailTimer);
+      state.thumbnailTimer = setTimeout(() => { state.liveThumbnail = boardThumbnail(); }, 20_000);
+    }
     state.chunks = [];
     state.bytes = 0;
     state.elapsed = 0;
@@ -503,10 +527,11 @@
     state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS });
     state.recorder.addEventListener("dataavailable", event => {
       if (event.data.size) {
-        state.chunks.push(event.data);
+        if (uploader) uploader.push(event.data);
+        else state.chunks.push(event.data);
         state.bytes += event.data.size;
       }
-      if (recording() && (state.bytes >= MAX_BYTES || seconds() >= limit)) {
+      if (recording() && ((!uploader && state.bytes >= MAX_BYTES) || seconds() >= limit)) {
         state.limitReached = true;
         stop();
       }
@@ -553,6 +578,7 @@
 
   async function finish() {
     if (state.phase !== "saving") return; // discarded
+    if (uploader) return finishLive();
     const type = (state.recorder.mimeType || "video/webm").split(";")[0];
     let blob = new Blob(state.chunks, { type });
     state.chunks = [];
@@ -568,6 +594,55 @@
     const extras = [state.chapters.length && `${state.chapters.length} chapter${state.chapters.length === 1 ? "" : "s"}`, state.vtt && "captions"].filter(Boolean);
     const limit = state.limitReached ? `You reached the ${formatTime(maxSeconds())} or 200 MB limit, so recording stopped. ` : "";
     say(`${limit}${formatTime(state.elapsed / 1000)} recorded (${formatSize(blob.size)})${extras.length ? ` with ${extras.join(" and ")}` : ""}. Watch it back, trim or cut parts on the timeline, then use it.`, state.limitReached ? "warn" : "");
+  }
+
+  // A frame of the board with the class title, for the recording's thumbnail.
+  function boardThumbnail() {
+    return window.StudioScene.thumbnail(live, settings.thumbStyle, { title: titleField.value, name: sceneOptions().name, background: settings.background });
+  }
+
+  // Teaching board: send what's left, then MyProgress turns the pieces into the class recording. The board stays
+  // open, so the teacher can keep teaching or record again.
+  async function finishLive() {
+    const vtt = state.captions?.vtt() || "";
+    state.captions = null;
+    captionLine.hidden = true;
+    clearTimeout(state.thumbnailTimer);
+    const thumbnail = await (state.liveThumbnail || boardThumbnail()).catch(() => null);
+    const saved = find("[data-recorder-saved]");
+    try {
+      const result = await uploader.finish({ duration_ms: Math.round(state.elapsed), chapters: chaptersText(state.chapters), captions: vtt, thumbnail });
+      saved.querySelector("[data-saved-text]").textContent = `Saved ${formatTime(state.elapsed / 1000)} (${formatSize(result.size)}) as the class recording. Students are told it's ready.`;
+      saved.querySelector("[data-saved-link]").href = result.post_url;
+      saved.hidden = false;
+      say("");
+    } catch (error) {
+      say(error.message, "error");
+    }
+    state.chapters = [];
+    setPhase(state.stream ? "ready" : "idle");
+  }
+
+  // The board alone in its own window, so the teacher can share that window in the class call and keep the
+  // tools and script to themselves.
+  function openShareWindow() {
+    if (!state.stream) return say("Pick what to show first: a whiteboard, your screen, or your camera.", "warn");
+    if (state.shareWindow && !state.shareWindow.closed) return state.shareWindow.focus();
+    const share = window.open("", "myprogress-board-share", "popup,width=1280,height=760");
+    if (!share) return say("Your browser blocked the board window. Allow pop-ups for MyProgress, then press Share board again.", "warn");
+    const doc = share.document;
+    doc.title = `${titleField.value || "Class"} · board to share`;
+    const style = doc.createElement("style");
+    style.textContent = "html,body{margin:0;height:100%;background:#000}video{display:block;width:100%;height:100%;object-fit:contain}";
+    doc.head.append(style);
+    const video = doc.createElement("video");
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.srcObject = live.captureStream(30);
+    doc.body.replaceChildren(video);
+    state.shareWindow = share;
+    say(`The board is open in its own window. In the class call, choose Share screen, then the window “${doc.title}”. Keep drawing here; students see it there.`, "ok");
   }
 
   // Move the video to `time` seconds ("auto" picks an early frame, null keeps the current one).
@@ -716,7 +791,15 @@
   }
 
   function close(force) {
+    if (!force && liveHost && (recording() || state.phase === "saving" || uploader?.busy)) {
+      if (state.phase === "saving" || uploader?.busy) return say("The recording is still being saved. Close the board when it's done.", "warn");
+      if (!confirm("Stop recording and close the board? What's recorded so far is saved.")) return;
+      stop();
+      return;
+    }
     if (!force && (recording() || state.phase === "countdown") && !confirm("Stop and discard this recording?")) return;
+    state.shareWindow?.close();
+    state.shareWindow = null;
     if (!force && state.phase === "exporting" && !confirm("Stop saving your edit and close the studio?")) return;
     if (state.recorder && state.recorder.state !== "inactive") state.recorder.stop();
     release();
@@ -732,6 +815,7 @@
     chapter: () => markChapter(),
     close: () => close(false),
     use: useRecording,
+    present: openShareWindow,
     "cancel-export": () => state.exporting?.abort(),
     retake: () => {
       const screenEnded = state.screen?.getVideoTracks()[0]?.readyState === "ended";
@@ -808,23 +892,23 @@
     renderThumbnail();
     say(`${formatTime(length)} video, ${formatSize(file.size)}. Trim the ends or cut parts out on the timeline, then use it.`);
   }
-  card.querySelector("[data-edit-file]").addEventListener("click", () => fileInput.click());
-  fileInput.addEventListener("change", () => {
+  if (form) card.querySelector("[data-edit-file]").addEventListener("click", () => fileInput.click());
+  fileInput?.addEventListener("change", () => {
     openFile(fileInput.files[0]);
     fileInput.value = "";
   });
-  card.querySelector("[data-recorder-remove]").addEventListener("click", () => {
+  card.querySelector("[data-recorder-remove]")?.addEventListener("click", () => {
     if (videoInput.files[0] === state.attachedVideo) setFiles(videoInput, null);
     if (thumbnailInput.files[0] === state.attachedThumbnail) setFiles(thumbnailInput, null);
     attached.hidden = true;
   });
-  videoInput.addEventListener("change", () => { if (videoInput.files[0] !== state.attachedVideo) attached.hidden = true; });
-  window.addEventListener("beforeunload", event => { if (recording()) event.preventDefault(); });
+  videoInput?.addEventListener("change", () => { if (videoInput.files[0] !== state.attachedVideo) attached.hidden = true; });
+  window.addEventListener("beforeunload", event => { if (recording() || uploader?.busy) event.preventDefault(); });
   setPhase("idle");
 
   // Publishing with a video: upload in the background so the author sees progress instead of a frozen page.
-  const progress = form.querySelector("[data-upload-progress]");
-  form.addEventListener("submit", event => {
+  const progress = form?.querySelector("[data-upload-progress]");
+  form?.addEventListener("submit", event => {
     if (event.defaultPrevented || !videoInput.files.length || !progress) return;
     event.preventDefault();
     const button = event.submitter || form.querySelector('button:not([type="button"])');

@@ -223,3 +223,21 @@ class ParentAccess(models.Model):
     digest_stopped_at = models.DateTimeField(null=True, blank=True, help_text="The parent turned the weekly email off")
     class Meta:
         ordering = ["-created_at"]
+class ClassRecording(models.Model):
+    """A live class recorded on the teaching board. The browser uploads it a few seconds at a time while the class
+    happens, so a long class never has to sit in the teacher's memory or go up as one huge file."""
+    live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name="recordings")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    token = models.CharField(max_length=32, unique=True, default=secrets.token_hex)
+    extension = models.CharField(max_length=5, default="webm")
+    pieces = models.PositiveIntegerField(default=0)
+    size = models.PositiveBigIntegerField(default=0)
+    started_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    post = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    class Meta:
+        ordering = ["-started_at"]
+    @property
+    def file_name(self):
+        """Where the upload lands in media storage: the private folder, which only members-only views serve."""
+        return f"private/class-recordings/{self.token}.{self.extension}"

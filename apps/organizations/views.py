@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -21,11 +22,14 @@ from apps.common.ratelimit import rate_limit
 from apps.core.models import ContentView, LearningPost
 from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
+from apps.learning.media import MAX_THUMBNAIL_BYTES, place_post_files
+from apps.learning.timeline import clean_captions, clean_chapters
+from apps.learning.views import studio_options
 from apps.notifications.services import notify
-from . import services
+from . import recordings, services
 from .middleware import OrganizationUnavailable
 from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, Certificate, ChannelPost, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, Certificate, ChannelPost, ClassRecording, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -510,6 +514,91 @@ def class_calendar_view(request, slug, class_id):
     response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{name}.ics"'
     return response
+def _teaching_class(request, slug, class_id):
+    """A class its teachers run: only staff of the class's organization get here."""
+    organization, member = _organization(request, slug, staff=True)
+    return organization, member, get_object_or_404(LiveClass, pk=class_id, organization=organization)
+@login_required(login_url="landing:home")
+def teaching_board_view(request, slug, class_id):
+    """The video studio for a live class: whiteboard, pen, notes, zoom and screen + camera, shown to students by
+    sharing the board's window in the call, and recorded straight into the class's recording."""
+    organization, member, live = _teaching_class(request, slug, class_id)
+    upload = {name: reverse(f"organizations:recording_{name}", args=[slug, live.pk]) for name in ["start", "piece", "finish"]}
+    upload.update(chunk=upload.pop("piece"), title=live.title, max_minutes=min(240, live.duration_minutes + 60))
+    response = render(request, "organizations/teaching_board.html", {
+        **studio_options(), "organization": organization, "member": member, "live": live, "section": "organization",
+        "studio_host": "live", "studio_upload": upload, "join_url": reverse("organizations:join_class", args=[slug, live.pk]),
+        "past_recordings": live.recordings.filter(post__isnull=False).select_related("post")[:5],
+    })
+    response["Cache-Control"] = "private, no-store"
+    return response
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("class-recording", 20, 3600)
+def recording_start_view(request, slug, class_id):
+    organization, member, live = _teaching_class(request, slug, class_id)
+    recording = ClassRecording.objects.create(live_class=live, created_by=request.user, extension="mp4" if request.POST.get("type", "").startswith("video/mp4") else "webm")
+    recordings.start_file(recording)
+    return JsonResponse({"recording": recording.token})
+@login_required(login_url="landing:home")
+@require_POST
+def recording_piece_view(request, slug, class_id):
+    """One piece of a recording in progress, appended in order. A piece sent twice (a retry) is acknowledged, not added again."""
+    organization, member, live = _teaching_class(request, slug, class_id)
+    piece, seq = request.FILES.get("piece"), request.POST.get("seq", "")
+    if piece is None or not seq.isdigit():
+        return JsonResponse({"error": "Send a piece and its number."}, status=400)
+    with transaction.atomic():
+        recording = get_object_or_404(ClassRecording.objects.select_for_update(), token=request.POST.get("recording", ""), live_class=live, created_by=request.user, finished_at__isnull=True)
+        if int(seq) < recording.pieces:
+            return JsonResponse({"received": recording.pieces})
+        if int(seq) > recording.pieces:
+            return JsonResponse({"error": "A piece is missing.", "expected": recording.pieces}, status=409)
+        if recording.size + piece.size > settings.CLASS_RECORDING_MAX_BYTES:
+            return JsonResponse({"error": "This recording reached the size limit, so it stopped here."}, status=413)
+        recordings.append_piece(recording, piece)
+        recording.pieces += 1
+        recording.size += piece.size
+        recording.save(update_fields=["pieces", "size"])
+    return JsonResponse({"received": recording.pieces})
+@login_required(login_url="landing:home")
+@require_POST
+def recording_finish_view(request, slug, class_id):
+    """Turn the uploaded pieces into the class's recording: a members-only lecture video with chapters and captions."""
+    organization, member, live = _teaching_class(request, slug, class_id)
+    with transaction.atomic():
+        recording = get_object_or_404(ClassRecording.objects.select_for_update(), token=request.POST.get("recording", ""), live_class=live, created_by=request.user, finished_at__isnull=True)
+        if not recording.pieces or not recordings.starts_like_video(recording):
+            return JsonResponse({"error": "Nothing playable was uploaded for this recording."}, status=400)
+        recording.finished_at = timezone.now()
+        recording.save(update_fields=["finished_at"])
+    milliseconds = request.POST.get("duration_ms", "")
+    if recording.extension == "webm" and milliseconds.isdigit():
+        recordings.add_duration(recordings.file_path(recording), min(int(milliseconds), 24 * 3600 * 1000))
+
+    def cleaned(clean, value):
+        try:
+            return clean(value)
+        except ValueError:
+            return ""
+    when = timezone.localtime(live.starts_at)
+    post = LearningPost.objects.create(
+        author=request.user, organization=organization, kind="video", is_public=False, title=f"{live.title} (class recording)"[:180],
+        summary=f"Recorded live in class on {when:%a} {when:%b} {when.day}." + (f" For {live.group}." if live.group else ""),
+        chapters=cleaned(clean_chapters, request.POST.get("chapters", "")[:3000]), captions=cleaned(clean_captions, request.POST.get("captions", "")),
+        video_file=recording.file_name,
+    )
+    thumbnail = request.FILES.get("thumbnail")
+    if thumbnail and thumbnail.size <= MAX_THUMBNAIL_BYTES and thumbnail.content_type in {"image/jpeg", "image/png", "image/webp"}:
+        post.thumbnail.save(f"{recording.token}.jpg", thumbnail, save=True)
+        place_post_files(post)  # the thumbnail joins the video in the private folder
+    recording.post = post
+    recording.save(update_fields=["post"])
+    live.recording = post
+    live.save(update_fields=["recording"])
+    LearningPost.objects.filter(pk=post.pk).update(announced_at=timezone.now())
+    services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[post.pk]), live.group)
+    return JsonResponse({"post_url": reverse("learning:detail", args=[post.pk]), "size": recording.size})
 @login_required(login_url="landing:home")
 def live_now_view(request):
     """Classes to alert this person about right now (open to join or live, not joined yet), for the alert on every page."""

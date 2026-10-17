@@ -69,7 +69,8 @@
   let banner = null;
   function render(classes) {
     const here = location.pathname;
-    const show = classes.find(live => !store.get(`myprogress-live-dismissed-${live.id}-${live.state}`) && here !== live.page_url && !here.startsWith(`${live.page_url}room`));
+    // Not on the class's own pages (its page, the call, the teaching board): they already say all this.
+    const show = classes.find(live => !store.get(`myprogress-live-dismissed-${live.id}-${live.state}`) && !here.startsWith(live.page_url));
     if (!show) {
       banner?.remove();
       banner = null;

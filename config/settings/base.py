@@ -284,6 +284,8 @@ LOGGING = {
 JITSI_DOMAIN = config("JITSI_DOMAIN", default="").strip().removeprefix("https://").strip("/")
 # Class reminders, scheduled posts, lectures and tasks also run as people use the site, at most this often (seconds),
 # so they happen even without a cron job for run_organization_jobs. 0 turns this off when cron runs it every few minutes.
+# Largest class recording from the teaching board, uploaded in pieces during the class (default 2 GB, about 2 hours at 720p).
+CLASS_RECORDING_MAX_BYTES = config("CLASS_RECORDING_MAX_BYTES", default=2 * 1024 ** 3, cast=int)
 ORGANIZATION_JOBS_EVERY_SECONDS = config("ORGANIZATION_JOBS_EVERY_SECONDS", default=60, cast=int)
 # Set both when that server uses token authentication (the app_id and app_secret from its Prosody config).
 JITSI_APP_ID = config("JITSI_APP_ID", default="")

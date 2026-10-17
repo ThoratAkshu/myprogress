@@ -129,9 +129,12 @@ RECORDER_BACKGROUNDS = [("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("ocea
 INK_COLORS = [("#ef4444", "Red"), ("#facc15", "Yellow"), ("#22c55e", "Green"), ("#38bdf8", "Blue"), ("#ffffff", "White"), ("#0f172a", "Black")]
 BOARD_PAPERS = [("grid", "Grid paper"), ("lined", "Lined paper"), ("dots", "Dotted paper"), ("plain", "Plain white"), ("chalk", "Chalkboard")]
 NOTE_PLACES = [("top-right", "Top right"), ("top-left", "Top left"), ("top-center", "Top center"), ("center", "Center"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")]
+def studio_options():
+    """The choices the studio dialog offers; the post form and the live-class teaching board both use it."""
+    return {"recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ink_colors": INK_COLORS, "board_papers": BOARD_PAPERS, "note_places": NOTE_PLACES}
 def _form_context(request, form, post=None):
     lecturer = user_role(request.user) == "organization"
-    return {"section": "organization" if lecturer else "learning", "is_lecturer": lecturer, "form": form, "post": post, "studio_projects": [] if lecturer else _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ink_colors": INK_COLORS, "board_papers": BOARD_PAPERS, "note_places": NOTE_PLACES, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
+    return {"section": "organization" if lecturer else "learning", "is_lecturer": lecturer, "form": form, "post": post, "studio_projects": [] if lecturer else _studio_projects(request.user), **studio_options(), "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
 def media_view(request, post_id, which):
     """An organization post's video or thumbnail, only for people who can see the post."""
     post = _visible_post(request, post_id)

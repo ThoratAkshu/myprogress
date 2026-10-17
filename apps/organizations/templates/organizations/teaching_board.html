@@ -1,0 +1,16 @@
+{% extends "organizations/base.html" %}{% load static ui %}
+{% block title %}Teaching board · {{ live.title }}{% endblock %}
+{% block content %}<div class="section-page org-page board-page" data-recorder data-author-name="{{ request.user.get_full_name|default:request.user.profile.handle }}">{% csrf_token %}
+<header class="card board-head"><span class="org-logo">{{ organization|face }}</span><div><span class="kicker">Teaching board</span><h1>{{ live.title }}</h1><p class="muted">{{ live.starts_at|date:"D, M j · g:i a" }} to {{ live.ends_at|date:"g:i a" }}{% if live.group %} · {{ live.group }}{% endif %} · {{ organization.name }}</p></div><a class="button primary" href="{{ join_url }}" target="_blank" rel="noopener">{% icon "video" 16 %} Open the class call</a></header>
+<ol class="board-steps">
+<li><span>1</span><div><b>Pick what to show</b><small>A whiteboard, your screen, your camera, or a mix. Draw, zoom, spotlight and show notes on it, the same tools as the video studio.</small></div></li>
+<li><span>2</span><div><b>Share it with the class</b><small>Press <em>Share board</em> at the top of the board. It opens in its own window: in the call, choose Share screen, then that window.</small></div></li>
+<li><span>3</span><div><b>Record if you like</b><small>Start recording on the board. It saves as you go, and when you stop it becomes this class's recording, with chapters and captions.</small></div></li>
+</ol>
+{% include "learning/_record_modes.html" %}
+<p class="recorder-note" data-recorder-unsupported hidden></p>
+{% if past_recordings %}<section class="card board-recordings"><h2>{% icon "film" 18 %} Recordings of this class</h2><ul>{% for item in past_recordings %}<li><a href="{% url 'learning:detail' item.post.pk %}">{{ item.post.title }}</a><small>{{ item.finished_at|date:"M j, g:i a" }}</small></li>{% endfor %}</ul></section>{% endif %}
+<textarea data-board-script hidden>{{ live.agenda }}</textarea>
+</div>
+{% include "learning/_studio_dialog.html" %}{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'landing/js/recorder-scene.js' %}"></script><script src="{% static 'landing/js/recorder-captions.js' %}"></script><script src="{% static 'landing/js/recorder-ink.js' %}"></script><script src="{% static 'landing/js/recorder-editor.js' %}"></script><script src="{% static 'landing/js/recorder-live.js' %}"></script><script src="{% static 'landing/js/recorder.js' %}"></script>{% endblock %}

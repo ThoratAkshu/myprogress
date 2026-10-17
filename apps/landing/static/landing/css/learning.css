@@ -495,3 +495,27 @@ body.editor-focus-open{overflow:hidden}
 @keyframes voice-pulse{50%{opacity:.35}}
 @media (max-width:900px){.article-editor[data-view=split] .editor-panes{grid-template-columns:minmax(0,1fr)}.code-dialog-body{grid-template-columns:minmax(0,1fr)}.code-files{max-height:34vh;border-right:0;border-bottom:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){.voice-dot{animation:none}}
+/* Teaching board: the studio for a live class */
+.recorder-dialog:not([data-host=live]) [data-live-only]{display:none}
+.recorder-dialog .recorder-present{height:34px;margin-left:auto;margin-right:8px;border-color:#0369a1;background:#0369a1}
+.recorder-dialog[data-host=live] .recorder-keys{margin-left:12px}
+.recorder-saved{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;padding:0 16px 12px;color:#86efac;font-size:13px}
+.recorder-saved a{color:#7dd3fc;font-weight:700}
+.board-page{display:grid;gap:16px}
+.board-head{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:18px 20px}
+.board-head>div{flex:1;min-width:220px}
+.board-head h1{margin:2px 0;font-size:22px}
+.board-head p{margin:0}
+.board-head .org-logo{width:52px;height:52px;background:var(--violet-soft);color:var(--violet)}
+.board-head .button{display:inline-flex;align-items:center;gap:6px}
+.board-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.board-steps li{display:flex;gap:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface,#fff)}
+.board-steps li>span{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:50%;background:var(--violet);color:#fff;font-size:13px;font-weight:800}
+.board-steps b{display:block;font-size:14px}
+.board-steps small{color:var(--muted);font-size:12.5px;line-height:1.45}
+.board-recordings{padding:16px 20px}
+.board-recordings h2{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:16px}
+.board-recordings ul{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.board-recordings li{display:flex;justify-content:space-between;gap:10px}
+.board-recordings small{color:var(--muted)}
+@media(max-width:860px){.board-steps{grid-template-columns:minmax(0,1fr)}}

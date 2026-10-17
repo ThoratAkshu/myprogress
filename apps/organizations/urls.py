@@ -38,5 +38,9 @@ urlpatterns = [
     path("<slug:slug>/live/<int:class_id>/join/", views.class_join_view, name="join_class"),
     path("<slug:slug>/live/<int:class_id>/room/", views.class_room_view, name="class_room"),
     path("<slug:slug>/live/<int:class_id>/calendar.ics", views.class_calendar_view, name="class_calendar"),
+    path("<slug:slug>/live/<int:class_id>/board/", views.teaching_board_view, name="teaching_board"),
+    path("<slug:slug>/live/<int:class_id>/recording/start/", views.recording_start_view, name="recording_start"),
+    path("<slug:slug>/live/<int:class_id>/recording/piece/", views.recording_piece_view, name="recording_piece"),
+    path("<slug:slug>/live/<int:class_id>/recording/finish/", views.recording_finish_view, name="recording_finish"),
     path("<slug:slug>/live/<int:class_id>/cancel/", views.class_delete_view, name="cancel_class"),
 ]
