@@ -158,6 +158,14 @@ a.icon-button{display:grid;place-items:center;color:var(--ink);text-decoration:n
 .studio-status[data-tone=error]{color:#b4443a}
 .studio-status[data-tone=busy]::before{content:"";display:inline-block;width:12px;height:12px;margin-right:8px;vertical-align:-2px;border:2px solid var(--line);border-top-color:var(--violet);border-radius:50%;animation:studio-spin .8s linear infinite}
 .studio-source.is-drafting .studio-projects{opacity:.6;pointer-events:none}
+.lecture-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+.post-form .lecture-field{display:grid;gap:6px;margin:0}
+.lecture-field span{display:flex;align-items:baseline;gap:6px}
+.lecture-field small{color:var(--muted);font-size:11px;font-weight:500}
+.lecture-points{grid-column:1/-1}
+.post-form .lecture-field textarea{min-height:96px;resize:vertical}
+.studio-source.is-drafting .lecture-fields{opacity:.6;pointer-events:none}
+@media (max-width:700px){.lecture-fields{grid-template-columns:minmax(0,1fr)}}
 .post-form textarea[name=video_script]{min-height:260px;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
 @keyframes studio-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.studio-status[data-tone=busy]::before{animation:none}}
@@ -225,6 +233,7 @@ a.icon-button{display:grid;place-items:center;color:var(--ink);text-decoration:n
 .recorder-dialog .teleprompter-text h3:first-child{margin-top:0}
 .teleprompter-text p{margin:0 0 8px}
 .teleprompter-text .teleprompter-cue{color:#fbbf24;font:14px/1.5 ui-monospace,Consolas,monospace}
+.teleprompter-text .teleprompter-cue.is-board{color:#86efac}
 .teleprompter-gap{height:10px}
 .teleprompter-text .teleprompter-empty{color:#94a3b8;font-size:15px}
 .recorder-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08)}

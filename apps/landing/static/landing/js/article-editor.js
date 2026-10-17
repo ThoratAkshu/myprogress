@@ -85,6 +85,10 @@
     tutorial: "## What you'll build\n\n[One paragraph and, ideally, a screenshot.]\n\n## Before you start\n\n- [Tool or skill you need]\n- [Another one]\n\n## Step 1: [Title]\n\n[Explain the step.]\n\n## Step 2: [Title]\n\n[Explain the step.]\n\n## Step 3: [Title]\n\n[Explain the step.]\n\n## Wrapping up\n\n[What the reader built, and where to go next.]\n",
     lessons: "## The context\n\n[What you were working on, and for how long.]\n\n## What went well\n\n- [Something that worked]\n\n## What didn't\n\n- [Something that didn't]\n\n## What I learned\n\n1. [Lesson one]\n2. [Lesson two]\n3. [Lesson three]\n",
     compare: "## The options\n\n- **[Option A]**: [one line about it]\n- **[Option B]**: [one line about it]\n\n## How I compared them\n\n[What mattered for your project: speed, cost, learning curve...]\n\n## Results\n\n[What you found.]\n\n## My pick\n\n> [!NOTE]\n> [Which one you chose, and why.]\n",
+    // For teachers: lecture notes, an assignment brief, and a revision sheet.
+    notes: "## What you'll learn\n\n- [First idea]\n- [Second idea]\n- [Third idea]\n\n## [First idea]\n\n[Explain it simply, with a small example.]\n\n## [Second idea]\n\n[Explain it.]\n\n## Worked example\n\n```\n[the example]\n```\n\n## Common mistakes\n\n> [!WARNING]\n> [A mistake students often make, and how to avoid it.]\n\n## Practice\n\n1. [An easy question]\n2. [A question that applies the idea]\n3. [A harder question]\n\n## Recap\n\n[Three sentences that sum it up.]\n",
+    assignment: "## The task\n\n[What students will build or answer.]\n\n## What to submit\n\n- [A link, file, or repository]\n- [Anything else]\n\n## Steps\n\n1. [First step]\n2. [Second step]\n3. [Third step]\n\n## How it's marked\n\n- **[Criterion]**: [points]\n- **[Criterion]**: [points]\n\n> [!NOTE]\n> Due [date]. Ask questions in the channel.\n",
+    revision: "## Key terms\n\n- **[Term]**: [one-line meaning]\n- **[Term]**: [one-line meaning]\n\n## Must remember\n\n1. [Fact or rule]\n2. [Fact or rule]\n3. [Fact or rule]\n\n## Quick check\n\n1. [Question]\n2. [Question]\n\n> [!TIP]\n> [How to remember the hardest part.]\n",
   };
 
   const actions = {

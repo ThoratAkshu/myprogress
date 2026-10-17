@@ -455,3 +455,61 @@ class ArticleStudioTests(TestCase):
         self.assertContains(page, '<nav class="ig-toc" aria-label="On this page">')
         self.assertContains(page, '<a href="#usage">Usage</a>')
         self.assertContains(page, "data-listen")
+@override_settings(ANTHROPIC_API_KEY="")
+class LectureStudioTests(TestCase):
+    """Institutes record lectures and write notes without projects or branches: they have no repositories."""
+    def setUp(self):
+        from django.core.cache import cache
+        from apps.organizations import services
+        cache.clear()  # rate limits are kept in the cache; don't use up other tests' allowance
+        self.addCleanup(cache.clear)
+        self.institute = make_user("office@institute.example", "Sunrise", "Institute", role="organization")
+        self.organization = services.create_organization(self.institute, {"name": "Sunrise Institute", "kind": "institute", "city": "", "about": "", "website": "", "join_requires_approval": False})
+        self.client.force_login(self.institute)
+    def test_institutes_plan_a_lecture_instead_of_picking_a_project(self):
+        page = self.client.get(reverse("learning:create"))
+        for text in ["Record a lecture", "Plan your lecture", "data-lecture-topic", "Video lecture", 'data-template="notes"', "Lecture script", "[BOARD: draw the loop]", "Share lecture", '<input type="hidden" name="is_public" value="on">']:
+            self.assertContains(page, text)
+        for text in ["Start from your project", 'name="project"', 'data-format="repo"', 'data-template="built"']:
+            self.assertNotContains(page, text)
+        self.assertContains(page, '<input type="radio" name="kind" value="video" id="id_kind_1" required checked>')
+        self.assertContains(page, f'<option value="{self.organization.pk}" selected>Sunrise Institute</option>')
+        developer = make_user("dev@example.com", "Dev", "Eloper")
+        self.client.force_login(developer)
+        page = self.client.get(reverse("learning:create"))
+        self.assertContains(page, "Start from your project")
+        self.assertNotContains(page, "Plan your lecture")
+    def test_the_studio_drafts_lecture_notes_and_a_whiteboard_script_from_a_topic(self):
+        response = self.client.post(reverse("learning:studio_draft"), {"topic": "Python loops for beginners", "points": "for loops over a list\n- while loops", "audience": "Batch A", "kind": "video"})
+        draft = response.json()
+        self.assertEqual((draft["source"], draft["title"]), ("starter", "Python loops for beginners"))
+        self.assertIn("## for loops over a list", draft["body"])
+        self.assertIn("## Practice", draft["body"])
+        self.assertIn("[BOARD: while loops]", draft["video_script"])
+        self.assertIn("your lecture plan", draft["notice"])
+        refused = self.client.post(reverse("learning:studio_draft"), {"topic": "  ", "kind": "video"})
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("what the lecture is about", refused.json()["error"])
+        from types import SimpleNamespace
+        from unittest import mock
+        from .studio import LECTURE_SYSTEM_PROMPT
+        reply = SimpleNamespace(stop_reason="tool_use", content=[SimpleNamespace(type="tool_use", input={"title": "Loops", "summary": "s", "body": "b", "video_script": "v"})])
+        with override_settings(ANTHROPIC_API_KEY="test-key"), mock.patch("anthropic.Anthropic") as client_class:
+            client_class.return_value.messages.create.return_value = reply
+            self.assertEqual(self.client.post(reverse("learning:studio_draft"), {"topic": "Loops", "kind": "article"}).json()["source"], "ai")
+        request = client_class.return_value.messages.create.call_args.kwargs
+        self.assertEqual(request["system"], LECTURE_SYSTEM_PROMPT)
+        self.assertIn('"topic": "Loops"', request["messages"][0]["content"])
+        self.assertNotIn("repository_data", request["messages"][0]["content"])
+    def test_lectures_go_to_the_students_or_everyone_and_never_earn_coins(self):
+        from apps.earnings.services import coin_balance
+        data = {"title": "Loops", "kind": "article", "summary": "", "body": ARTICLE, "is_public": "on"}
+        self.client.post(reverse("learning:create"), {**data, "organization": self.organization.pk})
+        shared = LearningPost.objects.get(title="Loops")
+        self.assertEqual((shared.organization, shared.is_public, shared.project), (self.organization, False, None))
+        self.client.post(reverse("learning:create"), {**data, "title": "Open lecture", "organization": ""})
+        public = LearningPost.objects.get(title="Open lecture")
+        self.assertTrue(public.is_public)
+        self.assertEqual(coin_balance(self.institute), 0)
+        response = self.client.post(reverse("learning:delete", args=[shared.pk]))
+        self.assertRedirects(response, reverse("organizations:channel", args=[self.organization.slug]), fetch_redirect_response=False)

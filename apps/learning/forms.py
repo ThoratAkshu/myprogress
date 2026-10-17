@@ -1,6 +1,7 @@
 import subprocess
 from django import forms
 from django.utils import timezone
+from apps.accounts.access import user_role
 from apps.organizations.services import staff_organizations
 from apps.core.git_service import list_branches
 from apps.core.models import LearningPost
@@ -27,6 +28,14 @@ class LearningPostForm(forms.ModelForm):
         self.fields["organization"].queryset = staff_organizations(user) if user else self.fields["organization"].queryset.none()
         self.fields["organization"].empty_label = "No, use the setting above"
         self.fields["organization"].help_text = ""
+        if user and user_role(user) == "organization":
+            # Institutes publish lectures and notes for students, not posts about their own code.
+            self.fields["organization"].label = "Share with"
+            self.fields["organization"].empty_label = "Everyone (public)"
+            self.fields["video_script"].label = "Lecture script"
+            placeholders = {"title": "Python loops: for, while, and when to use each", "summary": "What students will be able to do after this lecture.", "body": "## What you'll learn\n\n## Key ideas\n\n## Worked example\n\n## Practice", "video_script": "INTRO\nHello everyone. Today we're learning ...\n\nCONCEPT\n[BOARD: draw the loop]\n\nPRACTICE\n[SHOW: the exercise]"}
+            for name, text in placeholders.items():
+                self.fields[name].widget.attrs["placeholder"] = text
     def clean_video_url(self):
         url = self.cleaned_data.get("video_url", "")
         if url and not url.lower().startswith(("https://", "http://")):

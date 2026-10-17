@@ -137,7 +137,7 @@ class OrganizationTests(TestCase):
         self.join(self.student)
         self.client.force_login(self.owner)
         form = self.client.get(reverse("learning:create") + f"?org={self.organization.slug}&kind=video")
-        self.assertContains(form, "Share only with my organization")
+        self.assertContains(form, "Share with")  # institutes choose their students or everyone
         response = self.client.post(reverse("learning:create"), {"title": "Day 3: Joins explained", "kind": "article", "body": "Joins combine tables. " * 10, "is_public": "on", "organization": self.organization.pk}, follow=True)
         self.assertContains(response, "Shared with Sunrise Coding Institute. Only its members can see it.")
         lecture = LearningPost.objects.get(title="Day 3: Joins explained")

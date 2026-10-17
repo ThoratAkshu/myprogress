@@ -134,7 +134,7 @@
     if (state.floating?.time) state.floating.time.classList.toggle("paused", phase === "paused");
   }
 
-  // Teleprompter: section labels (click one while recording to mark a chapter), on-screen cues, and spoken lines.
+  // Teleprompter: section labels (click one while recording to mark a chapter), on-screen and whiteboard cues, and spoken lines.
   function renderScript() {
     const lines = (scriptField?.value || "").split(/\r?\n/);
     const elements = [];
@@ -146,10 +146,10 @@
     }
     else for (const line of lines) {
       const text = line.trim();
-      const cue = text.match(/^\[SHOW:\s*(.+?)\]$/i);
+      const cue = text.match(/^\[(SHOW|BOARD):\s*(.+?)\]$/i);
       let element;
       if (!text) { element = document.createElement("div"); element.className = "teleprompter-gap"; }
-      else if (cue) { element = document.createElement("p"); element.className = "teleprompter-cue"; element.textContent = `On screen: ${cue[1]}`; }
+      else if (cue) { element = document.createElement("p"); const board = cue[1].toUpperCase() === "BOARD"; element.className = board ? "teleprompter-cue is-board" : "teleprompter-cue"; element.textContent = `${board ? "On the board" : "On screen"}: ${cue[2]}`; }
       else if (/^[A-Z][A-Z0-9 &'-]{1,30}$/.test(text)) { element = document.createElement("h3"); element.textContent = text; element.title = "While recording, click to mark a chapter here"; }
       else { element = document.createElement("p"); element.textContent = text; }
       elements.push(element);

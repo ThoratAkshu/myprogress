@@ -28,7 +28,7 @@ from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
 from .media import place_post_files, youtube_embed_url
-from .studio import StudioError, branch_paths, draft_post, project_branches
+from .studio import StudioError, branch_paths, draft_post, lecture_plan, project_branches
 from .timeline import parse_captions, parse_chapters
 MAX_INSERT_BYTES = 300_000
 logger = logging.getLogger(__name__)
@@ -87,8 +87,11 @@ def post_detail_view(request, post_id):
 @login_required(login_url="landing:home")
 @rate_limit("publish", 10, 3600)
 def post_create_view(request):
-    initial = {"kind": request.GET.get("kind") if request.GET.get("kind") in {"article", "video"} else "article", "is_public": True}
-    organization = staff_organizations(request.user).filter(slug=request.GET.get("org", "")).first()
+    lecturer = user_role(request.user) == "organization"
+    initial = {"kind": request.GET.get("kind") if request.GET.get("kind") in {"article", "video"} else "video" if lecturer else "article", "is_public": True}
+    organizations = staff_organizations(request.user)
+    # An institute's lectures go to its own students unless it chooses otherwise.
+    organization = organizations.filter(slug=request.GET.get("org", "")).first() or (organizations.first() if lecturer else None)
     if organization:
         initial.update(organization=organization.pk, is_public=False)
     project_id = request.GET.get("project", "")
@@ -127,7 +130,8 @@ INK_COLORS = [("#ef4444", "Red"), ("#facc15", "Yellow"), ("#22c55e", "Green"), (
 BOARD_PAPERS = [("grid", "Grid paper"), ("lined", "Lined paper"), ("dots", "Dotted paper"), ("plain", "Plain white"), ("chalk", "Chalkboard")]
 NOTE_PLACES = [("top-right", "Top right"), ("top-left", "Top left"), ("top-center", "Top center"), ("center", "Center"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")]
 def _form_context(request, form, post=None):
-    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ink_colors": INK_COLORS, "board_papers": BOARD_PAPERS, "note_places": NOTE_PLACES, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
+    lecturer = user_role(request.user) == "organization"
+    return {"section": "organization" if lecturer else "learning", "is_lecturer": lecturer, "form": form, "post": post, "studio_projects": [] if lecturer else _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ink_colors": INK_COLORS, "board_papers": BOARD_PAPERS, "note_places": NOTE_PLACES, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
 def media_view(request, post_id, which):
     """An organization post's video or thumbnail, only for people who can see the post."""
     post = _visible_post(request, post_id)
@@ -167,15 +171,20 @@ def studio_branches_view(request):
 @rate_limit("studio-draft", 20, 3600)
 def studio_draft_view(request):
     recording = {"transcript": request.POST.get("transcript", "").strip()[:20000], "chapters": request.POST.get("chapters", "").strip()[:3000]}
-    if request.POST.get("project", ""):
+    lecture = lecture_plan(request.POST.get("topic"), request.POST.get("points"), request.POST.get("audience"))
+    if lecture:
+        project = None
+    elif request.POST.get("project", ""):
         project = _owned_project(request, request.POST.get("project", ""))
     elif recording["transcript"]:
         project = None
+    elif user_role(request.user) == "organization":
+        return JsonResponse({"error": "Write what the lecture is about first, or record with live captions on so the studio can draft from what you said."}, status=400)
     else:
         return JsonResponse({"error": "Pick a project, or record with live captions on so the studio can draft from what you said."}, status=400)
     kind = "video" if request.POST.get("kind") == "video" else "article"
     try:
-        draft, source, notice = draft_post(project, request.POST.get("branch", "").strip() if project else "", _display_name(request.user), kind, recording)
+        draft, source, notice = draft_post(project, request.POST.get("branch", "").strip() if project else "", _display_name(request.user), kind, recording, lecture=lecture)
     except StudioError as error:
         return JsonResponse({"error": str(error)}, status=400)
     except (subprocess.CalledProcessError, OSError, ValueError):

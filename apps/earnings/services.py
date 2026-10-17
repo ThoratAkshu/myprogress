@@ -1,4 +1,5 @@
 """The earning engine: coins for posts, the follower milestone, coin conversion, monthly payments, and the master account."""
+from apps.accounts.access import user_role
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.auth.models import User
@@ -95,7 +96,8 @@ def sync_post_coins(post):
     """Give coins once for a public post, and take them back if it's unpublished. Returns the coins given."""
     rules = EarningSettings.current()
     net = _post_net(post)
-    if post.is_public and net <= 0 and rules.program_enabled:
+    # Earnings are a developer's: institutes and recruiters have no earnings page, so their posts don't earn coins.
+    if post.is_public and net <= 0 and rules.program_enabled and user_role(post.author) == "developer":
         today = CoinTransaction.objects.filter(user=post.author, kind="post", created_at__date=timezone.localdate()).count()
         coins = post_coins(post, rules)
         if today >= rules.daily_post_limit or not coins:
