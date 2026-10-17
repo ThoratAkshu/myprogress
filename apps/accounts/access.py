@@ -67,6 +67,7 @@ POLICY = {
         "channel", "channel_delete", "channel_publish", "release_now", "channel_file", "tasks", "task", "task_delete", "task_file",
         "review", "submission_file", "settings", "leaderboard", "certificates", "classes", "live_class", "join_class", "class_room", "cancel_class",
         "class_calendar", "live_now", "teaching_board", "recording_start", "recording_piece", "recording_finish",
+        "watch", "class_stream", "class_stream_bytes", "class_chat",
     ]},
     # The finance console has its own sign-in for finance staff (see earnings.views.finance_required).
     **{f"finance:{name}": PUBLIC for name in [

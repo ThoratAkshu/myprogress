@@ -519,3 +519,61 @@ body.editor-focus-open{overflow:hidden}
 .board-recordings li{display:flex;justify-content:space-between;gap:10px}
 .board-recordings small{color:var(--muted)}
 @media(max-width:860px){.board-steps{grid-template-columns:minmax(0,1fr)}}
+/* Classes held inside MyProgress: the board's Class tab, and the students' watch page */
+.recorder-dialog[data-broadcast="1"] .recorder-present{display:none}
+.class-tab-count{min-width:18px;margin-left:4px;padding:1px 5px;border-radius:99px;background:#dc2626;color:#fff;font-size:11px}
+.class-pane{display:flex;flex-direction:column;min-height:0;padding:12px;gap:10px}
+.class-status{display:grid;gap:2px;margin:0;color:#94a3b8;font-size:12px}
+.class-watching{color:#f8fafc;font-size:14px;font-weight:700}
+.class-hands{display:grid;gap:6px;padding:10px;border:1px solid #f59e0b;border-radius:10px;background:rgba(245,158,11,.1);color:#fde68a;font-size:13px}
+.class-hands b{display:flex;align-items:center;gap:6px}
+.class-hands ul{display:grid;gap:4px;margin:0;padding:0;list-style:none}
+.class-hands li{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.class-hands button{padding:3px 9px;border:1px solid #f59e0b;border-radius:99px;background:none;color:#fde68a;font:inherit;font-size:12px;cursor:pointer}
+.class-messages{display:grid;align-content:start;gap:8px;flex:1;min-height:120px;margin:0;padding:0;overflow-y:auto;list-style:none}
+.class-empty{color:#64748b;font-size:13px}
+.class-message{position:relative;display:grid;gap:2px;padding:8px 28px 8px 10px;border-radius:10px;background:#111827;color:#e2e8f0}
+.class-message.is-teacher{background:rgba(3,105,161,.25)}
+.class-message.is-mine{background:#1e293b}
+.class-message-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:12px}
+.class-message-head em{padding:0 6px;border-radius:99px;background:#0369a1;color:#fff;font-size:10px;font-style:normal;font-weight:700}
+.class-message-head small{color:#64748b}
+.class-message p{margin:0;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.class-message-remove{position:absolute;top:4px;right:4px;width:22px;height:22px;border:0;border-radius:6px;background:none;color:#64748b;font-size:16px;cursor:pointer}
+.class-message-remove:hover{background:rgba(255,255,255,.08);color:#fff}
+.class-say{display:flex;gap:6px}
+.class-say input{flex:1;min-width:0;height:36px;padding:0 10px;border:1px solid #334155;border-radius:8px;background:#111827;color:#e2e8f0;font:inherit;font-size:14px}
+.watch-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.watch-main{display:grid;gap:12px;min-width:0}
+.watch-stage{position:relative;display:grid;place-items:center;aspect-ratio:16/9;overflow:hidden;border-radius:14px;background:#0b1220}
+.watch-stage>*{grid-area:1/1}
+.watch-stage video{width:100%;height:100%;object-fit:contain;background:#000}
+.watch-overlay{z-index:1;display:none;justify-items:center;gap:8px;max-width:440px;padding:20px;color:#e2e8f0;text-align:center}
+.watch-overlay b{font-size:18px}
+.watch-overlay small{color:#94a3b8;font-size:13px;line-height:1.5}
+.watch-stage[data-state=waiting] [data-overlay=waiting],.watch-stage[data-state=starting] [data-overlay=starting],.watch-stage[data-state=ready] [data-overlay=ready],.watch-stage[data-state=ended] [data-overlay=ended],.watch-stage[data-state=unsupported] [data-overlay=unsupported]{display:grid}
+.watch-stage[data-state=ready] video{filter:brightness(.45)}
+.watch-stage[data-state=ended] video{filter:brightness(.2)}
+.watch-stage[data-state=ended]~.watch-info [data-hand-toggle]{display:none}
+.watch-stage[data-paused=true][data-state=live] [data-overlay=paused]{display:flex}
+.watch-overlay.is-corner{align-self:end;justify-self:start;align-items:center;gap:6px;margin:12px;padding:6px 12px;border-radius:99px;background:rgba(2,6,23,.75);font-size:13px}
+.watch-badge{z-index:1;display:none;align-self:start;justify-self:start;margin:12px;padding:3px 10px;border-radius:99px;background:#dc2626;color:#fff;font-size:12px;font-weight:800;letter-spacing:.05em}
+.watch-stage[data-state=live] .watch-badge{display:block}
+.watch-info{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.watch-info>div{flex:1;min-width:200px}
+.watch-info h1{margin:0;font-size:20px}
+.watch-info p{margin:2px 0 0}
+.watch-info .org-logo{width:44px;height:44px;background:var(--violet-soft);color:var(--violet)}
+.watch-info [data-hand-toggle]{display:inline-flex;align-items:center;gap:6px}
+.watch-info [data-hand-toggle][aria-pressed=true]{border-color:#f59e0b;background:#fef3c7;color:#92400e}
+.watch-agenda{margin:0;color:#334155;font-size:14px;line-height:1.55}
+.watch-chat{display:flex;flex-direction:column;gap:10px;height:min(640px,calc(100vh - 160px));padding:14px}
+.watch-chat header{display:grid;gap:2px}
+.watch-chat header b{display:flex;align-items:center;gap:6px}
+.watch-chat header small,.watch-chat .class-empty,.watch-chat .class-message-head small{color:var(--muted);font-size:12px}
+.watch-chat .class-message{border:1px solid var(--line);background:var(--canvas);color:var(--ink)}
+.watch-chat .class-message.is-mine{border-color:#d0e2f5;background:var(--violet-soft)}
+.watch-chat .class-message.is-teacher{border-color:#bae6fd;background:#e0f2fe}
+.watch-chat .class-message-head em{background:var(--violet)}
+.watch-chat .class-say input{border-color:var(--line);background:var(--surface);color:var(--ink)}
+@media(max-width:900px){.watch-layout{grid-template-columns:minmax(0,1fr)}.watch-chat{height:420px}}

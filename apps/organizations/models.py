@@ -152,7 +152,7 @@ class LiveClass(models.Model):
     agenda = models.TextField(blank=True)
     starts_at = models.DateTimeField()
     duration_minutes = models.PositiveSmallIntegerField(default=60)
-    meeting_link = models.URLField(blank=True, help_text="Google Meet, Zoom or any https link; empty makes a free Jitsi room")
+    meeting_link = models.URLField(blank=True, help_text="Google Meet, Zoom or any https link; empty holds the class inside MyProgress")
     group = models.CharField(max_length=60, blank=True, help_text="Only this batch; empty means everyone")
     recording = models.ForeignKey("core.LearningPost", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     series = models.CharField(max_length=32, blank=True, db_index=True, help_text="Shared by every class created together as a repeating series")
@@ -163,9 +163,15 @@ class LiveClass(models.Model):
     def __str__(self):
         return self.title
     def save(self, *args, **kwargs):
-        if not self.meeting_link:
-            self.meeting_link = f"https://{settings.JITSI_DOMAIN or 'meet.jit.si'}/MyProgress-{self.organization.slug}-{secrets.token_hex(6)}"
+        # Without a link the class happens inside MyProgress: the teacher broadcasts from the teaching board. An
+        # institute that runs its own Jitsi server gets a video call room there instead.
+        if not self.meeting_link and settings.JITSI_DOMAIN:
+            self.meeting_link = f"https://{settings.JITSI_DOMAIN}/MyProgress-{self.organization.slug}-{secrets.token_hex(6)}"
         super().save(*args, **kwargs)
+    @property
+    def in_myprogress(self):
+        """Held inside MyProgress: broadcast from the teaching board, watched and chatted about on the class's watch page."""
+        return not self.meeting_link
     @property
     def ends_at(self):
         return self.starts_at + timedelta(minutes=self.duration_minutes)
@@ -182,6 +188,8 @@ class Attendance(models.Model):
     status = models.CharField(max_length=10, choices=STATUSES)
     joined_at = models.DateTimeField(null=True, blank=True)
     marked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", help_text="A teacher who set it by hand")
+    last_seen_at = models.DateTimeField(null=True, blank=True, help_text="Last moment the student was on the class's watch page")
+    hand_raised_at = models.DateTimeField(null=True, blank=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["live_class", "student"], name="one_attendance_per_class")]
 def certificate_code():
@@ -230,6 +238,10 @@ class ClassRecording(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     token = models.CharField(max_length=32, unique=True, default=secrets.token_hex)
     extension = models.CharField(max_length=5, default="webm")
+    mime = models.CharField(max_length=80, blank=True, help_text="The recorder's type and codecs, which students' players need")
+    is_live = models.BooleanField(default=False, help_text="Being broadcast to students right now")
+    last_piece_at = models.DateTimeField(null=True, blank=True)
+    stream_state = models.JSONField(default=dict, blank=True, help_text="Where the stream's header ends and its recent keyframes start, for students joining")
     pieces = models.PositiveIntegerField(default=0)
     size = models.PositiveBigIntegerField(default=0)
     started_at = models.DateTimeField(auto_now_add=True)
@@ -241,3 +253,11 @@ class ClassRecording(models.Model):
     def file_name(self):
         """Where the upload lands in media storage: the private folder, which only members-only views serve."""
         return f"private/class-recordings/{self.token}.{self.extension}"
+class ClassMessage(models.Model):
+    """A chat message during a class held inside MyProgress. Members only, kept with the class."""
+    live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="+")
+    text = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["created_at", "pk"]

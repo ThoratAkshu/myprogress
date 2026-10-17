@@ -19,6 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
 from apps.common.ratelimit import rate_limit
+from apps.common.templatetags.ui import public_name
 from apps.core.models import ContentView, LearningPost
 from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
@@ -29,7 +30,7 @@ from apps.notifications.services import notify
 from . import recordings, services
 from .middleware import OrganizationUnavailable
 from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, Certificate, ChannelPost, ClassRecording, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, Certificate, ChannelPost, ClassMessage, ClassRecording, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -482,6 +483,10 @@ def class_join_view(request, slug, class_id):
     if state == "over":
         messages.info(request, "This class has ended." + (" The recording is below." if live.recording_id else ""))
         return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    if live.in_myprogress:
+        if not member.is_staff:
+            services.join_class(live, request.user)
+        return redirect("organizations:teaching_board" if member.is_staff else "organizations:watch", slug=slug, class_id=live.pk)
     if services.video_room(live):
         return redirect("organizations:class_room", slug=slug, class_id=live.pk)
     if not member.is_staff:
@@ -525,6 +530,8 @@ def teaching_board_view(request, slug, class_id):
     organization, member, live = _teaching_class(request, slug, class_id)
     upload = {name: reverse(f"organizations:recording_{name}", args=[slug, live.pk]) for name in ["start", "piece", "finish"]}
     upload.update(chunk=upload.pop("piece"), title=live.title, max_minutes=min(240, live.duration_minutes + 60))
+    if live.in_myprogress:  # broadcast to the class's watch page, with its chat
+        upload.update(broadcast=True, chat=reverse("organizations:class_chat", args=[slug, live.pk]))
     response = render(request, "organizations/teaching_board.html", {
         **studio_options(), "organization": organization, "member": member, "live": live, "section": "organization",
         "studio_host": "live", "studio_upload": upload, "join_url": reverse("organizations:join_class", args=[slug, live.pk]),
@@ -537,7 +544,11 @@ def teaching_board_view(request, slug, class_id):
 @rate_limit("class-recording", 20, 3600)
 def recording_start_view(request, slug, class_id):
     organization, member, live = _teaching_class(request, slug, class_id)
-    recording = ClassRecording.objects.create(live_class=live, created_by=request.user, extension="mp4" if request.POST.get("type", "").startswith("video/mp4") else "webm")
+    kind = request.POST.get("type", "")[:80]
+    broadcast = request.POST.get("live") == "1" and live.in_myprogress and not kind.startswith("video/mp4")
+    if broadcast:  # one broadcast at a time per class: going live again replaces the previous one
+        ClassRecording.objects.filter(live_class=live, is_live=True).update(is_live=False)
+    recording = ClassRecording.objects.create(live_class=live, created_by=request.user, extension="mp4" if kind.startswith("video/mp4") else "webm", mime=kind, is_live=broadcast)
     recordings.start_file(recording)
     return JsonResponse({"recording": recording.token})
 @login_required(login_url="landing:home")
@@ -559,7 +570,10 @@ def recording_piece_view(request, slug, class_id):
         recordings.append_piece(recording, piece)
         recording.pieces += 1
         recording.size += piece.size
-        recording.save(update_fields=["pieces", "size"])
+        recording.last_piece_at = timezone.now()
+        if recording.extension == "webm":
+            recording.stream_state = recordings.index_stream(recording)
+        recording.save(update_fields=["pieces", "size", "last_piece_at", "stream_state"])
     return JsonResponse({"received": recording.pieces})
 @login_required(login_url="landing:home")
 @require_POST
@@ -571,7 +585,8 @@ def recording_finish_view(request, slug, class_id):
         if not recording.pieces or not recordings.starts_like_video(recording):
             return JsonResponse({"error": "Nothing playable was uploaded for this recording."}, status=400)
         recording.finished_at = timezone.now()
-        recording.save(update_fields=["finished_at"])
+        recording.is_live = False
+        recording.save(update_fields=["finished_at", "is_live"])
     milliseconds = request.POST.get("duration_ms", "")
     if recording.extension == "webm" and milliseconds.isdigit():
         recordings.add_duration(recordings.file_path(recording), min(int(milliseconds), 24 * 3600 * 1000))
@@ -599,6 +614,109 @@ def recording_finish_view(request, slug, class_id):
     LearningPost.objects.filter(pk=post.pk).update(announced_at=timezone.now())
     services.notify_members(organization, request.user, f"Recording of {live.title} is ready", reverse("learning:detail", args=[post.pk]), live.group)
     return JsonResponse({"post_url": reverse("learning:detail", args=[post.pk]), "size": recording.size})
+def _watchable(request, slug, class_id):
+    """A class this member may watch: their organization's, for their batch."""
+    organization, member = _organization(request, slug)
+    return organization, member, get_object_or_404(services.classes_for(organization, member), pk=class_id)
+@login_required(login_url="landing:home")
+def watch_view(request, slug, class_id):
+    """A class held inside MyProgress, for students: the teacher's board live, a few seconds behind, and the class chat."""
+    organization, member, live = _watchable(request, slug, class_id)
+    if not live.in_myprogress:
+        return redirect("organizations:live_class", slug=slug, class_id=live.pk)
+    if member.is_staff:
+        return redirect("organizations:teaching_board", slug=slug, class_id=live.pk)
+    state = live.state(timezone.now())
+    if state in {"open", "live"}:
+        services.join_class(live, request.user)
+    response = _render(request, "watch.html", organization, member, "classes", {
+        "live": live, "state": state, "now": timezone.now(),
+        "stream_url": reverse("organizations:class_stream", args=[slug, live.pk]), "bytes_url": reverse("organizations:class_stream_bytes", args=[slug, live.pk]),
+        "chat_url": reverse("organizations:class_chat", args=[slug, live.pk]),
+    })
+    response["Cache-Control"] = "private, no-store"
+    return response
+def _stream_state(recording):
+    if recording is None or recording.stream_state.get("init") is None:
+        return "waiting"
+    if recording.finished_at or not recording.is_live:
+        return "ended"
+    if recording.last_piece_at and timezone.now() - recording.last_piece_at > timedelta(seconds=12):
+        return "paused"
+    return "live" if recording.stream_state.get("recent") else "starting"
+@login_required(login_url="landing:home")
+def stream_view(request, slug, class_id):
+    """Where a student's player starts: the stream's header, and a keyframe a few seconds behind the teacher."""
+    organization, member, live = _watchable(request, slug, class_id)
+    recording = live.recordings.order_by("-started_at").first()
+    state = _stream_state(recording)
+    data = {"state": state, "recording_url": reverse("learning:detail", args=[live.recording_id]) if live.recording_id else ""}
+    if recording and state in {"live", "paused", "starting"}:
+        codecs = recording.mime.partition("codecs=")[2]
+        data.update(recording=recording.token, mime=f'video/webm; codecs="{codecs}"' if codecs else "video/webm", init=recording.stream_state["init"], start=recordings.join_point(recording.stream_state), size=recording.size)
+    response = JsonResponse(data)
+    response["Cache-Control"] = "private, no-store"
+    return response
+STREAM_READ_LIMIT = 4 * 1024 * 1024
+@login_required(login_url="landing:home")
+def stream_bytes_view(request, slug, class_id):
+    """A slice of the broadcast as uploaded so far, for the student's player to append."""
+    organization, member, live = _watchable(request, slug, class_id)
+    recording = get_object_or_404(ClassRecording, live_class=live, token=request.GET.get("recording", ""))
+    start, end = request.GET.get("from", ""), request.GET.get("to", "")
+    if not start.isdigit() or (end and not end.isdigit()):
+        return HttpResponse(status=400)
+    start = int(start)
+    stop = min(int(end) if end else recording.size, start + STREAM_READ_LIMIT, recording.size)
+    if start >= stop:
+        response = HttpResponse(status=204)
+    else:
+        with open(recordings.file_path(recording), "rb") as handle:
+            handle.seek(start)
+            response = HttpResponse(handle.read(stop - start), content_type="application/octet-stream")
+    response["X-Stream-Size"] = str(recording.size)
+    response["X-Stream-State"] = _stream_state(recording)
+    response["Cache-Control"] = "private, no-store"
+    return response
+CHAT_BATCH = 100
+@login_required(login_url="landing:home")
+@rate_limit("class-chat", 30, 60)
+def class_chat_view(request, slug, class_id):
+    """The class chat: messages, raised hands, and, for teachers, how many students are watching."""
+    organization, member, live = _watchable(request, slug, class_id)
+    now = timezone.now()
+    if request.method == "POST":
+        action = request.POST.get("action", "say")
+        if action == "say":
+            text = " ".join(request.POST.get("text", "").split())[:500]
+            if text:
+                ClassMessage.objects.create(live_class=live, author=request.user, text=text)
+        elif action in {"raise", "lower"} and not member.is_staff:
+            Attendance.objects.filter(live_class=live, student=request.user).update(hand_raised_at=now if action == "raise" else None)
+        elif action == "lower" and member.is_staff:
+            Attendance.objects.filter(live_class=live, student_id=request.POST.get("student") or 0).update(hand_raised_at=None)
+        elif action == "delete" and member.is_staff:
+            ClassMessage.objects.filter(live_class=live, pk=request.POST.get("message") or 0).delete()
+        else:
+            return JsonResponse({"error": "That isn't something you can do here."}, status=400)
+        return JsonResponse({"ok": True})
+    after = request.GET.get("after", "0")
+    teachers = set(services.staff_of(organization).values_list("pk", flat=True))
+    rows = live.messages.filter(pk__gt=int(after) if after.isdigit() else 0).select_related("author__profile")[:CHAT_BATCH]
+    data = {"messages": [{"id": message.pk, "name": public_name(message.author), "text": message.text, "mine": message.author_id == request.user.pk, "teacher": message.author_id in teachers, "time": timezone.localtime(message.created_at).strftime("%I:%M %p").lstrip("0")} for message in rows]}
+    if member.is_staff:
+        seen = Attendance.objects.filter(live_class=live).select_related("student__profile")
+        data["watching"] = seen.filter(last_seen_at__gte=now - timedelta(seconds=30)).count()
+        data["hands"] = [{"student": mark.student_id, "name": public_name(mark.student)} for mark in seen.filter(hand_raised_at__isnull=False).order_by("hand_raised_at")]
+    else:
+        if live.state(now) in {"open", "live"}:
+            services.join_class(live, request.user)  # opened the page early: present once the class opens
+        mine = Attendance.objects.filter(live_class=live, student=request.user)
+        mine.update(last_seen_at=now)
+        data["hand"] = mine.filter(hand_raised_at__isnull=False).exists()
+    response = JsonResponse(data)
+    response["Cache-Control"] = "private, no-store"
+    return response
 @login_required(login_url="landing:home")
 def live_now_view(request):
     """Classes to alert this person about right now (open to join or live, not joined yet), for the alert on every page."""

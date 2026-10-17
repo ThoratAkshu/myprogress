@@ -58,10 +58,14 @@
   const quality = () => QUALITIES[settings.quality] || QUALITIES[720];
   // Longest recording that stays under the upload limit at the chosen quality, in whole minutes, at most 10.
   const maxSeconds = () => (liveHost ? Number(dialog.dataset.maxMinutes || 120) * 60 : Math.min(600, Math.floor((MAX_BYTES * 8) / (quality().bps + AUDIO_BPS) / 60) * 60));
-  // Teaching board recordings go up piece by piece while the class happens.
+  // Teaching board recordings go up piece by piece while the class happens. In a class held inside MyProgress
+  // the recording is also the broadcast: small pieces, and a keyframe every 2 seconds so students can join late.
+  const broadcast = liveHost && dialog.dataset.broadcast === "1";
+  const csrf = card.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
   const uploader = liveHost && window.StudioLiveUpload ? window.StudioLiveUpload.create({
     urls: { start: dialog.dataset.startUrl, piece: dialog.dataset.chunkUrl, finish: dialog.dataset.finishUrl },
-    csrf: card.querySelector("[name=csrfmiddlewaretoken]")?.value || "",
+    csrf,
+    pieceMs: broadcast ? 2000 : 5000,
     onProgress: progress => {
       if (progress.error) say(progress.error, "error");
       else if (!recording()) say(progress.retrying ? `Connection trouble: still saving (${formatSize(progress.bytes)} saved so far)…` : `Saving the recording: ${formatSize(progress.bytes)} saved${progress.waiting ? `, ${progress.waiting} piece${progress.waiting === 1 ? "" : "s"} to go` : ""}…`);
@@ -131,9 +135,25 @@
     });
   });
   find('[data-setting="name"]').placeholder = authorName || "Your name";
+  // The class chat on the board's Class tab; its badge counts messages that came in while another tab was open.
+  const classBadge = find("[data-class-badge]");
+  let unread = 0;
+  const chat = broadcast && window.ClassChat ? window.ClassChat.create(find("[data-class-chat]"), {
+    url: dialog.dataset.chatUrl, csrf, teacher: true,
+    onMessages: count => {
+      if (!find('[data-pane="class"]').hidden) return;
+      unread += count;
+      classBadge.textContent = String(unread);
+      classBadge.hidden = false;
+    },
+  }) : null;
   dialog.querySelectorAll("[data-panel-tab]").forEach(tab => tab.addEventListener("click", () => {
     dialog.querySelectorAll("[data-panel-tab]").forEach(other => other.setAttribute("aria-selected", String(other === tab)));
     dialog.querySelectorAll("[data-pane]").forEach(pane => { pane.hidden = pane.dataset.pane !== tab.dataset.panelTab; });
+    if (tab.dataset.panelTab === "class" && classBadge) {
+      unread = 0;
+      classBadge.hidden = true;
+    }
   }));
   applySettings();
 
@@ -459,6 +479,7 @@
 
   async function open(mode) {
     release();
+    chat?.start();
     state.mode = mode;
     dialog.dataset.mode = mode;
     heading.textContent = liveHost ? `Teaching: ${titleField.value || "live class"}` : mode === "board" ? "Explain on the whiteboard" : "Record your walkthrough";
@@ -511,7 +532,7 @@
     const limit = maxSeconds();
     if (uploader) {
       try {
-        await uploader.begin(mimeType.split(";")[0] || "video/webm");
+        await uploader.begin(mimeType || "video/webm", broadcast ? { live: "1" } : {});
       } catch (error) {
         setPhase("ready");
         return say(error.message, "error");
@@ -524,7 +545,7 @@
     state.bytes = 0;
     state.elapsed = 0;
     state.resumedAt = performance.now();
-    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS });
+    state.recorder = new MediaRecorder(state.stream, { ...(mimeType && { mimeType }), videoBitsPerSecond: quality().bps, audioBitsPerSecond: AUDIO_BPS, ...(broadcast && { videoKeyFrameIntervalDuration: 2000 }) });
     state.recorder.addEventListener("dataavailable", event => {
       if (event.data.size) {
         if (uploader) uploader.push(event.data);
@@ -612,7 +633,7 @@
     const saved = find("[data-recorder-saved]");
     try {
       const result = await uploader.finish({ duration_ms: Math.round(state.elapsed), chapters: chaptersText(state.chapters), captions: vtt, thumbnail });
-      saved.querySelector("[data-saved-text]").textContent = `Saved ${formatTime(state.elapsed / 1000)} (${formatSize(result.size)}) as the class recording. Students are told it's ready.`;
+      saved.querySelector("[data-saved-text]").textContent = `${broadcast ? "Class ended. " : ""}Saved ${formatTime(state.elapsed / 1000)} (${formatSize(result.size)}) as the class recording. Students are told it's ready.`;
       saved.querySelector("[data-saved-link]").href = result.post_url;
       saved.hidden = false;
       say("");
@@ -804,6 +825,7 @@
     if (state.recorder && state.recorder.state !== "inactive") state.recorder.stop();
     release();
     setPhase("idle");
+    chat?.stop();
     if (dialog.open) dialog.close();
   }
 

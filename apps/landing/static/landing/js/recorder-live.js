@@ -5,10 +5,11 @@ window.StudioLiveUpload = (() => {
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   /*
-   * urls: { start, piece, finish }; csrf: the page's CSRF token.
+   * urls: { start, piece, finish }; csrf: the page's CSRF token; pieceMs: how often a piece is sent (a broadcast
+ * sends often, so students stay close behind).
    * onProgress({ bytes, waiting, retrying, error }) reports how much is saved and how much is still to send.
    */
-  function create({ urls, csrf, onProgress }) {
+  function create({ urls, csrf, onProgress, pieceMs = PIECE_MS }) {
     let token = null;
     let seq = 0;
     let buffer = [];
@@ -79,9 +80,11 @@ window.StudioLiveUpload = (() => {
     }
 
     return {
-      async begin(type) {
+      // extra: more fields for the server, like live=1 for a class broadcast.
+      async begin(type, extra = {}) {
         const body = new FormData();
         body.append("type", type || "video/webm");
+        for (const [name, value] of Object.entries(extra)) body.append(name, value);
         const result = await post(urls.start, body);
         if (!result.ok || !result.data.recording) throw new Error(result.data.error || "Recording couldn't start: MyProgress didn't answer. Check your connection.");
         token = result.data.recording;
@@ -95,7 +98,7 @@ window.StudioLiveUpload = (() => {
       push(blob) {
         if (!token || !blob.size) return;
         buffer.push(blob);
-        if (Date.now() - lastFlush >= PIECE_MS) flush();
+        if (Date.now() - lastFlush >= pieceMs) flush();
       },
       // Send what's left, then turn the pieces into the class recording. fields: duration_ms, chapters, captions, thumbnail (a Blob).
       async finish(fields) {

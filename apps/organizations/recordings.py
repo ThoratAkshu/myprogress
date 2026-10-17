@@ -7,7 +7,10 @@ from django.conf import settings
 
 EBML, SEGMENT, SEEK_HEAD, INFO = 0x1A45DFA3, 0x18538067, 0x114D9B74, 0x1549A966
 TIMECODE_SCALE, DURATION = 0x2AD7B1, 0x4489
+TRACKS, TRACK_ENTRY, TRACK_NUMBER, TRACK_TYPE = 0x1654AE6B, 0xAE, 0xD7, 0x83
+CLUSTER, CLUSTER_TIMECODE, SIMPLE_BLOCK, BLOCK_GROUP, BLOCK, REFERENCE_BLOCK = 0x1F43B675, 0xE7, 0xA3, 0xA0, 0xA1, 0xFB
 HEAD_BYTES = 64 * 1024
+RECENT_KEYFRAMES = 30  # enough for a student to join a few seconds behind the teacher
 
 
 def file_path(recording):
@@ -54,6 +57,116 @@ def _element(data, at):
     element_id, id_length, _ = _vint(data, at, True)
     size, size_length, unknown = _vint(data, at + id_length, False)
     return element_id, at + id_length, at + id_length + size_length, size, unknown
+
+
+def _uint(data, start, size):
+    return int.from_bytes(data[start:start + size], "big")
+
+
+def _children(data, start, end):
+    """(id, data start, size) of each child element in data[start:end]."""
+    at = start
+    while at < end:
+        element_id, _, child_start, size, _ = _element(data, at)
+        yield element_id, child_start, size
+        at = child_start + size
+
+
+def keyframes_path(recording):
+    return file_path(recording) + ".keys"
+
+
+def index_stream(recording):
+    """Read the part of a broadcast uploaded since last time. Notes where the header ends (what every student's
+    player needs first) and where each cluster that starts with a video keyframe begins (where a student joining
+    late can start). Browsers start a new cluster at each keyframe; the board asks for one every 2 seconds.
+    Returns the updated state; the caller saves it. Stops at an element that isn't complete yet and picks it up
+    on the next piece."""
+    state = dict(recording.stream_state or {})
+    scanned = state.get("scanned", 0)
+    with open(file_path(recording), "rb") as handle:
+        handle.seek(scanned)
+        data = handle.read()
+    at, found = 0, []
+    try:
+        if state.get("init") is None:
+            element_id, _, start, size, _ = _element(data, 0)
+            if element_id != EBML:
+                raise ValueError("Not a WebM stream")
+            element_id, _, at, _, _ = _element(data, start + size)
+            if element_id != SEGMENT:
+                raise ValueError("Not a WebM stream")
+            while True:  # the Segment's header elements, up to the first cluster
+                element_id, _, start, size, unknown = _element(data, at)
+                if element_id == CLUSTER:
+                    state["init"] = scanned + at
+                    break
+                if unknown or start + size > len(data):
+                    raise IndexError("Header not complete yet")
+                if element_id == INFO:
+                    for child_id, child_start, child_size in _children(data, start, start + size):
+                        if child_id == TIMECODE_SCALE:
+                            state["scale"] = _uint(data, child_start, child_size)
+                elif element_id == TRACKS:
+                    for entry_id, entry_start, entry_size in _children(data, start, start + size):
+                        if entry_id == TRACK_ENTRY:
+                            fields = {child_id: _uint(data, child_start, child_size) for child_id, child_start, child_size in _children(data, entry_start, entry_start + entry_size) if child_id in {TRACK_NUMBER, TRACK_TYPE}}
+                            if fields.get(TRACK_TYPE) == 1:
+                                state["video"] = fields.get(TRACK_NUMBER)
+                at = start + size
+        scale = state.get("scale") or 1_000_000
+        while at < len(data):  # clusters (unknown size: their children follow in the stream) and their contents
+            element_id, _, start, size, unknown = _element(data, at)
+            if element_id == CLUSTER:
+                state["cluster"] = {"offset": scanned + at, "ms": None, "decided": False}
+                at = start
+                continue
+            if start + size > len(data):
+                break  # not complete yet
+            cluster = state.get("cluster")
+            if cluster and element_id == CLUSTER_TIMECODE:
+                cluster["ms"] = round(_uint(data, start, size) * scale / 1_000_000)
+                state["last_ms"] = cluster["ms"]
+            elif cluster and not cluster["decided"] and element_id in {SIMPLE_BLOCK, BLOCK_GROUP}:
+                track, keyframe = None, False
+                if element_id == SIMPLE_BLOCK:
+                    track, track_length, _ = _vint(data, start, False)
+                    keyframe = bool(data[start + track_length + 2] & 0x80)
+                else:
+                    referenced = False
+                    for child_id, child_start, _ in _children(data, start, start + size):
+                        if child_id == BLOCK:
+                            track, _, _ = _vint(data, child_start, False)
+                        elif child_id == REFERENCE_BLOCK:
+                            referenced = True
+                    keyframe = not referenced
+                if track == state.get("video"):
+                    cluster["decided"] = True
+                    if keyframe and cluster["ms"] is not None:
+                        found.append([cluster["offset"], cluster["ms"]])
+            at = start + size
+    except (ValueError, IndexError):
+        pass  # an element cut off at the end of what's uploaded so far
+    # The header is read in one go from the start of the file, so until it's complete nothing counts as read.
+    state["scanned"] = scanned + at if state.get("init") is not None else 0
+    if found:
+        state["recent"] = (state.get("recent", []) + found)[-RECENT_KEYFRAMES:]
+        with open(keyframes_path(recording), "a", encoding="ascii") as handle:
+            handle.writelines(f"{offset} {ms}\n" for offset, ms in found)
+    return state
+
+
+def join_point(state, behind_ms=4000):
+    """Where a student joining now starts: the latest keyframe at least `behind_ms` before the live edge, so the
+    player has a little buffer, or the earliest one kept."""
+    recent = state.get("recent") or []
+    if not recent:
+        return None
+    edge = state.get("last_ms") or recent[-1][1]
+    for offset, ms in reversed(recent):
+        if edge - ms >= behind_ms:
+            return offset
+    return recent[0][0]
 
 
 def _patched_head(head, milliseconds):

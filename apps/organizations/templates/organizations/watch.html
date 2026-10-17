@@ -1,0 +1,27 @@
+{% extends "organizations/base.html" %}{% load static ui %}
+{% block title %}{{ live.title }} · Live class{% endblock %}
+{% block content %}<div class="section-page org-page watch-page">{% csrf_token %}
+<div class="watch-layout" data-watch-room>
+<section class="watch-main">
+<div class="watch-stage" data-watch data-stream-url="{{ stream_url }}" data-bytes-url="{{ bytes_url }}" data-state="{% if state == 'over' %}ended{% else %}waiting{% endif %}">
+<video data-watch-video playsinline></video>
+<span class="watch-badge" data-watch-badge>LIVE</span>
+<div class="watch-overlay" data-overlay="waiting">{% icon "clock" 30 %}<b>Waiting for your teacher</b><small>Class time: {{ live.starts_at|date:"g:i a" }}<br>Keep this page open: it plays here as soon as your teacher goes live.</small></div>
+<div class="watch-overlay" data-overlay="starting">{% icon "clock" 30 %}<b>Your teacher is going live…</b><small>The picture appears in a few seconds.</small></div>
+<div class="watch-overlay" data-overlay="ready"><button type="button" class="button primary large" data-watch-play>{% icon "play" 18 %} Watch live with sound</button><small>Your teacher is live now.</small></div>
+<div class="watch-overlay is-corner" data-overlay="paused">{% icon "pause" 16 %} Your teacher paused. It carries on when they're back.</div>
+<div class="watch-overlay" data-overlay="ended">{% icon "check-circle" 30 %}<b>This class has ended</b><small data-watch-ended-note>The recording appears on the class page when it's ready.</small><a class="button soft" data-watch-recording hidden href="#">{% icon "play" 16 %} Watch the recording</a></div>
+<div class="watch-overlay" data-overlay="unsupported">{% icon "alert-circle" 30 %}<b>This browser can't play the live class</b><small>Open it in Chrome, Edge or Firefox on a computer or Android phone.</small></div>
+</div>
+<header class="watch-info"><span class="org-logo">{{ organization|face }}</span><div><h1>{{ live.title }}</h1><p class="muted">{{ organization.name }} · {{ live.starts_at|date:"D, M j · g:i a" }} to {{ live.ends_at|date:"g:i a" }}{% if live.group %} · {{ live.group }}{% endif %}</p></div><button type="button" class="button soft" data-hand-toggle aria-pressed="false">{% icon "user" 16 %} <span data-hand-label>Raise hand</span></button></header>
+{% if live.agenda %}<p class="watch-agenda">{{ live.agenda|linebreaksbr }}</p>{% endif %}
+</section>
+<aside class="card watch-chat">
+<header><b>{% icon "message" 16 %} Class chat</b><small>Your teacher and classmates see what you write here.</small></header>
+<ol class="class-messages" data-chat-list aria-live="polite"><li class="class-empty" data-chat-empty>Ask a question: your teacher sees it on their board.</li></ol>
+<form class="class-say" data-chat-form><input type="text" maxlength="500" autocomplete="off" placeholder="Ask a question or say hi" aria-label="Message the class" data-chat-input><button type="submit" class="button primary">Send</button></form>
+</aside>
+</div>
+<div data-chat-config data-url="{{ chat_url }}" hidden></div>
+</div>{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'landing/js/class-chat.js' %}"></script><script src="{% static 'landing/js/class-watch.js' %}"></script>{% endblock %}

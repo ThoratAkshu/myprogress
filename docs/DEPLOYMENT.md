@@ -124,14 +124,28 @@ Back up all three together so they stay consistent:
 `503` if the database or Git is unavailable. Point your load balancer or uptime
 monitor at it.
 
-## Video classes inside MyProgress
+## Live classes
 
-Live classes link out to a free meet.jit.si room in a new tab unless you set
-`JITSI_DOMAIN`. meet.jit.si can't be used for classes held inside the site:
-calls embedded from other websites end after 5 minutes there.
+Classes with a blank meeting link are held inside MyProgress, with nothing to
+install and no other accounts: the teacher goes live from the class's teaching
+board, and students watch on the class's page, a few seconds behind, with a chat
+and a raise-hand button. Students who open the class are marked present, or late
+after the first 10 minutes. The broadcast is also the class recording: when the
+teacher ends the class it is saved, like any recording from the board.
 
-To hold classes inside MyProgress, run your own Jitsi Meet server (the Debian
-packages in the Jitsi handbook take about an hour on a 4 GB VPS) and set:
+Each watching student asks for new video about once a second and for new chat
+messages every two seconds, so a class of 100 adds about 150 small requests a
+second while it's live. Run enough app workers for your largest class, and keep
+`MEDIA_ROOT` on a local disk: the video is read from the recording file as it
+grows. Classes made earlier with an automatic meet.jit.si room are held inside
+MyProgress too. Classes with their own Zoom or Google Meet link keep opening
+that link.
+
+### Two-way video calls (optional)
+
+To give classes a video call where students can also talk, run your own Jitsi
+Meet server (the Debian packages in the Jitsi handbook take about an hour on a
+4 GB VPS) and set:
 
 | Setting | Value |
 | --- | --- |
@@ -140,11 +154,9 @@ packages in the Jitsi handbook take about an hour on a 4 GB VPS) and set:
 
 What changes:
 
-- The class page opens the room on the page itself; students who come in are
-  marked present, or late after the first 10 minutes, as before.
-- Classes with a blank meeting link get a room on your server. Classes made
-  earlier with an automatic meet.jit.si room move to your server too. Classes
-  with their own Zoom or Google Meet link keep opening that link.
+- Classes with a blank meeting link get a room on your server instead of the
+  broadcast, opened on the class page itself. The teaching board still records
+  the class.
 - With token authentication each person gets a pass for that one room, valid
   until two hours after the class ends, with their name filled in. Teachers'
   passes say they're moderators (`moderator` and `context.user.affiliation`
@@ -153,8 +165,9 @@ What changes:
 - Keep the site's pages free of a `Permissions-Policy` header that blocks the
   camera or microphone, or the embedded room can't use them.
 
-JaaS (8x8's hosted Jitsi) needs RS256-signed tokens, which this version doesn't
-make; use a self-hosted server.
+meet.jit.si can't be used: calls embedded from other websites end after 5
+minutes there, and it asks everyone to sign in. JaaS (8x8's hosted Jitsi) needs
+RS256-signed tokens, which this version doesn't make; use a self-hosted server.
 
 ## Security features to know about
 

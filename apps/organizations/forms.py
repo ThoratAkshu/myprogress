@@ -129,7 +129,7 @@ class LiveClassForm(forms.ModelForm):
         model = LiveClass
         fields = ["title", "starts_at", "duration_minutes", "meeting_link", "group", "agenda"]
         labels = {"duration_minutes": "Length (minutes)", "meeting_link": "Meeting link (optional)", "group": "Only for batch (optional)", "agenda": "Agenda (optional)"}
-        widgets = {"title": forms.TextInput(attrs={"placeholder": "Live: building a REST API"}), "agenda": forms.Textarea(attrs={"rows": 3, "placeholder": "What we'll cover, and anything to prepare."}), "meeting_link": forms.URLInput(attrs={"placeholder": "https://meet.google.com/... or leave empty for a free Jitsi room"})}
+        widgets = {"title": forms.TextInput(attrs={"placeholder": "Live: building a REST API"}), "agenda": forms.Textarea(attrs={"rows": 3, "placeholder": "What we'll cover, and anything to prepare."}), "meeting_link": forms.URLInput(attrs={"placeholder": "Leave empty to teach inside MyProgress, or paste a Meet or Zoom link"})}
     def clean_starts_at(self):
         starts_at = self.cleaned_data["starts_at"]
         if starts_at < timezone.now() - timedelta(hours=1):
