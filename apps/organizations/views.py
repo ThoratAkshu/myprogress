@@ -161,9 +161,25 @@ def accept_invite_view(request, token):
         messages.error(request, "This invitation was already used. Ask for a new one.")
         return redirect("landing:dashboard" if request.user.is_authenticated else "landing:home")
     return _join(request, invite.organization, invite)
+def _mask_email(email):
+    name, _, domain = email.partition("@")
+    return f"{name[:1]}{'•' * max(len(name) - 1, 2)}@{domain}"
+def _invite_problem(invite, user):
+    """Why this account can't use an emailed invitation ("" if it can), and whether confirming the email fixes it.
+    An invitation belongs to the address it was sent to, so a forwarded or leaked link is useless to anyone else.
+    Teacher invitations also need that address confirmed, so nobody can sign up with someone else's email first."""
+    if invite is None or not user.is_authenticated or (invite.accepted_by_id == user.pk):
+        return "", False
+    if user.email.strip().lower() != invite.email.strip().lower():
+        return f"This invitation was sent to {_mask_email(invite.email)}. Sign in with that email to accept it, or ask {invite.organization.name} to invite {user.email}.", False
+    profile = Profile.objects.filter(user=user).first()
+    if invite.role != "student" and not (profile and profile.email_verified_at):
+        return "Teacher invitations need a confirmed email. Open the confirmation link we emailed you, then open this invitation again.", True
+    return "", False
 def _join(request, organization, invite):
     existing = Membership.objects.filter(organization=organization, user=request.user).first() if request.user.is_authenticated else None
-    if request.method == "POST" and request.user.is_authenticated and not existing:
+    problem, needs_confirmation = ("", False) if existing else _invite_problem(invite, request.user)
+    if request.method == "POST" and request.user.is_authenticated and not existing and not problem:
         member = services.join(organization, request.user, invite)
         if member.status == "active":
             messages.success(request, f"Welcome to {organization.name}.")
@@ -172,7 +188,7 @@ def _join(request, organization, invite):
         return redirect("organizations:home")
     if existing and existing.status == "active":
         return redirect("organizations:channel", slug=organization.slug)
-    return render(request, "organizations/join.html", {"organization": organization, "invite": invite, "existing": existing, "shared": services.SHARED_WITH_TEACHERS, "member_count": organization.memberships.filter(status="active").count()})
+    return render(request, "organizations/join.html", {"organization": organization, "invite": invite, "existing": existing, "invite_problem": problem, "needs_confirmation": needs_confirmation, "shared": services.SHARED_WITH_TEACHERS, "member_count": organization.memberships.filter(status="active").count()})
 @login_required(login_url="landing:home")
 @require_POST
 def leave_view(request, slug):
@@ -486,7 +502,7 @@ def class_delete_view(request, slug, class_id):
     organization, member = _organization(request, slug, staff=True)
     live = get_object_or_404(LiveClass, pk=class_id, organization=organization)
     if request.POST.get("scope") == "following" and live.series:
-        later = LiveClass.objects.filter(series=live.series, starts_at__gte=live.starts_at)
+        later = LiveClass.objects.filter(organization=organization, series=live.series, starts_at__gte=live.starts_at)
         count = later.count()
         later.delete()
         messages.success(request, f"Cancelled {count} class{'es' if count != 1 else ''} in the series.")

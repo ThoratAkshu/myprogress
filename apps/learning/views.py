@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from apps.accounts.access import user_role
 from apps.accounts.models import Profile
 from apps.core.git_service import clean_repo_path, object_type, read_blob
 from apps.core.models import ArticleImage, ContentView, LearningPost, PostComment, PostLike, Project
@@ -278,9 +279,14 @@ def post_delete_view(request, post_id):
         if field:
             field.storage.delete(field.name)
     reverse_post_coins(post)
+    organization = post.organization
     post.delete()
     refresh_rank(request.user)
     messages.success(request, "Post deleted.")
+    if organization:
+        return redirect("organizations:channel", slug=organization.slug)
+    if user_role(request.user) != "developer":
+        return redirect("landing:dashboard")
     return redirect(f'{reverse("landing:workspace_section", args=["learning"])}?tab=mine')
 @login_required(login_url="landing:home")
 @require_POST

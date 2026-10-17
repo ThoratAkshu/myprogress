@@ -116,6 +116,11 @@ def initials(user):
     profile = getattr(user, "profile", None)
     return (getattr(profile, "handle", "") or "?")[:2].upper()
 @register.filter
+def public_name(user):
+    """How to name someone to people who aren't staff: their name, else their public handle. Never their email."""
+    profile = getattr(user, "profile", None)
+    return user.get_full_name() or (f"@{profile.handle}" if profile and profile.handle else "A MyProgress member")
+@register.filter
 def tone(obj):
     """Stable muted background tone (tone-0..tone-5) for items without an image."""
     return f"tone-{(getattr(obj, 'pk', 0) or 0) % 6}"

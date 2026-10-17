@@ -61,6 +61,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.accounts.middleware.RoleAccessMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.organizations.middleware.OrganizationAccessMiddleware",
 ]

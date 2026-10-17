@@ -92,6 +92,7 @@ class OrganizationTests(TestCase):
         self.assertIn("Join Sunrise Coding Institute", mail.outbox[0].subject)
         invite = Invite.objects.get()
         teacher = make_user("teacher@example.com", "Tea", "Cher")
+        Profile.objects.filter(user=teacher).update(email_verified_at=timezone.now())  # teacher invitations need a confirmed email
         self.client.force_login(teacher)
         self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
         member = Membership.objects.get(user=teacher)

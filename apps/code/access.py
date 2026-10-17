@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Max
 from django.shortcuts import redirect
 from django.urls import reverse
+from apps.accounts.access import user_role
 from apps.accounts.models import Profile
 from apps.core.git_service import list_branches, user_can_access, user_can_administer
 from apps.core.models import Issue, Repository
@@ -21,7 +22,7 @@ def load_repository(request, repository_id, write=False):
         messages.error(request, "You need write access for that.")
         raise RepositoryDenied(redirect("landing:repository", repository_id=repository.pk))
     messages.error(request, "You do not have access to that repository.")
-    raise RepositoryDenied(redirect("landing:workspace_section", section="projects"))
+    raise RepositoryDenied(redirect("landing:workspace_section", section="projects") if user_role(request.user) == "developer" else redirect("landing:dashboard"))
 def repository_context(request, repository, active_tab, branches=None):
     branches = list_branches(repository) if branches is None else branches
     counts = dict(repository.issues.filter(state="open").values_list("kind").annotate(total=Count("id")))

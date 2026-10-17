@@ -19,6 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.text import slugify
 from django.views.generic import TemplateView
+from apps.accounts.access import user_role
 from apps.accounts.emails import send_verification_email, user_from_verification_token
 from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
 from apps.accounts.models import Follow, Profile
@@ -348,7 +349,7 @@ def learning_view(request, post_id):
     """Old share links: record the view and send readers to the post page (never off-site)."""
     post = LearningPost.objects.filter(pk=post_id, is_public=True).first()
     if not post:
-        return redirect("landing:workspace_section", section="learning")
+        return redirect("landing:workspace_section", section="learning") if user_role(request.user) == "developer" else redirect("landing:dashboard")
     record_post_view(request, post)
     return redirect("learning:detail", post_id=post.pk)
 @login_required(login_url="landing:home")
@@ -562,6 +563,8 @@ def update_profile_view(request):
         for errors in form.errors.values():
             for error in errors:
                 messages.error(request, error)
+    if user_role(request.user) != "developer":
+        return redirect("landing:public_profile", handle=profile.handle)
     return redirect("landing:workspace_section", section="portfolio")
 @login_required(login_url="landing:home")
 @require_POST
