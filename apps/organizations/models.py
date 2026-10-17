@@ -60,7 +60,7 @@ class Invite(models.Model):
     name = models.CharField(max_length=120, blank=True)
     role = models.CharField(max_length=10, choices=[("student", "Student"), ("teacher", "Teacher")], default="student")
     group = models.CharField(max_length=60, blank=True)
-    token = models.CharField(max_length=40, unique=True, default=secrets.token_urlsafe)
+    token = models.CharField(max_length=64, unique=True, default=secrets.token_urlsafe)  # 43 characters
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
@@ -236,7 +236,7 @@ class ClassRecording(models.Model):
     happens, so a long class never has to sit in the teacher's memory or go up as one huge file."""
     live_class = models.ForeignKey(LiveClass, on_delete=models.CASCADE, related_name="recordings")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
-    token = models.CharField(max_length=32, unique=True, default=secrets.token_hex)
+    token = models.CharField(max_length=64, unique=True, default=secrets.token_hex)  # 64 characters
     extension = models.CharField(max_length=5, default="webm")
     mime = models.CharField(max_length=80, blank=True, help_text="The recorder's type and codecs, which students' players need")
     is_live = models.BooleanField(default=False, help_text="Being broadcast to students right now")

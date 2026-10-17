@@ -726,7 +726,7 @@ def recording_edit_view(request, slug, class_id, recording_id):
             form.add_error(None, str(error))
         else:
             with transaction.atomic():
-                recording = ClassRecording.objects.select_for_update().select_related("post").get(pk=recording.pk)
+                recording = ClassRecording.objects.select_for_update().get(pk=recording.pk)  # just this row: its lecture loads on its own
                 published_parts = recording.parts
                 recording.title, recording.summary, recording.chapters, recording.audience, recording.parts = data["title"], data["summary"], data["chapters"], data["audience"], parts
                 if data["thumbnail"]:
