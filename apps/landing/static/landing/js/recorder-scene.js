@@ -1,5 +1,6 @@
 // Learning studio scenes: draw the screen and camera into one video frame with a layout template
-// (full screen, framed, or side by side), and draw styled thumbnails from a frame.
+// (full screen, framed, or side by side), and draw styled thumbnails from a frame. The "screen" can also
+// be a canvas, such as the whiteboard paper or a zoomed-in screen.
 window.StudioScene = (() => {
   const BACKGROUNDS = {
     midnight: ["#0f172a", "#1e3a8a"],
@@ -11,7 +12,9 @@ window.StudioScene = (() => {
   const CAMERA_SIZES = { small: 0.19, medium: 0.26, large: 0.34 };
   const FONT = '"DM Sans", "Segoe UI", system-ui, sans-serif';
   const DISPLAY_FONT = 'Manrope, "DM Sans", "Segoe UI", system-ui, sans-serif';
-  const ready = video => Boolean(video && video.videoWidth);
+  // Video elements report their size as videoWidth (0 until a frame arrives); canvases as width.
+  const sizeOf = source => ({ width: source.videoWidth ?? source.width, height: source.videoHeight ?? source.height });
+  const ready = source => Boolean(source && sizeOf(source).width);
 
   function roundedPath(ctx, x, y, w, h, r) {
     const radius = Math.min(r, w / 2, h / 2);
@@ -35,19 +38,21 @@ window.StudioScene = (() => {
 
   // Fit the whole video inside the box (letterboxed); returns where it landed.
   function containRect(video, x, y, w, h) {
-    const scale = Math.min(w / video.videoWidth, h / video.videoHeight);
-    const width = video.videoWidth * scale;
-    const height = video.videoHeight * scale;
+    const size = sizeOf(video);
+    const scale = Math.min(w / size.width, h / size.height);
+    const width = size.width * scale;
+    const height = size.height * scale;
     return { x: x + (w - width) / 2, y: y + (h - height) / 2, w: width, h: height };
   }
 
   // Fill the box with the video, cropping the edges.
   function drawCover(ctx, video, x, y, w, h, mirror) {
-    const scale = Math.max(w / video.videoWidth, h / video.videoHeight);
+    const size = sizeOf(video);
+    const scale = Math.max(w / size.width, h / size.height);
     const sw = w / scale;
     const sh = h / scale;
-    const sx = (video.videoWidth - sw) / 2;
-    const sy = (video.videoHeight - sh) / 2;
+    const sx = (size.width - sw) / 2;
+    const sy = (size.height - sh) / 2;
     ctx.save();
     if (mirror) {
       ctx.translate(x + w, y);
@@ -178,9 +183,10 @@ window.StudioScene = (() => {
 
   /*
    * Draw one video frame.
-   * sources: { screen, camera } video elements (either may be missing)
+   * sources: { screen, camera } video elements or canvases (either may be missing)
    * options: { layout: "full" | "framed" | "side", position, size, shape, background, mirror,
    *            showCamera, nameTag, name, subtitle, accent }
+   * Returns { screen: {x, y, w, h} } with where the screen landed, or { screen: null }.
    */
   function draw(ctx, w, h, sources, options) {
     const screen = ready(sources.screen) ? sources.screen : null;
@@ -190,7 +196,7 @@ window.StudioScene = (() => {
     if (!screen) {
       if (!camera) {
         fillBackground(ctx, w, h, options.background);
-        return;
+        return { screen: null };
       }
       if (layout === "full") drawCover(ctx, camera, 0, 0, w, h, options.mirror);
       else {
@@ -204,7 +210,7 @@ window.StudioScene = (() => {
         ctx.restore();
       }
       nameTag(ctx, w, h, options, "left");
-      return;
+      return { screen: null };
     }
     if (layout === "side" && camera) {
       fillBackground(ctx, w, h, options.background);
@@ -228,7 +234,7 @@ window.StudioScene = (() => {
         ctx.fillStyle = "rgba(255, 255, 255, .82)";
         wrapLines(ctx, options.subtitle, cardW, 2).forEach((line, index) => ctx.fillText(line, cardX, cardY + cardH + (44 + nameLines.length * 30 + index * 22) * unit));
       }
-      return;
+      return { screen: area };
     }
     if (layout === "framed") {
       fillBackground(ctx, w, h, options.background);
@@ -238,7 +244,7 @@ window.StudioScene = (() => {
       drawFramedVideo(ctx, screen, area, w * 0.012);
       if (camera) cornerCamera(ctx, camera, area, w, h, options);
       nameTag(ctx, w, h, options, tagSide);
-      return;
+      return { screen: area };
     }
     ctx.fillStyle = "#0b1220";
     ctx.fillRect(0, 0, w, h);
@@ -246,6 +252,7 @@ window.StudioScene = (() => {
     ctx.drawImage(screen, area.x, area.y, area.w, area.h);
     if (camera) cornerCamera(ctx, camera, { x: 0, y: 0, w, h }, w, h, options);
     nameTag(ctx, w, h, options, tagSide);
+    return { screen: area };
   }
 
   /*
@@ -298,5 +305,5 @@ window.StudioScene = (() => {
     return new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.88));
   }
 
-  return { BACKGROUNDS, draw, thumbnail };
+  return { BACKGROUNDS, FONT, DISPLAY_FONT, draw, thumbnail, roundedPath, wrapLines, sizeOf };
 })();

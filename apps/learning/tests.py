@@ -83,6 +83,12 @@ class PublishingTests(TestCase):
         self.assertTrue(post.video_file.name.endswith(".webm"))
         self.assertTrue(post.thumbnail.name.endswith(".jpg"))
         self.assertEqual(post.video_script, "INTRO\nHi.")
+    def test_format_comes_first_and_the_studio_offers_drawing_notes_and_trimming(self):
+        page = self.client.get(reverse("learning:create"), {"kind": "video"}).content.decode()
+        self.assertLess(page.index('class="format-picker"'), page.index('class="studio-source"'))
+        self.assertIn('<input type="radio" name="kind" value="video"', page)
+        for control in ['data-record-mode="board"', 'data-ink-tool="pen"', 'data-ink-tool="zoom"', 'data-ink-color="#ef4444"', 'data-ink-action="board"', '<option value="chalk">Chalkboard</option>', 'data-pane="notes"', 'value="top-center"', "data-note-add", "data-clip-editor", 'data-clip-action="cut"', "data-edit-file-input", "recorder-ink.js", "recorder-editor.js"]:
+            self.assertIn(control, page)
     def test_background_upload_gets_the_post_address_and_keeps_the_success_message(self):
         data = {"title": "Uploaded in the background", "kind": "article", "summary": "", "body": ARTICLE, "is_public": "on"}
         response = self.client.post(reverse("learning:create"), data, headers={"X-Requested-With": "XMLHttpRequest"})

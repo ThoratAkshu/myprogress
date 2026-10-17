@@ -121,8 +121,12 @@ def _published(request, post):
 # Choices for the recorder's layout templates; colors match recorder-scene.js.
 RECORDER_CORNERS = [("top-left", "Top left"), ("top-right", "Top right"), ("bottom-left", "Bottom left"), ("bottom-right", "Bottom right")]
 RECORDER_BACKGROUNDS = [("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("ocean", "Ocean", ("#1d4ed8", "#0ea5e9")), ("sunset", "Sunset", ("#f97316", "#db2777")), ("forest", "Forest", ("#065f46", "#0d9488")), ("graphite", "Graphite", ("#111827", "#374151"))]
+# Drawing tools in the studio; paper styles are drawn by recorder-ink.js.
+INK_COLORS = [("#ef4444", "Red"), ("#facc15", "Yellow"), ("#22c55e", "Green"), ("#38bdf8", "Blue"), ("#ffffff", "White"), ("#0f172a", "Black")]
+BOARD_PAPERS = [("grid", "Grid paper"), ("lined", "Lined paper"), ("dots", "Dotted paper"), ("plain", "Plain white"), ("chalk", "Chalkboard")]
+NOTE_PLACES = [("top-right", "Top right"), ("top-left", "Top left"), ("top-center", "Top center"), ("center", "Center"), ("bottom-left", "Bottom left"), ("bottom-center", "Bottom center"), ("bottom-right", "Bottom right")]
 def _form_context(request, form, post=None):
-    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
+    return {"section": "learning", "form": form, "post": post, "studio_projects": _studio_projects(request.user), "recorder_corners": RECORDER_CORNERS, "recorder_backgrounds": RECORDER_BACKGROUNDS, "ink_colors": INK_COLORS, "board_papers": BOARD_PAPERS, "note_places": NOTE_PLACES, "ai_enabled": bool(settings.ANTHROPIC_API_KEY)}
 def media_view(request, post_id, which):
     """An organization post's video or thumbnail, only for people who can see the post."""
     post = _visible_post(request, post_id)
