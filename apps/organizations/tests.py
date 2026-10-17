@@ -91,10 +91,10 @@ class OrganizationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Join Sunrise Coding Institute", mail.outbox[0].subject)
         invite = Invite.objects.get()
-            teacher = make_user("teacher@example.com", "Tea", "Cher")
-            Profile.objects.filter(user=teacher).update(email_verified_at=timezone.now())  # teacher invitations need a confirmed email
-            self.client.force_login(teacher)
-            self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
+        teacher = make_user("teacher@example.com", "Tea", "Cher")
+        Profile.objects.filter(user=teacher).update(email_verified_at=timezone.now())  # teacher invitations need a confirmed email
+        self.client.force_login(teacher)
+        self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
         member = Membership.objects.get(user=teacher)
         self.assertEqual((member.role, member.group, member.status), ("teacher", "Batch A", "active"))
         invite.refresh_from_db()
@@ -137,7 +137,7 @@ class OrganizationTests(TestCase):
         self.join(self.student)
         self.client.force_login(self.owner)
         form = self.client.get(reverse("learning:create") + f"?org={self.organization.slug}&kind=video")
-        self.assertContains(form, "Share only with my organization")
+        self.assertContains(form, "Share with")  # institutes choose their students or everyone
         response = self.client.post(reverse("learning:create"), {"title": "Day 3: Joins explained", "kind": "article", "body": "Joins combine tables. " * 10, "is_public": "on", "organization": self.organization.pk}, follow=True)
         self.assertContains(response, "Shared with Sunrise Coding Institute. Only its members can see it.")
         lecture = LearningPost.objects.get(title="Day 3: Joins explained")
@@ -622,3 +622,76 @@ class OrganizationTests(TestCase):
         self.client.force_login(self.student)
         self.assertContains(self.client.get(reverse("organizations:invite", args=[self.organization.slug])), "This page is for teachers", status_code=404)
         self.assertEqual(self.client.get(reverse("organizations:channel", args=[self.organization.slug])).status_code, 200)
+@override_settings(MEDIA_ROOT=MEDIA)
+class LiveClassReminderTests(TestCase):
+    """Students see their live classes on their dashboard, with reminders, an alert, and a calendar file."""
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.owner = make_user("principal@institute.example", "Prin", "Cipal", role="organization")
+        self.organization = services.create_organization(self.owner, {"name": "Sunrise Coding Institute", "kind": "institute", "city": "Pune", "about": "", "website": "", "join_requires_approval": False})
+        self.student = make_user("asha@example.com", "Asha", "Rao")
+        member = services.join(self.organization, self.student)
+        member.group = "Batch A"
+        member.save()
+        self.other_batch = make_user("ravi@example.com", "Ravi", "Kumar")
+        services.join(self.organization, self.other_batch).__class__.objects.filter(user=self.other_batch).update(group="Batch B")
+    def live(self, minutes, **fields):
+        from .models import LiveClass
+        return LiveClass.objects.create(organization=self.organization, created_by=self.owner, title=fields.pop("title", "Python loops"), starts_at=timezone.now() + timedelta(minutes=minutes), group=fields.pop("group", "Batch A"), **fields)
+    def test_the_dashboard_lists_upcoming_classes_and_opens_join_on_time(self):
+        later = self.live(180)
+        self.client.force_login(self.student)
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, "Live classes")
+        self.assertContains(page, "Python loops")
+        self.assertContains(page, reverse("organizations:class_calendar", args=[self.organization.slug, later.pk]))
+        self.assertContains(page, f'href="{reverse("organizations:join_class", args=[self.organization.slug, later.pk])}" target="_blank" rel="noopener" hidden')
+        self.client.force_login(self.other_batch)
+        self.assertNotContains(self.client.get(reverse("landing:dashboard")), "Python loops")  # another batch's class
+    def test_the_alert_lists_classes_open_to_join_until_the_student_joins(self):
+        url = reverse("organizations:live_now")
+        self.live(180, title="Later today")
+        soon = self.live(5)
+        self.client.force_login(self.student)
+        classes = self.client.get(url).json()["classes"]
+        self.assertEqual([(item["title"], item["state"], item["teacher"]) for item in classes], [("Python loops", "open", False)])
+        self.assertEqual(classes[0]["join_url"], reverse("organizations:join_class", args=[self.organization.slug, soon.pk]))
+        self.client.get(classes[0]["join_url"])  # joining records attendance
+        self.assertEqual(self.client.get(url).json()["classes"], [])
+        self.client.force_login(self.other_batch)
+        self.assertEqual(self.client.get(url).json()["classes"], [])
+        outsider = make_user("outsider@example.com", "Out", "Sider")
+        self.client.force_login(outsider)
+        self.assertEqual(self.client.get(url).json()["classes"], [])
+    def test_the_calendar_file_has_a_reminder_and_stays_private(self):
+        from datetime import timezone as dt_timezone
+        from .models import LiveClass
+        first = self.live(60 * 24, title="Loops; part 1, intro", series="week-plan", agenda="Bring a laptop")
+        self.live(60 * 48, title="Loops part 2", series="week-plan")
+        self.client.force_login(self.student)
+        response = self.client.get(reverse("organizations:class_calendar", args=[self.organization.slug, first.pk]))
+        self.assertEqual(response["Content-Type"], "text/calendar; charset=utf-8")
+        body = response.content.decode()
+        self.assertIn("BEGIN:VEVENT\r\n", body)
+        self.assertIn("TRIGGER:-PT15M", body)
+        self.assertIn(r"SUMMARY:Loops\; part 1\, intro (Sunrise Coding Institute)", body)
+        self.assertIn(f"DTSTART:{first.starts_at.astimezone(dt_timezone.utc).strftime('%Y%m%dT%H%M%SZ')}", body)
+        self.assertTrue(all(len(line.encode()) <= 75 for line in body.split("\r\n")))
+        series = self.client.get(reverse("organizations:class_calendar", args=[self.organization.slug, first.pk]), {"series": "1"}).content.decode()
+        self.assertEqual(series.count("BEGIN:VEVENT"), 2)
+        self.client.force_login(self.other_batch)
+        self.assertEqual(self.client.get(reverse("organizations:class_calendar", args=[self.organization.slug, first.pk])).status_code, 404)
+        self.assertEqual(LiveClass.objects.count(), 2)
+    def test_reminders_go_out_as_people_use_the_site_without_a_cron_job(self):
+        self.live(5)
+        self.client.force_login(self.other_batch)
+        with override_settings(ORGANIZATION_JOBS_EVERY_SECONDS=0):
+            self.client.get(reverse("notifications:list"))
+        self.assertFalse(Notification.objects.filter(recipient=self.student, text__contains="starts at").exists())
+        cache.clear()
+        self.client.get(reverse("notifications:list"))  # anyone's visit runs the due jobs
+        self.client.get(reverse("notifications:list"))
+        services.send_class_reminders()  # a cron run at the same time sends nothing twice
+        self.assertEqual(Notification.objects.filter(recipient=self.student, text__contains="starts at").count(), 1)
+        self.assertFalse(Notification.objects.filter(recipient=self.other_batch, text__contains="starts at").exists())
