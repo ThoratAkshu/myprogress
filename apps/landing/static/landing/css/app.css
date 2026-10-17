@@ -1402,3 +1402,42 @@ a.org-item-title:hover{color:var(--violet)}
 [data-logo-note][data-tone=ok]{color:#15803d}
 @media(max-width:860px){.channel-form-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:520px){.logo-maker-body{grid-template-columns:minmax(0,1fr)}.channel-preview-body{flex-direction:column;align-items:flex-start;gap:8px}.channel-preview-text{padding-top:0}}
+/* Live classes: the dashboard card, countdowns, and the alert on every page */
+.live-classes{display:grid;gap:12px;border-top:3px solid var(--accent)}
+.live-classes .card-head{margin:0}
+.live-classes h2{display:flex;align-items:center;gap:8px}
+.live-alerts-toggle{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line);border-radius:99px;background:var(--surface,#fff);color:var(--violet);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.live-alerts-toggle:hover{border-color:var(--violet)}
+.live-class-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.live-class-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface,#fff)}
+.live-class-row[data-state=open],.live-class-row[data-state=live]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--surface,#fff))}
+.live-class-row .org-date{display:grid;place-items:center;width:52px;height:52px;border-radius:12px;background:var(--violet-soft);color:var(--violet);line-height:1}
+.live-class-row .org-date b{font-size:20px}
+.live-class-row .org-date small{font-size:11px;font-weight:700;text-transform:uppercase}
+.live-class-row .org-date.live{background:#dc2626;color:#fff}
+.live-class-text{display:grid;gap:2px;min-width:0}
+.live-class-text a{color:var(--ink);text-decoration:none}
+.live-class-text a:hover b{text-decoration:underline}
+.live-class-text b{overflow:hidden;font-size:15px;text-overflow:ellipsis;white-space:nowrap}
+.live-class-text small{overflow:hidden;color:var(--muted);font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.live-countdown{justify-self:start;margin-top:3px;padding:2px 9px;border-radius:99px;background:var(--canvas);color:#334155;font-size:12px;font-weight:700}
+.live-countdown[data-state=open]{background:#fef3c7;color:#92400e}
+.live-countdown[data-state=live]{background:#dc2626;color:#fff}
+.live-class-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px}
+.live-class-actions .button{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;font-size:13px}
+.org-live [data-countdown][data-state=open]{background:#fef3c7;color:#92400e}
+.org-live [data-countdown][data-state=live]{background:#dc2626;color:#fff}
+.org-live-actions [data-calendar],.org-live-actions [data-alerts-toggle]{display:inline-flex;align-items:center;gap:6px}
+.live-banner{position:sticky;top:0;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px max(16px,calc((100vw - 1120px) / 2));background:#0f172a;color:#f8fafc;box-shadow:0 8px 20px rgba(2,6,23,.25)}
+.live-banner[data-state=live]{background:linear-gradient(90deg,#7f1d1d,#0f172a 60%)}
+.live-banner-badge{padding:3px 9px;border-radius:99px;background:#f59e0b;color:#1f2937;font-size:12px;font-weight:800;letter-spacing:.04em}
+.live-banner[data-state=live] .live-banner-badge{background:#ef4444;color:#fff;animation:live-pulse 1.6s ease-in-out infinite}
+.live-banner-text{display:grid;flex:1;min-width:180px;color:inherit;text-decoration:none}
+.live-banner-text b{font-size:14px}
+.live-banner-text small{color:#cbd5e1;font-size:12px}
+.live-banner .live-banner-join{padding:8px 14px;font-size:13px}
+.live-banner-close{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:#cbd5e1;font-size:22px;line-height:1;cursor:pointer}
+.live-banner-close:hover{background:rgba(255,255,255,.1);color:#fff}
+@keyframes live-pulse{50%{opacity:.6}}
+@media(max-width:640px){.live-class-row{grid-template-columns:auto minmax(0,1fr)}.live-class-actions{grid-column:1/-1;justify-content:flex-start}}
+@media(prefers-reduced-motion:reduce){.live-banner[data-state=live] .live-banner-badge{animation:none}}

@@ -5,7 +5,7 @@ import logging
 import re
 import secrets
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from urllib.parse import urlparse
 import jwt
 from django.conf import settings
@@ -48,7 +48,7 @@ def visible_to(queryset, member):
     if member.is_staff:
         return queryset
     return queryset.filter(Q(group="") | Q(group__iexact=member.group))
-RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent"}
+RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent", "classes-now"}
 def unique_slug(name):
     base = slugify(name)[:50] or "organization"
     if base in RESERVED_SLUGS:
@@ -228,12 +228,62 @@ def send_class_reminders():
     due = LiveClass.objects.filter(reminded_at__isnull=True, starts_at__gt=now, starts_at__lte=now + timedelta(minutes=LiveClass.JOIN_OPENS_MINUTES)).select_related("organization")
     count = 0
     for live in due:
+        if not LiveClass.objects.filter(pk=live.pk, reminded_at__isnull=True).update(reminded_at=now):
+            continue  # another run already reminded this class
         starts = timezone.localtime(live.starts_at).strftime("%I:%M %p").lstrip("0")
         notify_members(live.organization, None, f"{live.title} starts at {starts}. Join from {live.organization.name}.", reverse("organizations:live_class", args=[live.organization.slug, live.pk]), live.group)
-        live.reminded_at = now
-        live.save(update_fields=["reminded_at"])
         count += 1
     return count
+def run_due_jobs():
+    """Everything that happens on a schedule: scheduled posts, lectures and tasks, and class reminders.
+    Returns (published, released, reminded)."""
+    return publish_due_posts(), release_due_items(), send_class_reminders()
+def upcoming_classes(user, days=7, limit=6):
+    """Live classes for someone's dashboard: live now or starting within `days`, from every organization they're in.
+    Each has .organization, .member and .current (the state now) set; students also get .mine (their attendance)."""
+    now = timezone.now()
+    classes = []
+    for member in Membership.objects.filter(user=user, status="active").select_related("organization"):
+        window = classes_for(member.organization, member).filter(starts_at__gte=now - timedelta(hours=12), starts_at__lte=now + timedelta(days=days)).select_related("organization")
+        for live in window.order_by("starts_at")[:limit * 2]:
+            if live.ends_at > now:
+                live.member, live.current = member, live.state(now)
+                classes.append(live)
+    classes.sort(key=lambda live: live.starts_at)
+    classes = classes[:limit]
+    marks = dict(Attendance.objects.filter(live_class__in=classes, student=user).values_list("live_class_id", "status"))
+    for live in classes:
+        live.mine = marks.get(live.pk)
+    return classes
+def class_alerts(user):
+    """Classes to alert someone about right now: open to join (from 15 minutes before) or live, and not joined yet."""
+    return [live for live in upcoming_classes(user, days=1, limit=10) if live.current in {"open", "live"} and not live.mine]
+def _ics_text(text):
+    """Text escaped for an iCalendar value: backslashes, semicolons, commas and line breaks."""
+    return str(text).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
+def class_calendar(classes, page_url):
+    """An iCalendar file for one class or a series, with an alarm 15 minutes before each class.
+    page_url(live) gives the class page; the meeting link itself stays in MyProgress, which takes attendance."""
+    stamp = lambda moment: moment.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MyProgress//Live classes//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"]
+    for live in classes:
+        url = page_url(live)
+        lines += ["BEGIN:VEVENT", f"UID:live-class-{live.pk}@myprogress", f"DTSTAMP:{stamp(timezone.now())}", f"DTSTART:{stamp(live.starts_at)}", f"DTEND:{stamp(live.ends_at)}",
+                  f"SUMMARY:{_ics_text(live.title)} ({_ics_text(live.organization.name)})", f"DESCRIPTION:{_ics_text((live.agenda + chr(10) + chr(10) if live.agenda else '') + 'Join from MyProgress: ' + url)}", f"URL:{url}",
+                  "BEGIN:VALARM", "ACTION:DISPLAY", f"DESCRIPTION:{_ics_text(live.title)} starts in 15 minutes", "TRIGGER:-PT15M", "END:VALARM", "END:VEVENT"]
+    lines.append("END:VCALENDAR")
+    # Lines longer than 75 octets are folded, as the format requires.
+    folded = []
+    for line in lines:
+        data = line.encode("utf-8")
+        while len(data) > 75:
+            cut = 75
+            while (data[cut] & 0xC0) == 0x80:  # don't split a character
+                cut -= 1
+            folded.append(data[:cut].decode("utf-8"))
+            data = b" " + data[cut:]
+        folded.append(data.decode("utf-8"))
+    return "\r\n".join(folded) + "\r\n"
 
 LEADERBOARD_METRICS = [("class_points", "Class points"), ("task_points", "Task points"), ("attendance", "Attendance"), ("coding_days", "Coding days"), ("score", "MyProgress score")]
 def leaderboard(organization, metric="class_points", group=""):
@@ -352,11 +402,13 @@ def announce_post(post, actor=None):
     post.save(update_fields=["notified_at"])
 def publish_due_posts():
     """Announce scheduled posts whose time has come. Returns how many were published."""
-    due = ChannelPost.objects.filter(publish_at__lte=timezone.now(), notified_at__isnull=True).select_related("organization", "author")
+    now = timezone.now()
+    due = ChannelPost.objects.filter(publish_at__lte=now, notified_at__isnull=True).select_related("organization", "author")
     count = 0
     for post in due:
-        announce_post(post)
-        count += 1
+        if ChannelPost.objects.filter(pk=post.pk, notified_at__isnull=True).update(notified_at=now):  # claimed by this run
+            announce_post(post)
+            count += 1
     return count
 def released(items):
     """Lectures or tasks students may see now: released straight away, or whose release time has come."""
@@ -381,11 +433,13 @@ def release_due_items():
     """Announce lectures and tasks whose release time has come. Returns how many were released."""
     now, count = timezone.now(), 0
     for post in LearningPost.objects.filter(organization__isnull=False, publish_at__lte=now, announced_at__isnull=True).select_related("organization", "author"):
-        announce_lesson(post)
-        count += 1
+        if LearningPost.objects.filter(pk=post.pk, announced_at__isnull=True).update(announced_at=now):
+            announce_lesson(post)
+            count += 1
     for task in Task.objects.filter(publish_at__lte=now, announced_at__isnull=True).select_related("organization", "created_by"):
-        announce_task(task)
-        count += 1
+        if Task.objects.filter(pk=task.pk, announced_at__isnull=True).update(announced_at=now):
+            announce_task(task)
+            count += 1
     return count
 def class_dates(starts_at, repeat, days=(), count=1):
     """When each class in a series happens, keeping the same local time even across daylight-saving changes."""

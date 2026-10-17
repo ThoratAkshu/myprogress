@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -495,6 +495,31 @@ def class_room_view(request, slug, class_id):
     response = _render(request, "class_room.html", organization, member, "classes", {"live": live, "room": room, "domain": settings.JITSI_DOMAIN, "token": services.video_token(live, request.user, member.is_staff, room), "display_name": services.display_name(request.user), "mine": mine})
     response["Cache-Control"] = "private, no-store"
     response["Referrer-Policy"] = "no-referrer"
+    return response
+@login_required(login_url="landing:home")
+def class_calendar_view(request, slug, class_id):
+    """The class, or every class still to come in its series, as a calendar file with a reminder 15 minutes before."""
+    organization, member = _organization(request, slug)
+    visible = services.classes_for(organization, member).select_related("organization")
+    live = get_object_or_404(visible, pk=class_id)
+    classes = [live]
+    if request.GET.get("series") and live.series:
+        classes = list(visible.filter(series=live.series, starts_at__gte=timezone.now() - timedelta(hours=12)).order_by("starts_at")) or [live]
+    body = services.class_calendar(classes, lambda item: request.build_absolute_uri(reverse("organizations:live_class", args=[slug, item.pk])))
+    name = f"{slug}-series" if len(classes) > 1 else f"{slug}-class-{live.pk}"
+    response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{name}.ics"'
+    return response
+@login_required(login_url="landing:home")
+def live_now_view(request):
+    """Classes to alert this person about right now (open to join or live, not joined yet), for the alert on every page."""
+    alerts = [{
+        "id": live.pk, "title": live.title, "organization": live.organization.name, "state": live.current, "teacher": live.member.is_staff,
+        "starts_at": live.starts_at.isoformat(), "join_url": reverse("organizations:join_class", args=[live.organization.slug, live.pk]),
+        "page_url": reverse("organizations:live_class", args=[live.organization.slug, live.pk]),
+    } for live in services.class_alerts(request.user)]
+    response = JsonResponse({"classes": alerts})
+    response["Cache-Control"] = "private, no-store"
     return response
 @login_required(login_url="landing:home")
 @require_POST

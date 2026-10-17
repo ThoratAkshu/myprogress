@@ -91,10 +91,10 @@ class OrganizationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Join Sunrise Coding Institute", mail.outbox[0].subject)
         invite = Invite.objects.get()
-        teacher = make_user("teacher@example.com", "Tea", "Cher")
-        Profile.objects.filter(user=teacher).update(email_verified_at=timezone.now())  # teacher invitations need a confirmed email
-        self.client.force_login(teacher)
-        self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
+            teacher = make_user("teacher@example.com", "Tea", "Cher")
+            Profile.objects.filter(user=teacher).update(email_verified_at=timezone.now())  # teacher invitations need a confirmed email
+            self.client.force_login(teacher)
+            self.client.post(reverse("organizations:accept_invite", args=[invite.token]))
         member = Membership.objects.get(user=teacher)
         self.assertEqual((member.role, member.group, member.status), ("teacher", "Batch A", "active"))
         invite.refresh_from_db()
@@ -137,7 +137,7 @@ class OrganizationTests(TestCase):
         self.join(self.student)
         self.client.force_login(self.owner)
         form = self.client.get(reverse("learning:create") + f"?org={self.organization.slug}&kind=video")
-        self.assertContains(form, "Share with")  # institutes choose their students or everyone
+        self.assertContains(form, "Share only with my organization")
         response = self.client.post(reverse("learning:create"), {"title": "Day 3: Joins explained", "kind": "article", "body": "Joins combine tables. " * 10, "is_public": "on", "organization": self.organization.pk}, follow=True)
         self.assertContains(response, "Shared with Sunrise Coding Institute. Only its members can see it.")
         lecture = LearningPost.objects.get(title="Day 3: Joins explained")

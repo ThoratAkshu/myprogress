@@ -282,6 +282,9 @@ LOGGING = {
 # A Jitsi Meet server to hold live classes inside MyProgress, like meet.yourinstitute.in.
 # Empty: classes open a meet.jit.si room in a new tab (meet.jit.si ends embedded calls after 5 minutes).
 JITSI_DOMAIN = config("JITSI_DOMAIN", default="").strip().removeprefix("https://").strip("/")
+# Class reminders, scheduled posts, lectures and tasks also run as people use the site, at most this often (seconds),
+# so they happen even without a cron job for run_organization_jobs. 0 turns this off when cron runs it every few minutes.
+ORGANIZATION_JOBS_EVERY_SECONDS = config("ORGANIZATION_JOBS_EVERY_SECONDS", default=60, cast=int)
 # Set both when that server uses token authentication (the app_id and app_secret from its Prosody config).
 JITSI_APP_ID = config("JITSI_APP_ID", default="")
 JITSI_APP_SECRET = config("JITSI_APP_SECRET", default="")

@@ -9,6 +9,7 @@ urlpatterns = [
     path("certificates/<str:code>/", views.certificate_view, name="certificate"),
     path("parent/<str:token>/", views.parent_report_view, name="parent_report"),
     path("parent/<str:token>/emails/", views.parent_emails_view, name="parent_emails"),
+    path("classes-now/", views.live_now_view, name="live_now"),
     path("<slug:slug>/", views.overview_view, name="overview"),
     path("<slug:slug>/students/", views.members_view, name="members"),
     path("<slug:slug>/students/<int:user_id>/", views.member_detail_view, name="member"),
@@ -36,5 +37,6 @@ urlpatterns = [
     path("<slug:slug>/live/<int:class_id>/", views.class_detail_view, name="live_class"),
     path("<slug:slug>/live/<int:class_id>/join/", views.class_join_view, name="join_class"),
     path("<slug:slug>/live/<int:class_id>/room/", views.class_room_view, name="class_room"),
+    path("<slug:slug>/live/<int:class_id>/calendar.ics", views.class_calendar_view, name="class_calendar"),
     path("<slug:slug>/live/<int:class_id>/cancel/", views.class_delete_view, name="cancel_class"),
 ]
