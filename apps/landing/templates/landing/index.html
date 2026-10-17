@@ -159,7 +159,7 @@
 </ul></div>
 <div class="live-board">
 <div class="live-head"><b>{% icon "award" 18 %}Top developers right now</b><span class="live-dot">Live</span></div>
-{% for profile in top_developers %}<a class="live-row" href="{% url 'landing:public_profile' profile.handle %}"><span class="live-rank">#{{ forloop.counter }}</span><span class="live-avatar {{ profile.user|avatar_tone }}">{{ profile.user|initials }}</span><span class="live-who"><b>{{ profile.user.get_full_name|default:profile.handle }}</b><small>{{ profile.headline|default:"Developer"|truncatechars:48 }}{% if profile.top_language %} · {{ profile.top_language }}{% endif %}</small></span><span class="live-score">{{ profile.score }}</span></a>
+{% for profile in top_developers %}<a class="live-row" href="{% url 'landing:public_profile' profile.handle %}"><span class="live-rank">#{{ forloop.counter }}</span><span class="live-avatar {{ profile.user|avatar_tone }}">{{ profile.user|face }}</span><span class="live-who"><b>{{ profile.user.get_full_name|default:profile.handle }}</b><small>{{ profile.headline|default:"Developer"|truncatechars:48 }}{% if profile.top_language %} · {{ profile.top_language }}{% endif %}</small></span><span class="live-score">{{ profile.score }}</span></a>
 {% empty %}<div class="live-empty">{% icon "award" 22 %}<b>The leaderboard is waiting for its first names.</b><span>Push your first commit and you could be number one.</span><a class="site-btn primary" href="{% url 'landing:register' %}">Claim a spot</a></div>{% endfor %}
 </div>
 </div></section>

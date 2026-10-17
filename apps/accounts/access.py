@@ -39,7 +39,7 @@ POLICY = {
     "code:issue_create": PUBLIC, "code:issue_comment": PUBLIC, "code:issue_state": PUBLIC, "code:pull_create": PUBLIC, "code:pull_merge": PUBLIC, "code:collaborators": PUBLIC,
     # Every signed-in account.
     "landing:dashboard": ALL_ROLES,  # sends each account type to its own home
-    "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:follow": ALL_ROLES,
+    "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:channel_settings": ALL_ROLES, "landing:follow": ALL_ROLES,
     "landing:resend_verification": ALL_ROLES, "landing:dismiss_verify_banner": ALL_ROLES, "landing:learning_view": ALL_ROLES,
     "notifications:list": ALL_ROLES,
     "landing:workspace_section": _workspace_section,

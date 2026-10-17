@@ -1,0 +1,10 @@
+{% load ui %}{% if compact %}{% if profile.bio %}<section class="card channel-about-card"><header class="card-head"><h2>About</h2><a href="?tab=about">More</a></header><p class="prose">{{ profile.bio|truncatechars:320|linebreaksbr }}</p></section>{% endif %}{% else %}<div class="channel-about">
+<section class="card"><header class="card-head"><h2>About</h2></header>{% if profile.bio %}<p class="prose">{{ profile.bio|linebreaksbr }}</p>{% elif channel_organization.about %}<p class="prose">{{ channel_organization.about|linebreaksbr }}</p>{% else %}<p class="muted">{% if is_owner %}Add a description from Customize channel.{% else %}No description yet.{% endif %}</p>{% endif %}
+{% if profile.channel_links %}<h3 class="channel-about-sub">Links</h3><ul class="channel-link-list">{% for kind, label, url in profile.channel_links %}<li><a href="{{ url }}" target="_blank" rel="me noopener nofollow ugc">{% icon "social-"|add:kind 18 %}<span><b>{{ label }}</b><small>{{ url|cut:"https://"|truncatechars:60 }}</small></span></a></li>{% endfor %}</ul>{% endif %}</section>
+<aside class="card channel-stats"><h2>Stats</h2><ul>
+<li>{% icon "calendar" 16 %}Joined {{ owner.date_joined|date:"M j, Y" }}</li>
+{% if channel_organization %}<li>{% icon "briefcase" 16 %}{{ channel_organization.get_kind_display }}{% if channel_organization.city %}, {{ channel_organization.city }}{% endif %}</li><li>{% icon "users" 16 %}{{ organization_members }} member{{ organization_members|pluralize }}</li>{% elif profile.location %}<li>{% icon "map-pin" 16 %}{{ profile.location }}</li>{% endif %}
+<li>{% icon "user-plus" 16 %}{{ follower_count }} follower{{ follower_count|pluralize }}</li>
+<li>{% icon "eye" 16 %}{{ total_views }} view{{ total_views|pluralize }} on public posts</li>
+</ul></aside>
+</div>{% endif %}

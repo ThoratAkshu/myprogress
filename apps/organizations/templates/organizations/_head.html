@@ -1,5 +1,5 @@
 {% load ui %}<header class="org-head">
-<span class="org-logo" aria-hidden="true">{{ organization.initials }}</span>
+<span class="org-logo" aria-hidden="true">{{ organization|face }}</span>
 <div class="org-title"><span class="kicker">{{ organization.get_kind_display }}</span><h1>{{ organization.name }}</h1><p class="muted">{% if organization.city %}{{ organization.city }} · {% endif %}{% if member.is_staff %}You're the {{ member.get_role_display|lower }}{% else %}Student{% if member.group %} · {{ member.group }}{% endif %}{% endif %}</p></div>
 {% if member.is_staff %}<div class="org-head-actions"><a class="button soft" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">{% icon "video" 16 %}Record a lecture</a><a class="button primary" href="{% url 'organizations:invite' organization.slug %}">{% icon "user-plus" 16 %}Invite</a></div>{% endif %}
 </header>

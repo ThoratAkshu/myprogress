@@ -3,7 +3,7 @@
 <div class="cert-toolbar">{% if certificate.revoked_at %}<p class="cert-status revoked">{% icon "alert-circle" 18 %}This certificate was revoked on {{ certificate.revoked_at|date:"M j, Y" }}{% if certificate.revoked_reason %}: {{ certificate.revoked_reason }}{% endif %}.</p>{% else %}<p class="cert-status valid">{% icon "check-circle" 18 %}Verified: {{ certificate.organization.name }} issued this certificate on MyProgress.</p><button type="button" onclick="window.print()">{% icon "download" 16 %}Print or save as PDF</button>{% endif %}</div>
 <main class="cert{% if certificate.revoked_at %} is-revoked{% endif %}">
 <div class="cert-inner">
-<div class="cert-org"><span class="cert-seal">{{ certificate.organization.initials }}</span><span>{{ certificate.organization.name }}{% if certificate.organization.city %}<small>{{ certificate.organization.city }}</small>{% endif %}</span></div>
+<div class="cert-org"><span class="cert-seal">{{ certificate.organization|face }}</span><span>{{ certificate.organization.name }}{% if certificate.organization.city %}<small>{{ certificate.organization.city }}</small>{% endif %}</span></div>
 <p class="cert-kicker">Certificate of achievement</p>
 <p class="cert-presented">This certifies that</p>
 <h1>{{ certificate.student|public_name }}</h1>

@@ -10,6 +10,16 @@ def unique_handle(user, exclude_pk=None):
         handle = f"{base}-{counter}"
         counter += 1
     return handle
+# Channel brand colours: (key, label, (from, to)) for the banner gradient when there's no banner image.
+BRAND_COLORS = [
+    ("ocean", "Ocean", ("#0369a1", "#0ea5e9")), ("midnight", "Midnight", ("#0f172a", "#1e3a8a")), ("emerald", "Emerald", ("#065f46", "#10b981")),
+    ("violet", "Violet", ("#4c1d95", "#8b5cf6")), ("sunset", "Sunset", ("#c2410c", "#f59e0b")), ("rose", "Rose", ("#9f1239", "#f43f5e")), ("graphite", "Graphite", ("#1f2937", "#4b5563")),
+]
+# Links a channel can show: (kind, label, domains the link must be on; empty means any https site).
+SOCIAL_LINKS = [
+    ("website", "Website", ()), ("youtube", "YouTube", ("youtube.com", "youtu.be")), ("linkedin", "LinkedIn", ("linkedin.com",)), ("github", "GitHub", ("github.com",)),
+    ("x", "X", ("x.com", "twitter.com")), ("instagram", "Instagram", ("instagram.com",)), ("facebook", "Facebook", ("facebook.com", "fb.com")),
+]
 class Profile(models.Model):
     ROLE_CHOICES = [("developer", "Developer"), ("recruiter", "Recruiter"), ("organization", "Organization")]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
@@ -23,8 +33,13 @@ class Profile(models.Model):
     score = models.PositiveIntegerField(default=0)
     recruiter_visible = models.BooleanField(default=True)
     show_email = models.BooleanField(default=False, help_text="Show the account email to everyone who views the profile")
-    avatar = models.ImageField(upload_to="avatars/", blank=True)
+    avatar = models.ImageField(upload_to="avatars/", blank=True, help_text="The channel logo or profile photo, stored as a 400x400 PNG")
     email_verified_at = models.DateTimeField(null=True, blank=True)
+    # The public channel: every account brands its page with a name, logo, banner, colour, and links.
+    channel_name = models.CharField(max_length=80, blank=True)
+    banner = models.ImageField(upload_to="channels/banners/", blank=True)
+    brand_color = models.CharField(max_length=12, choices=[(key, label) for key, label, _ in BRAND_COLORS], default="ocean")
+    links = models.JSONField(default=dict, blank=True, help_text="Social and website links by kind, all https")
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} profile"
     def save(self, *args, **kwargs):
@@ -33,6 +48,24 @@ class Profile(models.Model):
             if kwargs.get("update_fields") is not None:
                 kwargs["update_fields"] = {*kwargs["update_fields"], "handle"}
         super().save(*args, **kwargs)
+    @property
+    def display_channel_name(self):
+        """The channel's name: the one chosen, else an institute's own name, else the person's name or handle."""
+        if self.channel_name:
+            return self.channel_name
+        if self.role == "organization":
+            organization = self.user.organizations_owned.order_by("created_at").first()
+            if organization:
+                return organization.name
+        return self.user.get_full_name() or f"@{self.handle}"
+    @property
+    def channel_links(self):
+        """The saved links in a fixed order, as (kind, label, url)."""
+        saved = self.links if isinstance(self.links, dict) else {}
+        return [(kind, label, saved[kind]) for kind, label, _ in SOCIAL_LINKS if saved.get(kind)]
+    @property
+    def brand_gradient(self):
+        return next((colors for key, _, colors in BRAND_COLORS if key == self.brand_color), BRAND_COLORS[0][2])
     @property
     def skill_list(self):
         return [skill.strip() for skill in self.skills.split(",") if skill.strip()]

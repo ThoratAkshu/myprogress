@@ -38,3 +38,7 @@ body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.55 "DM Sans"
 .rp-gone h1{margin:0 0 8px;font:800 22px Manrope,sans-serif}
 @media(max-width:760px){.rp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-grid{grid-template-columns:minmax(0,1fr)}.rp-head .rp-wrap{flex-wrap:wrap}}
 @media print{body{background:#fff}.rp-head{background:none;color:var(--ink);border-bottom:2px solid var(--ink)}.rp-head button{display:none}.rp-logo{background:var(--canvas)}.rp-card,.rp-kpis div{break-inside:avoid}}
+
+/* Uploaded logos and photos fill their circle or tile */
+.avatar>img,.org-logo>img,.profile-avatar>img,.live-avatar>img,.cert-seal>img,.rp-logo>img{display:block;width:100%;height:100%;border-radius:inherit;object-fit:cover}
+.avatar:has(>img),.org-logo:has(>img),.cert-seal:has(>img),.rp-logo:has(>img){background:#fff;overflow:hidden}

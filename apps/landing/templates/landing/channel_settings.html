@@ -1,0 +1,38 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}Customize channel{% endblock %}
+{% block content %}<div class="section-page channel-settings">
+<header class="page-title"><div><span class="kicker">YOUR CHANNEL</span><h1>Customize your channel</h1><p>{% if profile.role == "organization" %}Your institute's public page, like a YouTube channel: your logo, name, banner and links, with the videos and notes you share publicly. Lectures shared only with students stay in your class channel.{% elif profile.role == "recruiter" %}Your company page: a logo, name, banner and links, so developers know who's contacting them.{% else %}Brand your public page with a logo, a channel name, a banner and your links. Your projects and posts show under it.{% endif %}</p></div><a class="button soft" href="{% url 'landing:public_profile' profile.handle %}">{% icon "eye" 16 %} View channel</a></header>
+<form method="post" enctype="multipart/form-data" class="channel-form" data-channel-form novalidate>{% csrf_token %}{{ form.non_field_errors }}
+<section class="card channel-preview" data-channel-preview aria-label="Preview" style="--brand-from:{{ profile.brand_gradient.0 }};--brand-to:{{ profile.brand_gradient.1 }}"><span class="channel-preview-label">Preview</span>
+<div class="channel-banner" data-preview-banner>{% if profile.banner %}<img src="{{ profile.banner.url }}" alt="">{% endif %}</div>
+<div class="channel-preview-body"><span class="avatar avatar-xl channel-logo {{ owner|avatar_tone }}" data-preview-logo>{{ owner|face }}</span><div class="channel-preview-text"><b data-preview-name data-default="{{ profile.display_channel_name }}">{{ profile.display_channel_name }}</b><small>@{{ profile.handle }}</small><p data-preview-tagline>{{ profile.headline }}</p><ul class="channel-links" data-preview-links aria-label="Links">{% for kind, label, url in profile.channel_links %}<li><span>{% icon "social-"|add:kind 15 %}<span>{{ label }}</span></span></li>{% endfor %}</ul></div></div>
+</section>
+<div class="channel-form-grid">
+<section class="card channel-section"><h2>{% icon "edit" 18 %} Basics</h2>
+<div class="form-field">{{ form.channel_name.label_tag }}{{ form.channel_name }}{{ form.channel_name.errors }}<small class="field-note">Shown at the top of your channel.{% if profile.role == "organization" %} Leave it empty to use your institute's name.{% else %} Leave it empty to use your name.{% endif %}</small></div>
+<div class="form-field">{{ form.headline.label_tag }}{{ form.headline }}{{ form.headline.errors }}</div>
+<div class="form-field">{{ form.location.label_tag }}{{ form.location }}{{ form.location.errors }}</div>
+<div class="form-field">{{ form.bio.label_tag }}{{ form.bio }}{{ form.bio.errors }}<small class="field-note">Shown on your channel's About tab.</small></div>
+</section>
+<section class="card channel-section"><h2>{% icon "image" 18 %} Logo</h2>
+<div class="logo-row"><span class="avatar avatar-lg {{ owner|avatar_tone }}" data-logo-current>{{ owner|face }}</span><div class="logo-upload"><label for="{{ form.avatar.id_for_label }}">Upload a logo or photo</label>{{ form.avatar }}{{ form.avatar.errors }}<small class="field-note">PNG, JPEG, WebP or GIF, up to 2 MB. It's cropped to a square.</small>{% if profile.avatar %}<label class="channel-check">{{ form.remove_logo }} Remove the logo</label>{% endif %}</div></div>
+<details class="logo-maker" data-logo-maker><summary>{% icon "palette" 16 %} No logo yet? Make one</summary>
+<div class="logo-maker-body"><canvas width="512" height="512" data-logo-canvas aria-label="Logo preview"></canvas><div class="logo-maker-controls">
+<label class="logo-letters">Letters<input type="text" maxlength="3" autocomplete="off" data-logo-text></label>
+<fieldset class="logo-choice"><legend>Shape</legend><label><input type="radio" name="logo-shape" value="circle" checked><span>Circle</span></label><label><input type="radio" name="logo-shape" value="rounded"><span>Rounded</span></label><label><input type="radio" name="logo-shape" value="square"><span>Square</span></label></fieldset>
+<fieldset class="logo-choice"><legend>Fill</legend><label><input type="radio" name="logo-fill" value="gradient" checked><span>Gradient</span></label><label><input type="radio" name="logo-fill" value="solid"><span>Solid</span></label><label><input type="radio" name="logo-fill" value="light"><span>Light</span></label></fieldset>
+<fieldset class="logo-colors"><legend>Colour</legend>{% for key, label, colors in brand_colors %}<label title="{{ label }}"><input type="radio" name="logo-color" value="{{ key }}" data-from="{{ colors.0 }}" data-to="{{ colors.1 }}"{% if key == profile.brand_color %} checked{% endif %} aria-label="{{ label }}"><span style="background:linear-gradient(135deg,{{ colors.0 }},{{ colors.1 }})"></span></label>{% endfor %}</fieldset>
+<button type="button" class="button primary" data-logo-use>{% icon "check" 16 %} Use this logo</button><small class="field-note" data-logo-note role="status">Save the channel to keep it.</small>
+</div></div></details>
+</section>
+<section class="card channel-section"><h2>{% icon "layout" 18 %} Banner and colour</h2>
+<div class="form-field"><label for="{{ form.banner.id_for_label }}">Banner image</label>{{ form.banner }}{{ form.banner.errors }}<small class="field-note">At least 600 pixels wide; around 2048 × 512 looks best. Without a banner, your brand colour is used.</small>{% if profile.banner %}<label class="channel-check">{{ form.remove_banner }} Remove the banner</label>{% endif %}</div>
+<fieldset class="brand-colors"><legend>Brand colour</legend>{% for key, label, colors in brand_colors %}<label class="brand-swatch"><input type="radio" name="brand_color" value="{{ key }}" data-from="{{ colors.0 }}" data-to="{{ colors.1 }}"{% if form.brand_color.value == key %} checked{% endif %}><span style="background:linear-gradient(135deg,{{ colors.0 }},{{ colors.1 }})"></span><small>{{ label }}</small></label>{% endfor %}</fieldset>{{ form.brand_color.errors }}
+</section>
+<section class="card channel-section"><h2>{% icon "link" 18 %} Links</h2><p class="muted small">Add the places people can find you. Each one must be a full https:// address.</p>
+{% for field in form.link_fields %}<div class="channel-link-field">{% with kind=field.name|cut:"link_" %}<label for="{{ field.id_for_label }}">{% icon "social-"|add:kind 16 %}{{ field.label }}</label>{% endwith %}{{ field }}{{ field.errors }}</div>{% endfor %}
+</section>
+</div>
+<div class="dialog-actions"><a class="button soft" href="{% url 'landing:public_profile' profile.handle %}">Cancel</a><button class="button primary">Save channel</button></div>
+</form></div>{% endblock %}
+{% block scripts %}<script src="{% static 'landing/js/channel.js' %}"></script>{% endblock %}

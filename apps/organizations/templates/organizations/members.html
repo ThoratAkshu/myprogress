@@ -3,7 +3,7 @@
 {% block content %}<div class="section-page org-page">
 {% include "organizations/_head.html" %}
 {% if pending %}<section class="card org-requests"><div class="card-heading"><h2>Join requests</h2><span class="muted">{{ pending|length }} waiting</span></div>
-{% for request_member in pending %}<div class="org-line"><span class="avatar avatar-sm {{ request_member.user|avatar_tone }}">{{ request_member.user|initials }}</span><span><b>{{ request_member.user.get_full_name|default:request_member.user.email }}</b><small>{{ request_member.user.email }} · asked {{ request_member.joined_at|timesince }} ago</small></span>
+{% for request_member in pending %}<div class="org-line"><span class="avatar avatar-sm {{ request_member.user|avatar_tone }}">{{ request_member.user|face }}</span><span><b>{{ request_member.user.get_full_name|default:request_member.user.email }}</b><small>{{ request_member.user.email }} · asked {{ request_member.joined_at|timesince }} ago</small></span>
 <form method="post" action="{% url 'organizations:member_action' organization.slug request_member.user_id %}">{% csrf_token %}<button class="button primary" name="action" value="approve">Approve</button><button class="button soft" name="action" value="decline">Decline</button></form></div>{% endfor %}
 </section>{% endif %}
 <form class="org-toolbar" method="get">
@@ -17,7 +17,7 @@
 <div class="org-table" role="table" aria-label="Student growth">
 <div class="org-tr head" role="row"><span role="columnheader">Student</span><span role="columnheader">Score</span><span role="columnheader">Coding (30 days)</span><span role="columnheader">Projects · posts</span><span role="columnheader">Tasks</span><span role="columnheader">Attendance</span><span role="columnheader">Last active</span></div>
 {% for row in rows %}<a class="org-tr" role="row" href="{% url 'organizations:member' organization.slug row.user.pk %}">
-<span role="cell" class="org-who"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.member.group %}{{ row.member.group }} · {% endif %}{% if row.profile.handle %}@{{ row.profile.handle }}{% else %}{{ row.user.email }}{% endif %}</small></span></span>
+<span role="cell" class="org-who"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|face }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.member.group %}{{ row.member.group }} · {% endif %}{% if row.profile.handle %}@{{ row.profile.handle }}{% else %}{{ row.user.email }}{% endif %}</small></span></span>
 <span role="cell"><b class="org-score">{{ row.score }}</b>{% if row.rank %}<small>#{{ row.rank }}</small>{% endif %}</span>
 <span role="cell"><span><b>{{ row.coding_days }}</b> day{{ row.coding_days|pluralize }}</span>{% if row.streak %}<small>{% icon "zap" 12 %}{{ row.streak }}-day streak</small>{% endif %}<i class="org-meter"><i style="width:{% widthratio row.coding_days 30 100 %}%"></i></i></span>
 <span role="cell">{{ row.projects }} · {{ row.posts }}</span>
@@ -27,7 +27,7 @@
 </a>{% empty %}<p class="org-empty-line pad">{% if query or group %}No students match.{% else %}No students yet. <a href="{% url 'organizations:invite' organization.slug %}">Invite them</a>.{% endif %}</p>{% endfor %}
 </div></section>
 <section class="card"><div class="card-heading"><h2>Teachers</h2></div>
-{% for teacher in staff %}<div class="org-line"><span class="avatar avatar-sm {{ teacher.user|avatar_tone }}">{{ teacher.user|initials }}</span><span><b>{{ teacher.user.get_full_name|default:teacher.user.email }}</b><small>{{ teacher.get_role_display }} · {{ teacher.user.email }}</small></span>{% if member.role == 'owner' and teacher.role == 'teacher' %}<form method="post" action="{% url 'organizations:member_action' organization.slug teacher.user_id %}" data-confirm="Remove {{ teacher.user.get_full_name|default:teacher.user.email }} from {{ organization.name }}?">{% csrf_token %}<button class="button soft" name="action" value="remove">Remove</button></form>{% endif %}</div>{% endfor %}
+{% for teacher in staff %}<div class="org-line"><span class="avatar avatar-sm {{ teacher.user|avatar_tone }}">{{ teacher.user|face }}</span><span><b>{{ teacher.user.get_full_name|default:teacher.user.email }}</b><small>{{ teacher.get_role_display }} · {{ teacher.user.email }}</small></span>{% if member.role == 'owner' and teacher.role == 'teacher' %}<form method="post" action="{% url 'organizations:member_action' organization.slug teacher.user_id %}" data-confirm="Remove {{ teacher.user.get_full_name|default:teacher.user.email }} from {{ organization.name }}?">{% csrf_token %}<button class="button soft" name="action" value="remove">Remove</button></form>{% endif %}</div>{% endfor %}
 <p class="muted small">To add a teacher, send an email invite with the Teacher role, or change a student's role from their page.</p>
 </section>
 </div>{% endblock %}

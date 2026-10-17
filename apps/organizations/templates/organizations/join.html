@@ -2,7 +2,7 @@
 {% block title %}Join {{ organization.name }}{% endblock %}
 {% block content %}<div class="section-page org-page org-join-page">
 <section class="card org-join">
-<span class="org-logo lg">{{ organization.initials }}</span>
+<span class="org-logo lg">{{ organization|face }}</span>
 <span class="kicker">{{ organization.get_kind_display }}</span>
 <h1>Join {{ organization.name }}</h1>
 <p class="muted">{% if organization.city %}{{ organization.city }} · {% endif %}{{ member_count }} member{{ member_count|pluralize }}{% if invite %} · Invited as a {{ invite.get_role_display|lower }}{% endif %}</p>

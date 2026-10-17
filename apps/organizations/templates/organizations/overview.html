@@ -18,7 +18,7 @@
 </section>
 <div class="org-grid">
 <section class="card"><div class="card-heading"><h2>Needs review</h2><a href="{% url 'organizations:tasks' organization.slug %}">All tasks</a></div>
-{% for submission in stats.to_review %}<a class="org-line" href="{% url 'organizations:task' organization.slug submission.task_id %}#student-{{ submission.student_id }}"><span class="avatar avatar-sm {{ submission.student|avatar_tone }}">{{ submission.student|initials }}</span><span><b>{{ submission.student.get_full_name|default:submission.student.email }}</b><small>{{ submission.task.title }} · {{ submission.updated_at|timesince }} ago</small></span>{% icon "chevron-right" 16 %}</a>
+{% for submission in stats.to_review %}<a class="org-line" href="{% url 'organizations:task' organization.slug submission.task_id %}#student-{{ submission.student_id }}"><span class="avatar avatar-sm {{ submission.student|avatar_tone }}">{{ submission.student|face }}</span><span><b>{{ submission.student.get_full_name|default:submission.student.email }}</b><small>{{ submission.task.title }} · {{ submission.updated_at|timesince }} ago</small></span>{% icon "chevron-right" 16 %}</a>
 {% empty %}<p class="org-empty-line">{% icon "check-circle" 16 %}Nothing waiting for review.</p>{% endfor %}
 </section>
 <section class="card"><div class="card-heading"><h2>Coming up</h2><a href="{% url 'organizations:tasks' organization.slug %}#new-task">New task</a></div>
@@ -29,11 +29,11 @@
 </div>
 <div class="org-grid">
 <section class="card"><div class="card-heading"><h2>Top students</h2><a href="{% url 'organizations:members' organization.slug %}">Everyone</a></div>
-{% for row in stats.top %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="org-rank">{{ forloop.counter }}</span><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.coding_days }} coding days this month · {{ row.tasks_submitted }}/{{ row.tasks_given }} tasks</small></span><em class="org-score">{{ row.score }}</em></a>
+{% for row in stats.top %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="org-rank">{{ forloop.counter }}</span><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|face }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{{ row.coding_days }} coding days this month · {{ row.tasks_submitted }}/{{ row.tasks_given }} tasks</small></span><em class="org-score">{{ row.score }}</em></a>
 {% empty %}<p class="org-empty-line">Students appear here once they join.</p>{% endfor %}
 </section>
 <section class="card"><div class="card-heading"><h2>Quiet this week</h2><span class="muted">No activity in 7 days</span></div>
-{% for row in stats.quiet %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|initials }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.last_active %}Last active {{ row.last_active|timesince }} ago{% else %}Not active yet{% endif %}{% if row.tasks_missed %} · {{ row.tasks_missed }} missed task{{ row.tasks_missed|pluralize }}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>
+{% for row in stats.quiet %}<a class="org-line" href="{% url 'organizations:member' organization.slug row.user.pk %}"><span class="avatar avatar-sm {{ row.user|avatar_tone }}">{{ row.user|face }}</span><span><b>{{ row.user.get_full_name|default:row.user.email }}</b><small>{% if row.last_active %}Last active {{ row.last_active|timesince }} ago{% else %}Not active yet{% endif %}{% if row.tasks_missed %} · {{ row.tasks_missed }} missed task{{ row.tasks_missed|pluralize }}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>
 {% empty %}<p class="org-empty-line">{% icon "check-circle" 16 %}Everyone was active this week.</p>{% endfor %}
 </section>
 </div>

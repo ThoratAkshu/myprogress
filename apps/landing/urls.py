@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 from apps.common.ratelimit import rate_limit
-from .views import LandingPageView, account_identity_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, dismiss_verification_banner_view, health_view, search_view, project_detail_view, search_suggest_view
+from .views import LandingPageView, account_identity_view, channel_settings_view, complete_loop_view, create_project_view, create_repository_view, dashboard_view, follow_view, git_http_view, issue_git_token_view, learning_view, login_view, logout_view, public_profile_view, register_view, repository_view, update_profile_view, update_project_view, workspace_section_view, verify_email_view, resend_verification_view, dismiss_verification_banner_view, health_view, search_view, project_detail_view, search_suggest_view
 app_name = "landing"
 urlpatterns = [
     path("", LandingPageView.as_view(), name="home"),
@@ -20,6 +20,7 @@ urlpatterns = [
     path("repositories/<int:repository_id>/", repository_view, name="repository"),
     path("settings/git-tokens/create/", issue_git_token_view, name="issue_git_token"),
     path("settings/profile/", update_profile_view, name="update_profile"),
+    path("settings/channel/", channel_settings_view, name="channel_settings"),
     path("u/<slug:handle>/", public_profile_view, name="public_profile"),
     path("u/<slug:handle>/follow/", follow_view, name="follow"),
     path("account/verify/<str:token>/", verify_email_view, name="verify_email"),

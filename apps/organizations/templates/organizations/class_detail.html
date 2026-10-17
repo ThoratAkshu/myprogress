@@ -19,7 +19,7 @@
 <div class="org-grid">
 <form method="post" class="card org-roster">{% csrf_token %}<input type="hidden" name="action" value="attendance">
 <div class="card-heading"><h2>Attendance</h2><span class="muted">{{ came }} of {{ roster|length }} attended</span></div>
-{% for row in roster %}{% with mark=row.attendance student=row.member.user %}<div class="org-roster-row"><span class="avatar avatar-sm {{ student|avatar_tone }}">{{ student|initials }}</span><span class="org-roster-name"><b>{{ student.get_full_name|default:student.email }}</b><small>{% if mark.joined_at %}Joined {{ mark.joined_at|date:"g:i a" }}{% elif mark.marked_by %}Marked by a teacher{% else %}Not joined{% endif %}</small></span>
+{% for row in roster %}{% with mark=row.attendance student=row.member.user %}<div class="org-roster-row"><span class="avatar avatar-sm {{ student|avatar_tone }}">{{ student|face }}</span><span class="org-roster-name"><b>{{ student.get_full_name|default:student.email }}</b><small>{% if mark.joined_at %}Joined {{ mark.joined_at|date:"g:i a" }}{% elif mark.marked_by %}Marked by a teacher{% else %}Not joined{% endif %}</small></span>
 <span class="org-segment">{% for value, label in statuses %}<label><input type="radio" name="status-{{ student.pk }}" value="{{ value }}"{% if mark.status == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</span></div>{% endwith %}
 {% empty %}<p class="org-empty-line">No students in this class.</p>{% endfor %}
 {% if roster %}<div class="org-form-actions"><button class="button primary">Save attendance</button></div>{% endif %}

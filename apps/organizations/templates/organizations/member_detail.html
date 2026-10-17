@@ -4,7 +4,7 @@
 {% include "organizations/_head.html" %}
 <a class="org-back" href="{% url 'organizations:members' organization.slug %}">{% icon "chevron-right" 14 %}All students</a>
 <section class="card org-student">
-<span class="avatar avatar-lg {{ student.user|avatar_tone }}">{{ student.user|initials }}</span>
+<span class="avatar avatar-lg {{ student.user|avatar_tone }}">{{ student.user|face }}</span>
 <div><h2>{{ student.user.get_full_name|default:student.user.email }}</h2><p class="muted">{{ student.get_role_display }}{% if student.group %} · {{ student.group }}{% endif %} · joined {{ student.joined_at|date:"M j, Y" }}{% if row.last_active %} · last active {{ row.last_active|timesince }} ago{% endif %}</p></div>
 {% if student.user.profile.handle %}<a class="button soft" href="{% url 'landing:public_profile' student.user.profile.handle %}">{% icon "user" 16 %}Public profile</a>{% endif %}
 </section>

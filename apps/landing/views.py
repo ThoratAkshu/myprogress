@@ -21,8 +21,8 @@ from django.utils.text import slugify
 from django.views.generic import TemplateView
 from apps.accounts.access import user_role
 from apps.accounts.emails import send_verification_email, user_from_verification_token
-from apps.accounts.forms import EmailLoginForm, ProfileForm, RegistrationForm
-from apps.accounts.models import Follow, Profile
+from apps.accounts.forms import ChannelForm, EmailLoginForm, ProfileForm, RegistrationForm
+from apps.accounts.models import BRAND_COLORS, Follow, Profile
 from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
@@ -540,7 +540,22 @@ def public_profile_view(request, handle):
             pass
     can_recruit = bool(viewer_profile and viewer_profile.role in RECRUITER_ROLES and profile.role == "developer" and profile.recruiter_visible and request.user != owner)
     context = {"certificates": owner.certificates.filter(revoked_at__isnull=True, show_on_profile=True).select_related("organization"), "profile": profile, "owner": owner, "projects": projects, "public_repositories": public_repositories, "languages": language_breakdown(repositories.values_list("languages", flat=True)), "calendar": contribution_calendar(owner), "posts": owner.learning_posts.filter(is_public=True).select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)), "tab": request.GET.get("tab") if request.GET.get("tab") in {"repositories", "projects", "posts"} else "overview", "completed_count": sum(1 for project in projects if project.status == "complete" and project.has_verified_code), "follower_count": owner.follower_relationships.count(), "following_count": owner.following_relationships.count(), "is_owner": request.user == owner, "is_following": is_following, "can_recruit": can_recruit, "owner_initials": ((owner.first_name[:1] + owner.last_name[:1]) or owner.username[:2]).upper()}
-    if context["tab"] == "posts" and request.user.is_authenticated:
+    if profile.role != "developer":
+        # Institutes and recruiters get a channel: their videos and notes, and an About page, instead of a code portfolio.
+        posts = list(context["posts"].order_by("-published_at"))
+        videos = [post for post in posts if post.kind == "video"]
+        organization = owner.organizations_owned.order_by("created_at").first() if profile.role == "organization" else None
+        context.update({
+            "channel_tab": request.GET.get("tab") if request.GET.get("tab") in {"videos", "notes", "about"} else "home",
+            "channel_posts": posts, "channel_videos": videos, "channel_notes": [post for post in posts if post.kind != "video"],
+            "featured": videos[0] if videos else (posts[0] if posts else None),
+            "channel_latest": [post for post in posts if post != (videos[0] if videos else posts[0])][:6] if posts else [],
+            "total_views": sum(post.views for post in posts),
+            "channel_organization": organization,
+            "organization_members": organization.memberships.filter(status="active").count() if organization else 0,
+            "viewer_is_member": bool(organization and request.user.is_authenticated and organization.memberships.filter(user=request.user, status="active").exists()),
+        })
+    if (context["tab"] == "posts" or profile.role != "developer") and request.user.is_authenticated:
         context["liked_ids"] = set(PostLike.objects.filter(user=request.user, post__author=owner).values_list("post_id", flat=True))
     if can_recruit:
         context["viewer_shortlists"] = request.user.shortlists.all()
@@ -566,6 +581,17 @@ def update_profile_view(request):
     if user_role(request.user) != "developer":
         return redirect("landing:public_profile", handle=profile.handle)
     return redirect("landing:workspace_section", section="portfolio")
+@login_required(login_url="landing:home")
+@rate_limit("channel", 30, 600)
+def channel_settings_view(request):
+    """Brand your public channel: name, tagline, about, logo, banner, colour, and links. Every account type has one."""
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    form = ChannelForm(request.POST or None, request.FILES or None, instance=profile)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Channel saved. This is how everyone sees it.")
+        return redirect("landing:public_profile", handle=profile.handle)
+    return render(request, "landing/channel_settings.html", {"section": "channel", "form": form, "profile": profile, "owner": request.user, "brand_colors": BRAND_COLORS})
 @login_required(login_url="landing:home")
 @require_POST
 @rate_limit("follow", 60, 600)
