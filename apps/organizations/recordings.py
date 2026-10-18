@@ -479,6 +479,35 @@ def _patched_head(head, milliseconds):
     return None
 
 
+def header_duration_ms(path):
+    """The length a WebM's header states, in milliseconds; 0 when it doesn't say."""
+    with open(path, "rb") as handle:
+        head = handle.read(HEAD_BYTES)
+    try:
+        element_id, _, start, size, _ = _element(head, 0)
+        if element_id != EBML:
+            return 0
+        element_id, _, at, _, _ = _element(head, start + size)
+        if element_id != SEGMENT:
+            return 0
+        while at < len(head):
+            element_id, _, start, size, unknown = _element(head, at)
+            if element_id == CLUSTER or unknown:
+                return 0  # the clusters started without a length
+            if element_id == INFO:
+                scale, duration = 1_000_000, 0.0
+                for child_id, child_start, child_size in _children(head, start, min(start + size, len(head))):
+                    if child_id == TIMECODE_SCALE:
+                        scale = _uint(head, child_start, child_size) or 1_000_000
+                    elif child_id == DURATION and child_size in {4, 8}:
+                        duration = struct.unpack(">d" if child_size == 8 else ">f", head[child_start:child_start + child_size])[0]
+                return max(0, round(duration * scale / 1_000_000))
+            at = start + size
+    except (ValueError, IndexError, struct.error):
+        pass
+    return 0
+
+
 def add_duration(path, milliseconds):
     """Write the recording's length into a browser-made WebM. Returns True when the file changed."""
     with open(path, "rb") as handle:

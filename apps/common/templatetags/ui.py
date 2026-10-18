@@ -143,6 +143,12 @@ def public_name(user):
     profile = getattr(user, "profile", None)
     return user.get_full_name() or (f"@{profile.handle}" if profile and profile.handle else "A MyProgress member")
 @register.filter
+def clock(seconds):
+    """A video's length the way players show it: 4:05, or 1:02:03."""
+    hours, rest = divmod(int(seconds or 0), 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+@register.filter
 def tone(obj):
     """Stable muted background tone (tone-0..tone-5) for items without an image."""
     return f"tone-{(getattr(obj, 'pk', 0) or 0) % 6}"

@@ -1,4 +1,5 @@
 import re
+import struct
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from django.core.exceptions import ValidationError
@@ -49,3 +50,53 @@ def place_post_files(post):
     if moved:
         type(post).objects.filter(pk=post.pk).update(**{name: getattr(post, name).name for name in moved})
     return moved
+def _mp4_seconds(handle):
+    """The length an MP4 states in its movie header (mvhd), wherever the movie box sits in the file."""
+    end, at = handle.seek(0, 2), 0
+    while at + 8 <= end:
+        handle.seek(at)
+        header = handle.read(16)
+        size, kind = struct.unpack(">I4s", header[:8])
+        start = 8
+        if size == 1:
+            size, start = struct.unpack(">Q", header[8:16])[0], 16
+        elif size == 0:
+            size = end - at
+        if size < start:
+            return 0
+        if kind == b"moov":
+            handle.seek(at + start)
+            movie = handle.read(min(size - start, 1024 * 1024))
+            child = 0
+            while child + 8 <= len(movie):
+                child_size, child_kind = struct.unpack(">I4s", movie[child:child + 8])
+                if child_kind == b"mvhd":
+                    body = movie[child + 8:child + child_size]
+                    scale, length = struct.unpack(">II", body[12:20]) if body[0] == 0 else struct.unpack(">IQ", body[20:32])
+                    return length // scale if scale else 0
+                if child_size < 8:
+                    return 0
+                child += child_size
+            return 0
+        at += size
+    return 0
+def video_seconds(path):
+    """A WebM's or MP4's length in whole seconds, from its header; 0 when the file doesn't say."""
+    from apps.organizations.recordings import header_duration_ms
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(12)
+            if head[4:8] == b"ftyp":
+                return _mp4_seconds(handle)
+        return header_duration_ms(path) // 1000 if head[:4] == b"\x1aE\xdf\xa3" else 0
+    except (OSError, ValueError, IndexError, struct.error):
+        return 0
+def note_duration(post):
+    """Keep the post's video length, shown on its thumbnail, in step with its video file."""
+    try:
+        seconds = video_seconds(post.video_file.path) if post.video_file else 0
+    except NotImplementedError:  # remote storage: no local file to read
+        return
+    if seconds != post.duration:
+        type(post).objects.filter(pk=post.pk).update(duration=seconds)
+        post.duration = seconds

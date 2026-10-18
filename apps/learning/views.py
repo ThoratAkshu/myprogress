@@ -28,7 +28,7 @@ from apps.organizations.services import announce_lesson, membership, staff_organ
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
-from .media import place_post_files, youtube_embed_url
+from .media import note_duration, place_post_files, youtube_embed_url
 from .studio import StudioError, branch_paths, draft_post, lecture_plan, project_branches
 from .timeline import parse_captions, parse_chapters
 MAX_INSERT_BYTES = 300_000
@@ -104,6 +104,7 @@ def post_create_view(request):
         post.author = request.user
         post.save()
         place_post_files(post)
+        note_duration(post)
         record_activity(request.user, "learning", "published_learning", 4, {"post_id": post.pk})
         complete_daily_step(request.user, "share")
         refresh_rank(request.user)
@@ -276,6 +277,7 @@ def post_edit_view(request, post_id):
     if request.method == "POST" and form.is_valid():
         post = form.save()
         place_post_files(post)
+        note_duration(post)
         if post.organization_id != shared_before:
             type(post).objects.filter(pk=post.pk).update(announced_at=None)
             post.announced_at = None

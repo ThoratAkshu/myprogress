@@ -13,6 +13,7 @@ from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
+from django.db.models.functions import Coalesce
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,14 +21,14 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from apps.accounts.models import Profile
+from apps.accounts.models import BRAND_COLORS, Profile
 from apps.common.ratelimit import rate_limit
 from apps.common.templatetags.ui import public_name
 from apps.common.views import ranged_file_response, stored_file_response
 from apps.core.models import ContentView, LearningPost
 from apps.core.services import progress_facts, score_breakdown
 from apps.learning.formatting import render_article
-from apps.learning.media import MAX_THUMBNAIL_BYTES, place_post_files
+from apps.learning.media import MAX_THUMBNAIL_BYTES, note_duration, place_post_files
 from apps.learning.timeline import clean_captions, clean_chapters, format_stamp, remap_captions, remap_chapters
 from apps.learning.views import studio_options
 from apps.earnings.services import sync_post_coins
@@ -219,6 +220,8 @@ def _channel_items(organization, member, kind=""):
     if kind in {"announcement", "material"}:
         lessons = lessons.none()
         posts = posts.filter(kind=kind)
+    elif kind == "posts":  # announcements and material, no lectures
+        lessons = lessons.none()
     elif kind in {"video", "article"}:
         posts = posts.none()
         lessons = lessons.filter(kind=kind)
@@ -250,25 +253,70 @@ def channel_view(request, slug):
                 services.announce_post(post, request.user)
                 messages.success(request, "Posted to the channel.")
             return redirect("organizations:channel", slug=slug)
-    scheduled, pinned, items = _channel_items(organization, member, kind)
-    page = Paginator(items, 20).get_page(request.GET.get("page"))
-    today = timezone.localdate()
-    def day_label(entry):
-        day = timezone.localtime(entry["when"]).date()
-        if day == today:
-            return "Today"
-        return "Yesterday" if (today - day).days == 1 else f"{day:%A}, {day:%b} {day.day}"
-    days = [(label, list(entries)) for label, entries in groupby(page.object_list, key=day_label)]
-    post_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "post"]
-    ChannelSeen.objects.bulk_create([ChannelSeen(post_id=post_id, user=request.user) for post_id in post_ids], ignore_conflicts=True)
-    seen = dict(ChannelSeen.objects.filter(post_id__in=post_ids).values("post_id").annotate(total=Count("id")).values_list("post_id", "total")) if member.is_staff else {}
-    lesson_ids = [entry["item"].pk for entry in pinned + list(page.object_list) if entry["type"] == "lesson"]
-    watched = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
-    return _render(request, "channel.html", organization, member, "channel", {
-        "shared_with": member.parents.filter(revoked_at__isnull=True) if not member.is_staff else [],
-        "next_class": services.next_class(organization, member), "now": timezone.now(), "form": form, "scheduled": scheduled, "pinned": pinned, "days": days, "page": page, "kind": kind, "seen": seen, "watched": watched,
+    # Older links filtered the feed with ?kind=; they now open the matching tab.
+    tab = request.GET.get("tab") or {"video": "videos", "article": "notes", "announcement": "posts", "material": "posts"}.get(kind, "home")
+    tab = tab if tab in CHANNEL_TABS else "home"
+    now = timezone.now()
+    lessons = services.lessons_for(organization, member).select_related("author__profile").annotate(shown=Coalesce("publish_at", "published_at"))
+    released = lessons.filter(Q(publish_at__isnull=True) | Q(publish_at__lte=now))
+    videos, notes = released.filter(kind="video"), released.exclude(kind="video")
+    context = {
+        "tab": tab, "kind": kind, "brand": _channel_brand(organization), "now": now, "form": form,
+        "next_class": services.next_class(organization, member),
         "member_count": Membership.objects.filter(organization=organization, status="active").count(),
-    })
+        "counts": {"videos": videos.count(), "notes": notes.count(), "posts": services.published(services.channel_posts_for(organization, member)).count()},
+        "shared_with": member.parents.filter(revoked_at__isnull=True) if not member.is_staff else [],
+        "sorts": [("latest", "Latest"), ("popular", "Popular"), ("oldest", "Oldest")],
+    }
+    shown_lessons, shown_posts = [], []
+    if tab == "home":
+        scheduled, pinned, items = _channel_items(organization, member)
+        latest = list(videos.order_by("-shown", "-pk")[:9])
+        recent = [entry for entry in items if entry["type"] == "post"][:4]
+        context.update(scheduled=scheduled, pinned=pinned, recent_posts=recent, featured=latest[0] if latest else None, latest_videos=latest[1:], latest_notes=list(notes.order_by("-shown", "-pk")[:4]))
+        shown_lessons = latest + context["latest_notes"] + [entry["item"] for entry in scheduled if entry["type"] == "lesson"]
+        shown_posts = [entry["item"] for entry in pinned + recent]
+    elif tab in {"videos", "notes"}:
+        sort = request.GET.get("sort") if request.GET.get("sort") in CHANNEL_SORTS else "latest"
+        page = Paginator((videos if tab == "videos" else notes).order_by(CHANNEL_SORTS[sort], "-pk"), 24).get_page(request.GET.get("page"))
+        waiting = lessons.filter(publish_at__gt=now).order_by("publish_at") if member.is_staff else lessons.none()
+        waiting = waiting.filter(kind="video") if tab == "videos" else waiting.exclude(kind="video")
+        scheduled = [{"type": "lesson", "item": lesson, "when": lesson.publish_at, "pinned": False} for lesson in waiting]
+        context.update(sort=sort, page=page, scheduled=scheduled)
+        shown_lessons = list(page.object_list) + [entry["item"] for entry in scheduled]
+    elif tab == "posts":
+        scheduled, pinned, items = _channel_items(organization, member, kind if kind in {"announcement", "material"} else "posts")
+        page = Paginator(items, 20).get_page(request.GET.get("page"))
+        today = timezone.localdate()
+        def day_label(entry):
+            day = timezone.localtime(entry["when"]).date()
+            if day == today:
+                return "Today"
+            return "Yesterday" if (today - day).days == 1 else f"{day:%A}, {day:%b} {day.day}"
+        context.update(scheduled=scheduled, pinned=pinned, page=page, days=[(label, list(entries)) for label, entries in groupby(page.object_list, key=day_label)])
+        shown_posts = [entry["item"] for entry in pinned + list(page.object_list)]
+    else:
+        context["public_channel"] = _public_channel(organization)
+    post_ids = [post.pk for post in shown_posts]
+    ChannelSeen.objects.bulk_create([ChannelSeen(post_id=post_id, user=request.user) for post_id in post_ids], ignore_conflicts=True)
+    lesson_ids = [lesson.pk for lesson in shown_lessons]
+    if member.is_staff:  # how many have seen each post, and opened each lecture
+        context["seen"] = dict(ChannelSeen.objects.filter(post_id__in=post_ids).values("post_id").annotate(total=Count("id")).values_list("post_id", "total"))
+        context["watched"] = dict(ContentView.objects.filter(post_id__in=lesson_ids, viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total"))
+    else:  # what this student has watched already
+        context["mine"] = set(ContentView.objects.filter(post_id__in=lesson_ids, viewer=request.user).values_list("post_id", flat=True))
+    return _render(request, "channel.html", organization, member, "channel", context)
+CHANNEL_TABS = ("home", "videos", "notes", "posts", "about")
+CHANNEL_SORTS = {"latest": "-shown", "popular": "-views", "oldest": "shown"}
+def _channel_brand(organization):
+    """How the institute dressed its channel (banner and colors), from its account's channel settings."""
+    profile = Profile.objects.filter(user=organization.owner).first()
+    colors = profile.brand_gradient if profile else BRAND_COLORS[0][2]
+    return {"banner": profile.banner.url if profile and profile.banner else "", "from": colors[0], "to": colors[1]}
+def _public_channel(organization):
+    """The institute's public channel, where its public videos are, if it has a handle."""
+    profile = Profile.objects.filter(user=organization.owner).first()
+    return reverse("landing:public_profile", args=[profile.handle]) if profile and profile.handle else ""
 @login_required(login_url="landing:home")
 @require_POST
 def channel_delete_view(request, slug, post_id):
@@ -688,6 +736,7 @@ def _publish_recording(request, organization, live, recording, published_parts, 
         if old:
             post.thumbnail.storage.delete(old)
     place_post_files(post)  # the thumbnail goes into, or out of, the private folder with the video
+    note_duration(post)
     if previous and previous != name and previous not in {recording.file_name, recording.source_name}:
         post.video_file.storage.delete(previous)
     recording.post = post

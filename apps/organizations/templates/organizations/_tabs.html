@@ -1,0 +1,11 @@
+{% load ui %}<nav class="org-tabs" aria-label="{{ organization.name }}">
+{% if member.is_staff %}<a href="{% url 'organizations:overview' organization.slug %}"{% if org_section == 'overview' %} aria-current="page"{% endif %}>{% icon "home" 16 %}Overview</a>
+<a href="{% url 'organizations:members' organization.slug %}"{% if org_section == 'members' %} aria-current="page"{% endif %}>{% icon "users" 16 %}Students</a>{% endif %}
+<a href="{% url 'organizations:channel' organization.slug %}"{% if org_section == 'channel' %} aria-current="page"{% endif %}>{% icon "book-open" 16 %}Channel</a>
+<a href="{% url 'organizations:tasks' organization.slug %}"{% if org_section == 'tasks' %} aria-current="page"{% endif %}>{% icon "check-circle" 16 %}Tasks</a>
+<a href="{% url 'organizations:classes' organization.slug %}"{% if org_section == 'classes' %} aria-current="page"{% endif %}>{% icon "video" 16 %}Live classes</a>
+{% if member.is_staff or organization.show_leaderboard %}<a href="{% url 'organizations:leaderboard' organization.slug %}"{% if org_section == 'leaderboard' %} aria-current="page"{% endif %}>{% icon "trending-up" 16 %}Leaderboard</a>{% endif %}
+<a href="{% url 'organizations:certificates' organization.slug %}"{% if org_section == 'certificates' %} aria-current="page"{% endif %}>{% icon "award" 16 %}Certificates</a>
+{% if member.is_staff %}<a href="{% url 'organizations:invite' organization.slug %}"{% if org_section == 'invite' %} aria-current="page"{% endif %}>{% icon "user-plus" 16 %}Invite</a>{% endif %}
+{% if member.role == 'owner' %}<a href="{% url 'organizations:settings' organization.slug %}"{% if org_section == 'settings' %} aria-current="page"{% endif %}>{% icon "sliders" 16 %}Settings</a>{% endif %}
+</nav>

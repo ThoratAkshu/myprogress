@@ -1,0 +1,17 @@
+{% load ui %}<header class="class-channel-head" style="--brand-from:{{ brand.from }};--brand-to:{{ brand.to }}">
+<div class="class-channel-banner">{% if brand.banner %}<img src="{{ brand.banner }}" alt="">{% endif %}</div>
+<div class="class-channel-id">
+<span class="org-logo class-channel-logo" aria-hidden="true">{{ organization|face }}</span>
+<div class="class-channel-title"><h1>{{ organization.name }}</h1>
+<p class="class-channel-meta"><span>{% icon "users" 14 %}{{ member_count }} member{{ member_count|pluralize }}</span><span>{% icon "play" 14 %}{{ counts.videos }} video{{ counts.videos|pluralize }}</span><span>{% icon "lock" 14 %}Only members can see this channel</span>{% if member.is_staff %}<span>You're the {{ member.get_role_display|lower }}</span>{% elif member.group %}<span>{{ member.group }}</span>{% endif %}</p>
+{% if organization.about %}<p class="class-channel-about">{{ organization.about }}</p>{% endif %}</div>
+{% if member.is_staff %}<div class="class-channel-actions"><a class="button primary" href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">{% icon "video" 16 %}Record a lecture</a>{% if member.role == 'owner' %}<a class="button soft" href="{% url 'landing:channel_settings' %}" title="Your logo, banner and colors, on this channel and your public one">{% icon "palette" 16 %}Customize</a>{% endif %}</div>{% endif %}
+</div>
+<nav class="class-channel-tabs" aria-label="Channel sections">
+<a href="?"{% if tab == 'home' %} aria-current="page"{% endif %}>Home</a>
+<a href="?tab=videos"{% if tab == 'videos' %} aria-current="page"{% endif %}>Videos{% if counts.videos %} <b>{{ counts.videos }}</b>{% endif %}</a>
+<a href="?tab=notes"{% if tab == 'notes' %} aria-current="page"{% endif %}>Notes{% if counts.notes %} <b>{{ counts.notes }}</b>{% endif %}</a>
+<a href="?tab=posts"{% if tab == 'posts' %} aria-current="page"{% endif %}>Posts{% if counts.posts %} <b>{{ counts.posts }}</b>{% endif %}</a>
+<a href="?tab=about"{% if tab == 'about' %} aria-current="page"{% endif %}>About</a>
+</nav>
+</header>

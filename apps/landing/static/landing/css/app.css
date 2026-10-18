@@ -1441,3 +1441,38 @@ a.org-item-title:hover{color:var(--violet)}
 @keyframes live-pulse{50%{opacity:.6}}
 @media(max-width:640px){.live-class-row{grid-template-columns:auto minmax(0,1fr)}.live-class-actions{grid-column:1/-1;justify-content:flex-start}}
 @media(prefers-reduced-motion:reduce){.live-banner[data-state=live] .live-banner-badge{animation:none}}
+/* Class channel: an institute's channel for its members, laid out like a video channel */
+.class-channel-head{overflow:hidden;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+.class-channel-banner{height:clamp(90px,15vw,170px);background:linear-gradient(120deg,var(--brand-from),var(--brand-to))}
+.class-channel-banner img{display:block;width:100%;height:100%;object-fit:cover}
+.class-channel-id{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 18px;margin-top:-40px;padding:0 24px 14px}
+.class-channel-logo{width:104px;height:104px;overflow:hidden;border:4px solid var(--surface);border-radius:50%;background:linear-gradient(135deg,var(--brand-from),var(--brand-to));font-size:34px;box-shadow:0 6px 18px rgba(15,23,42,.18)}
+.class-channel-logo img{width:100%;height:100%;object-fit:cover}
+.class-channel-title{display:grid;flex:1;gap:4px;min-width:220px;padding-top:44px}
+.class-channel-title h1{margin:0;font:800 clamp(22px,3vw,30px)/1.15 Manrope,"DM Sans",sans-serif;overflow-wrap:anywhere}
+.class-channel-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0;color:var(--muted);font-size:13.5px}
+.class-channel-meta span{display:inline-flex;align-items:center;gap:5px}
+.class-channel-about{display:-webkit-box;max-width:72ch;margin:2px 0 0;overflow:hidden;color:#334155;font-size:14px;line-height:1.5;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.class-channel-actions{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:6px}
+.class-channel-tabs{display:flex;gap:4px;overflow-x:auto;padding:0 14px;border-top:1px solid var(--line);scrollbar-width:none}
+.class-channel-tabs::-webkit-scrollbar{display:none}
+.class-channel-tabs a{display:inline-flex;align-items:center;gap:6px;padding:12px 14px 10px;border-bottom:3px solid transparent;color:var(--muted);font-size:14.5px;font-weight:700;text-decoration:none;white-space:nowrap}
+.class-channel-tabs a:hover{color:var(--ink)}
+.class-channel-tabs a[aria-current=page]{border-bottom-color:var(--ink);color:var(--ink)}
+.class-channel-tabs b{padding:0 7px;border-radius:99px;background:var(--canvas);color:var(--muted);font-size:12px}
+.class-live-strip{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-decoration:none}
+.class-live-strip:hover{border-color:var(--violet)}
+.class-live-strip.is-live{border-color:#fecaca;background:#fff5f5}
+.class-live-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--violet-soft);color:var(--violet);font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.class-live-strip.is-live .class-live-badge{background:#dc2626;color:#fff}
+.class-live-text{display:grid;flex:1;min-width:180px}
+.class-live-text small{color:var(--muted)}
+.channel-duration{position:absolute;right:8px;bottom:8px;padding:2px 6px;border-radius:5px;background:rgba(2,6,23,.82);color:#fff;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.channel-watched{position:absolute;top:8px;left:8px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;background:rgba(2,6,23,.78);color:#fff;font-size:11px;font-weight:700}
+.channel-thumb.is-watched::after{content:"";position:absolute;right:0;bottom:0;left:0;height:4px;background:#dc2626}
+.class-channel-note{display:flex;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:13px}
+.class-channel-about-tab{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.class-channel-description{margin:0 0 14px;line-height:1.6}
+.class-channel-facts{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.class-channel-facts li{display:flex;align-items:center;gap:10px;color:#334155;font-size:14px;overflow-wrap:anywhere}
+@media(max-width:860px){.class-channel-about-tab{grid-template-columns:minmax(0,1fr)}.class-channel-id{padding:0 16px 12px}.class-channel-logo{width:80px;height:80px;font-size:26px}.class-channel-title{min-width:100%;padding-top:0}}

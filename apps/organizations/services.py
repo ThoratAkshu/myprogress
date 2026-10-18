@@ -407,7 +407,7 @@ def channel_posts_for(organization, member):
     return posts if member and member.is_staff else published(posts)
 def announce_post(post, actor=None):
     """Tell members about a channel post, once."""
-    notify_members(post.organization, actor or post.author, f"{post.organization.name}: {post.title}", f"{channel_url(post.organization)}#post-{post.pk}", post.group)
+    notify_members(post.organization, actor or post.author, f"{post.organization.name}: {post.title}", f"{channel_url(post.organization)}?tab=posts#post-{post.pk}", post.group)
     post.notified_at = timezone.now()
     post.save(update_fields=["notified_at"])
 def publish_due_posts():
