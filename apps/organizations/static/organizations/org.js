@@ -54,4 +54,16 @@
     composer.hidden = !composer.hidden;
     if (!composer.hidden) composer.querySelector("select, input, textarea")?.focus();
   });
+
+  // A playlist's "Add lectures" list: find lectures by title as you type.
+  const filter = document.querySelector("[data-playlist-filter]");
+  filter?.addEventListener("input", () => {
+    const words = filter.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll("[data-playlist-candidates] li").forEach(item => {
+      item.hidden = Boolean(words) && !item.dataset.title.includes(words);
+      if (!item.hidden) shown += 1;
+    });
+    document.querySelector("[data-playlist-none]").hidden = shown > 0;
+  });
 })();

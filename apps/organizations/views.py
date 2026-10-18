@@ -35,8 +35,8 @@ from apps.earnings.services import sync_post_coins
 from apps.notifications.services import notify
 from . import recordings, services
 from .middleware import OrganizationUnavailable
-from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, RecordingForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, Certificate, ChannelPost, ClassMessage, ClassRecording, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, PlaylistForm, RecordingForm, ReviewForm, SubmissionForm, TaskForm
+from .models import Attendance, Certificate, ChannelPost, ClassMessage, ClassRecording, Playlist, PlaylistItem, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -264,7 +264,7 @@ def channel_view(request, slug):
         "tab": tab, "kind": kind, "brand": _channel_brand(organization), "now": now, "form": form,
         "next_class": services.next_class(organization, member),
         "member_count": Membership.objects.filter(organization=organization, status="active").count(),
-        "counts": {"videos": videos.count(), "notes": notes.count(), "posts": services.published(services.channel_posts_for(organization, member)).count()},
+        "counts": {"videos": videos.count(), "notes": notes.count(), "posts": services.published(services.channel_posts_for(organization, member)).count(), "playlists": services.playlists_for(organization, member).count()},
         "shared_with": member.parents.filter(revoked_at__isnull=True) if not member.is_staff else [],
         "sorts": [("latest", "Latest"), ("popular", "Popular"), ("oldest", "Oldest")],
     }
@@ -274,6 +274,7 @@ def channel_view(request, slug):
         latest = list(videos.order_by("-shown", "-pk")[:9])
         recent = [entry for entry in items if entry["type"] == "post"][:4]
         context.update(scheduled=scheduled, pinned=pinned, recent_posts=recent, featured=latest[0] if latest else None, latest_videos=latest[1:], latest_notes=list(notes.order_by("-shown", "-pk")[:4]))
+        context["playlists"] = [playlist for playlist in _playlist_cards(organization, member, request.user, services.playlists_for(organization, member)[:8]) if playlist.count][:4]
         shown_lessons = latest + context["latest_notes"] + [entry["item"] for entry in scheduled if entry["type"] == "lesson"]
         shown_posts = [entry["item"] for entry in pinned + recent]
     elif tab in {"videos", "notes"}:
@@ -284,6 +285,9 @@ def channel_view(request, slug):
         scheduled = [{"type": "lesson", "item": lesson, "when": lesson.publish_at, "pinned": False} for lesson in waiting]
         context.update(sort=sort, page=page, scheduled=scheduled)
         shown_lessons = list(page.object_list) + [entry["item"] for entry in scheduled]
+    elif tab == "playlists":
+        context["playlists"] = _playlist_cards(organization, member, request.user, services.playlists_for(organization, member))
+        context["playlist_form"] = PlaylistForm() if member.is_staff else None
     elif tab == "posts":
         scheduled, pinned, items = _channel_items(organization, member, kind if kind in {"announcement", "material"} else "posts")
         page = Paginator(items, 20).get_page(request.GET.get("page"))
@@ -306,7 +310,7 @@ def channel_view(request, slug):
     else:  # what this student has watched already
         context["mine"] = set(ContentView.objects.filter(post_id__in=lesson_ids, viewer=request.user).values_list("post_id", flat=True))
     return _render(request, "channel.html", organization, member, "channel", context)
-CHANNEL_TABS = ("home", "videos", "notes", "posts", "about")
+CHANNEL_TABS = ("home", "videos", "playlists", "notes", "posts", "about")
 CHANNEL_SORTS = {"latest": "-shown", "popular": "-views", "oldest": "shown"}
 def _channel_brand(organization):
     """How the institute dressed its channel (banner and colors), from its account's channel settings."""
@@ -317,6 +321,108 @@ def _public_channel(organization):
     """The institute's public channel, where its public videos are, if it has a handle."""
     profile = Profile.objects.filter(user=organization.owner).first()
     return reverse("landing:public_profile", args=[profile.handle]) if profile and profile.handle else ""
+def _playlist_cards(organization, member, user, playlists):
+    """Each playlist with what its card shows: the lectures this member can open, a cover, the total length, the
+    lecture Play all starts from, and how many of them the student has watched."""
+    playlists = list(playlists)
+    items = list(PlaylistItem.objects.filter(playlist__in=playlists, post__in=services.lessons_for(organization, member)).select_related("post").order_by("position", "pk"))
+    watched = set() if member.is_staff else set(ContentView.objects.filter(viewer=user, post_id__in=[item.post_id for item in items]).values_list("post_id", flat=True))
+    for playlist in playlists:
+        posts = [item.post for item in items if item.playlist_id == playlist.pk]
+        playlist.count, playlist.first = len(posts), posts[0] if posts else None
+        playlist.cover = next((post for post in posts if post.thumbnail), None)
+        playlist.seconds = sum(post.duration for post in posts)
+        playlist.watched = len([post for post in posts if post.pk in watched])
+    return playlists
+def _playlist_url(slug, playlist_id):
+    return reverse("organizations:playlist", args=[slug, playlist_id])
+@login_required(login_url="landing:home")
+@require_POST
+def playlist_create_view(request, slug):
+    organization, member = _organization(request, slug, staff=True)
+    form = PlaylistForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Give the playlist a title.")
+        return redirect(f"{services.channel_url(organization)}?tab=playlists")
+    playlist = form.save(commit=False)
+    playlist.organization, playlist.created_by = organization, request.user
+    playlist.save()
+    messages.success(request, "Playlist created. Add lectures to it below.")
+    return redirect(_playlist_url(slug, playlist.pk))
+def _move_item(playlist, item_id, direction):
+    """Swap a lecture with the one before or after it, keeping positions numbered 0, 1, 2…"""
+    items = list(playlist.items.order_by("position", "pk"))
+    index = next((at for at, item in enumerate(items) if str(item.pk) == item_id), None)
+    other = None if index is None else index - 1 if direction == "up" else index + 1
+    if other is None or not 0 <= other < len(items):
+        return
+    items[index], items[other] = items[other], items[index]
+    for position, item in enumerate(items):
+        if item.position != position:
+            PlaylistItem.objects.filter(pk=item.pk).update(position=position)
+@login_required(login_url="landing:home")
+def playlist_view(request, slug, playlist_id):
+    """A course in the class channel: its lectures in order, with Play all and how far the student has got.
+    Teachers rename it, add lectures, put them in order and remove them here."""
+    organization, member = _organization(request, slug)
+    playlist = get_object_or_404(services.playlists_for(organization, member), pk=playlist_id)
+    here = _playlist_url(slug, playlist.pk)
+    form = PlaylistForm(instance=playlist) if member.is_staff else None
+    if request.method == "POST":
+        if not member.is_staff:
+            raise Http404
+        action = request.POST.get("action", "")
+        if action == "details":
+            form = PlaylistForm(request.POST, instance=playlist)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "Playlist saved.")
+                return redirect(here)
+        elif action == "delete":
+            playlist.delete()
+            messages.success(request, f"Deleted the playlist {playlist.title}. Its lectures are still in the channel.")
+            return redirect(f"{services.channel_url(organization)}?tab=playlists")
+        else:
+            if action == "add":
+                chosen = services.lessons_for(organization, member).filter(pk__in=[value for value in request.POST.getlist("post") if value.isdigit()])
+                added = sum(services.add_to_playlist(playlist, post) for post in chosen.order_by(Coalesce("publish_at", "published_at"), "pk"))
+                messages.success(request, f"Added {added} lecture{'s' if added != 1 else ''}." if added else "Pick the lectures to add first.")
+            elif action == "remove":
+                playlist.items.filter(pk=request.POST.get("item", "0") if request.POST.get("item", "").isdigit() else 0).delete()
+            elif action in {"up", "down"}:
+                _move_item(playlist, request.POST.get("item", ""), action)
+            Playlist.objects.filter(pk=playlist.pk).update(updated_at=timezone.now())
+            return redirect(here)
+    items = services.playlist_lectures(playlist, member)
+    watched = set() if member.is_staff else set(ContentView.objects.filter(viewer=request.user, post_id__in=[item.post_id for item in items]).values_list("post_id", flat=True))
+    opened = dict(ContentView.objects.filter(post_id__in=[item.post_id for item in items], viewer__isnull=False).values("post_id").annotate(total=Count("viewer", distinct=True)).values_list("post_id", "total")) if member.is_staff else {}
+    inside = {item.post_id for item in items}
+    candidates = [post for post in services.lessons_for(organization, member).select_related("author__profile").order_by("-published_at")[:300] if post.pk not in inside] if member.is_staff else []
+    first_unwatched = next((item.post for item in items if item.post_id not in watched), items[0].post if items else None)
+    return _render(request, "playlist.html", organization, member, "channel", {
+        "playlist": playlist, "items": items, "watched": watched, "opened": opened, "candidates": candidates, "form": form,
+        "seconds": sum(item.post.duration for item in items), "watched_count": len(watched), "resume": first_unwatched if watched else None,
+        "cover": next((item.post for item in items if item.post.thumbnail), None), "brand": _channel_brand(organization),
+        "member_count": Membership.objects.filter(organization=organization, status="active").count(),
+    })
+@login_required(login_url="landing:home")
+@require_POST
+def playlist_save_view(request, slug):
+    """Save to playlist, from a lecture's page: the playlists ticked hold the lecture, the others don't, and a
+    new playlist can be started with it."""
+    organization, member = _organization(request, slug, staff=True)
+    post = get_object_or_404(services.lessons_for(organization, member), pk=request.POST.get("post", "0") if request.POST.get("post", "").isdigit() else 0)
+    chosen = set(request.POST.getlist("playlist"))
+    for playlist in Playlist.objects.filter(organization=organization):
+        if str(playlist.pk) in chosen:
+            services.add_to_playlist(playlist, post)
+        elif PlaylistItem.objects.filter(playlist=playlist, post=post).delete()[0]:
+            Playlist.objects.filter(pk=playlist.pk).update(updated_at=timezone.now())
+    title = " ".join(request.POST.get("new_title", "").split())[:120]
+    if title:
+        services.add_to_playlist(Playlist.objects.create(organization=organization, title=title, created_by=request.user), post)
+    messages.success(request, f"Saved to the new playlist {title}." if title else "Playlists updated.")
+    return _back(request, reverse("learning:detail", args=[post.pk]))
 @login_required(login_url="landing:home")
 @require_POST
 def channel_delete_view(request, slug, post_id):
@@ -764,7 +870,8 @@ def recording_edit_view(request, slug, class_id, recording_id):
             recording.summary, recording.chapters, recording.captions, recording.audience = post.summary, post.chapters, post.captions, "public" if post.is_public else "members"
         recording.save(update_fields=["title", "summary", "chapters", "captions", "audience"])
     missing = not os.path.isfile(recordings.source_path(recording))
-    form = RecordingForm(request.POST or None, request.FILES or None, initial={"title": recording.title, "summary": recording.summary, "chapters": recording.chapters, "audience": recording.audience})
+    playlists = list(Playlist.objects.filter(organization=organization))
+    form = RecordingForm(request.POST or None, request.FILES or None, playlists=playlists, initial={"title": recording.title, "summary": recording.summary, "chapters": recording.chapters, "audience": recording.audience})
     if request.method == "POST" and missing:
         form.add_error(None, "The recording's video file is gone, so it can't be published.")
     elif request.method == "POST" and form.is_valid():
@@ -785,6 +892,8 @@ def recording_edit_view(request, slug, class_id, recording_id):
                 publish = request.POST.get("action") == "publish" or recording.post_id
                 created = publish and _publish_recording(request, organization, live, recording, published_parts, bool(data["thumbnail"]))
                 recording.save()
+                if publish and data["playlist"]:
+                    services.add_to_playlist(next(playlist for playlist in playlists if playlist.pk == data["playlist"]), recording.post)
             if not publish:
                 messages.success(request, "Draft saved. Students can't see it until you publish it.")
             elif recording.audience == "public":
@@ -799,7 +908,8 @@ def recording_edit_view(request, slug, class_id, recording_id):
         "thumbnail_url": reverse("organizations:recording_file", args=[slug, live.pk, recording.pk, "thumbnail"]) if recording.thumbnail or (recording.post_id and recording.post.thumbnail) else "",
         "editor": {"duration": seconds(recording.duration_ms), "marks": [seconds(ms) for ms in recording.keyframes] if recording.can_cut else [], "parts": [[seconds(a), seconds(b)] for a, b in recording.parts]},
         "channel_name": public_name(recording.post.author if recording.post_id else recording.created_by or request.user),
-        "missing": missing,
+        "missing": missing, "has_playlists": bool(playlists),
+        "in_playlists": Playlist.objects.filter(items__post=recording.post_id) if recording.post_id else [],
     }
     response = _render(request, "recording_edit.html", organization, member, "classes", context)
     response["Cache-Control"] = "private, no-store"

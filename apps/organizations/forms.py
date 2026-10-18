@@ -6,7 +6,7 @@ from django.core.validators import validate_email
 from apps.core.models import Repository
 from apps.learning.media import MAX_THUMBNAIL_BYTES
 from apps.learning.timeline import clean_chapters
-from .models import MAX_FILE_BYTES, Certificate, ClassRecording, ParentAccess, ChannelPost, LiveClass, Membership, Organization, Submission, Task
+from .models import MAX_FILE_BYTES, Certificate, ClassRecording, ParentAccess, Playlist, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
@@ -175,6 +175,10 @@ class RecordingForm(forms.Form):
     thumbnail = forms.ImageField(required=False)
     audience = forms.ChoiceField(choices=ClassRecording.AUDIENCES, widget=forms.RadioSelect)
     parts = forms.CharField(required=False, widget=forms.HiddenInput)
+    playlist = forms.TypedChoiceField(required=False, coerce=int, empty_value=None, label="Add to a playlist")
+    def __init__(self, *args, playlists=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["playlist"].choices = [("", "Not now"), *[(playlist.pk, playlist.title) for playlist in playlists]]
     def clean_chapters(self):
         try:
             return clean_chapters(self.cleaned_data.get("chapters"))
@@ -197,3 +201,9 @@ class RecordingForm(forms.Form):
             return [[max(0, round(float(start) * 1000)), max(0, round(float(end) * 1000))] for start, end in parts]
         except (TypeError, ValueError):
             raise forms.ValidationError("The edit couldn't be read. Reload the page and edit again.")
+class PlaylistForm(forms.ModelForm):
+    class Meta:
+        model = Playlist
+        fields = ["title", "description", "group"]
+        labels = {"group": "Only for batch (optional)"}
+        widgets = {"title": forms.TextInput(attrs={"placeholder": "Linux, from zero"}), "description": forms.Textarea(attrs={"rows": 3, "placeholder": "What the course covers, and in what order to take it."})}

@@ -24,7 +24,7 @@ from apps.core.models import ActivityEvent, LearningPost, Repository
 from apps.core.services import CODE_ACTIONS
 from apps.notifications.services import notify
 from . import recordings
-from .models import Attendance, Certificate, ChannelPost, ClassRecording, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, Certificate, ChannelPost, ClassRecording, Playlist, PlaylistItem, ParentAccess, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 # Class points: task points earned, plus these for each class attended and each coding day in the last 30.
 POINTS_PER_CLASS = 5
@@ -427,8 +427,31 @@ def tasks_for(organization, member):
     tasks = visible_to(Task.objects.filter(organization=organization), member)
     return tasks if member and member.is_staff else released(tasks)
 def lessons_for(organization, member):
-    lessons = LearningPost.objects.filter(organization=organization)
+    """The organization's lectures and notes, and its class recordings even when they were published for everyone
+    (those leave the organization so they can be public, but they're still the class's lectures)."""
+    recordings_published = ClassRecording.objects.filter(live_class__organization=organization, post__isnull=False).values("post")
+    lessons = LearningPost.objects.filter(Q(organization=organization) | Q(pk__in=recordings_published, is_public=True))
     return lessons if member and member.is_staff else released(lessons)
+def lesson_organization(post):
+    """The organization a lecture belongs to: the one it's shared with, or the one whose class it recorded."""
+    if post.organization_id:
+        return post.organization
+    recording = ClassRecording.objects.filter(post=post).select_related("live_class__organization").first()
+    return recording.live_class.organization if recording else None
+def playlists_for(organization, member):
+    """Playlists for everyone in the organization, plus those for the member's batch. Staff see them all."""
+    return visible_to(Playlist.objects.filter(organization=organization), member)
+def playlist_lectures(playlist, member):
+    """The playlist's items this member may open, in order, each with its lecture or notes as .post."""
+    allowed = lessons_for(playlist.organization, member)
+    return list(playlist.items.filter(post__in=allowed).select_related("post__author__profile").order_by("position", "pk"))
+def add_to_playlist(playlist, post):
+    """Put a lecture at the end of a playlist, once. Returns True if it was added."""
+    end = playlist.items.aggregate(end=Max("position"))["end"]
+    _, created = PlaylistItem.objects.get_or_create(playlist=playlist, post=post, defaults={"position": 0 if end is None else end + 1})
+    if created:
+        Playlist.objects.filter(pk=playlist.pk).update(updated_at=timezone.now())
+    return created
 def announce_lesson(post, actor=None):
     """Tell the organization's members a new lecture or set of notes is in their channel, once."""
     label = "lecture" if post.kind == "video" else "notes"

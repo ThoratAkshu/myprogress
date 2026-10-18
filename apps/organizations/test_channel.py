@@ -17,7 +17,7 @@ from apps.common.templatetags.ui import clock
 from apps.core.models import LearningPost
 from apps.learning.media import note_duration, video_seconds
 from . import recordings, services
-from .models import ChannelPost
+from .models import ChannelPost, ClassRecording, LiveClass, Playlist
 from .test_board import class_webm
 
 MEDIA = tempfile.mkdtemp()
@@ -57,13 +57,9 @@ class VideoLengthTests(SimpleTestCase):
         self.assertEqual([clock(5), clock(125), clock(3725)], ["0:05", "2:05", "1:02:05"])
 
 
-@override_settings(MEDIA_ROOT=MEDIA, ORGANIZATION_JOBS_EVERY_SECONDS=0)
-class ClassChannelTests(TestCase):
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        shutil.rmtree(MEDIA, ignore_errors=True)
-
+class ChannelSetup:
+    """An institute with a branded channel, a student, three released lectures and notes, one scheduled lecture and
+    an announcement."""
     def setUp(self):
         cache.clear()
         self.addCleanup(cache.clear)
@@ -82,9 +78,17 @@ class ClassChannelTests(TestCase):
         self.shell = lecture("Shell scripting", duration=3725, views=40)
         LearningPost.objects.filter(pk=self.shell.pk).update(published_at=now - timedelta(days=3))
         self.notes = lecture("Linux cheat sheet", kind="article", body="cd ls pwd " * 120)
-        lecture("Next week: permissions", duration=600, publish_at=now + timedelta(days=2))
+        self.later = lecture("Next week: permissions", duration=600, publish_at=now + timedelta(days=2))
         ChannelPost.objects.create(organization=self.organization, author=self.owner, kind="announcement", title="Holiday on Monday", body="No class")
         self.url = reverse("organizations:channel", args=[self.organization.slug])
+
+
+@override_settings(MEDIA_ROOT=MEDIA, ORGANIZATION_JOBS_EVERY_SECONDS=0)
+class ClassChannelTests(ChannelSetup, TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(MEDIA, ignore_errors=True)
 
     def test_students_see_their_class_like_a_video_channel(self):
         self.client.force_login(self.student)
@@ -129,3 +133,90 @@ class ClassChannelTests(TestCase):
         note_duration(self.basics)
         self.basics.refresh_from_db()
         self.assertEqual(self.basics.duration, 95)
+
+
+@override_settings(MEDIA_ROOT=MEDIA, ORGANIZATION_JOBS_EVERY_SECONDS=0)
+class PlaylistTests(ChannelSetup, TestCase):
+    """Teachers group lectures into courses; students take them in order, with the next one playing on its own."""
+    def playlist_url(self, playlist):
+        return reverse("organizations:playlist", args=[self.organization.slug, playlist.pk])
+
+    def order(self, playlist):
+        return list(playlist.items.order_by("position").values_list("post__title", flat=True))
+
+    def test_teachers_build_a_course_and_students_take_it_in_order(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("organizations:playlist_create", args=[self.organization.slug]), {"title": "Linux, from zero", "description": "Start here.", "group": ""})
+        playlist = Playlist.objects.get(title="Linux, from zero")
+        self.assertRedirects(response, self.playlist_url(playlist))
+        self.assertContains(self.client.get(self.playlist_url(playlist)), "Add lectures")
+        self.client.post(self.playlist_url(playlist), {"action": "add", "post": [self.basics.pk, self.shell.pk, self.notes.pk, self.later.pk]})
+        self.assertEqual(self.order(playlist), ["Shell scripting", "Linux basics", "Linux cheat sheet", "Next week: permissions"])  # oldest first
+        shell_item = playlist.items.get(post=self.shell)
+        self.client.post(self.playlist_url(playlist), {"action": "down", "item": shell_item.pk})
+        self.client.post(self.playlist_url(playlist), {"action": "remove", "item": playlist.items.get(post=self.notes).pk})
+        self.assertEqual(self.order(playlist), ["Linux basics", "Shell scripting", "Next week: permissions"])
+        self.client.post(self.playlist_url(playlist), {"action": "up", "item": playlist.items.get(post=self.basics).pk})  # already first: nothing moves
+        self.assertEqual(self.order(playlist), ["Linux basics", "Shell scripting", "Next week: permissions"])
+        self.client.post(reverse("organizations:playlist_create", args=[self.organization.slug]), {"title": "Batch B extras", "group": "Batch B"})
+        # The student sees the course without the lecture that isn't released yet, and nothing for another batch.
+        self.client.force_login(self.student)
+        tab = self.client.get(self.url, {"tab": "playlists"})
+        for text in ["Linux, from zero", "0 of 2 watched", "1:04:07 in all"]:
+            self.assertContains(tab, text)
+        self.assertNotContains(tab, "Batch B extras")
+        page = self.client.get(self.playlist_url(playlist))
+        self.assertContains(page, f'href="{reverse("learning:detail", args=[self.basics.pk])}?list={playlist.pk}"')
+        self.assertContains(page, "Play all")
+        self.assertNotContains(page, "Next week: permissions")
+        self.assertNotContains(page, "Add lectures")
+        first = self.client.get(reverse("learning:detail", args=[self.basics.pk]), {"list": playlist.pk})
+        for text in ["1 / 2", "Autoplay", f'data-next="{reverse("learning:detail", args=[self.shell.pk])}?list={playlist.pk}"', "playlist-player.js"]:
+            self.assertContains(first, text)
+        self.assertNotContains(first, "Save to a playlist")  # only teachers save lectures to playlists
+        last = self.client.get(reverse("learning:detail", args=[self.shell.pk]), {"list": playlist.pk})
+        self.assertContains(last, "2 / 2")
+        self.assertContains(last, "Last one in this playlist")
+        self.assertContains(self.client.get(self.url, {"tab": "playlists"}), "Finished: all 2 watched")
+        self.assertNotContains(self.client.get(reverse("learning:detail", args=[self.notes.pk]), {"list": playlist.pk}), "pl-panel")  # not in the playlist any more
+        # Students can't change it, and people outside the institute can't see it.
+        for url, data in [(self.playlist_url(playlist), {"action": "delete"}), (reverse("organizations:playlist_create", args=[self.organization.slug]), {"title": "Mine"}), (reverse("organizations:playlist_save", args=[self.organization.slug]), {"post": self.basics.pk, "new_title": "Mine"})]:
+            self.assertEqual(self.client.post(url, data).status_code, 404)
+        self.client.force_login(make_user("outsider@example.com"))
+        self.assertEqual(self.client.get(self.playlist_url(playlist)).status_code, 404)
+        self.assertEqual(self.client.get(reverse("learning:detail", args=[self.shell.pk]), {"list": playlist.pk}).status_code, 404)  # members-only
+        self.client.force_login(self.owner)
+        self.client.post(self.playlist_url(playlist), {"action": "delete"})
+        self.assertFalse(Playlist.objects.filter(title="Linux, from zero").exists())
+        self.assertTrue(LearningPost.objects.filter(pk=self.basics.pk).exists())  # its lectures stay in the channel
+
+    def test_lectures_are_saved_to_playlists_from_their_page(self):
+        self.client.force_login(self.owner)
+        lecture = reverse("learning:detail", args=[self.basics.pk])
+        self.assertContains(self.client.get(lecture), "Save to a playlist")
+        save = reverse("organizations:playlist_save", args=[self.organization.slug])
+        response = self.client.post(save, {"post": self.basics.pk, "new_title": "Revision", "next": f"{lecture}?list=1"})
+        self.assertRedirects(response, f"{lecture}?list=1", fetch_redirect_response=False)
+        revision = Playlist.objects.get(title="Revision")
+        self.assertEqual(self.order(revision), ["Linux basics"])
+        self.client.post(save, {"post": self.shell.pk, "playlist": [revision.pk]})
+        self.assertEqual(self.order(revision), ["Linux basics", "Shell scripting"])
+        self.client.post(save, {"post": self.basics.pk})  # unticked: taken out
+        self.assertEqual(self.order(revision), ["Shell scripting"])
+        other = services.create_organization(make_user("admin@other.example", role="organization", first_name="Other", last_name="Office"), {"name": "Other Institute", "kind": "institute", "city": "", "about": "", "website": "", "join_requires_approval": False})
+        self.assertEqual(self.client.post(reverse("organizations:playlist_save", args=[other.slug]), {"post": self.basics.pk, "new_title": "Theirs"}).status_code, 404)
+
+    def test_class_recordings_published_for_everyone_stay_in_the_class_channel(self):
+        live = LiveClass.objects.create(organization=self.organization, created_by=self.owner, title="SQL joins", starts_at=timezone.now() - timedelta(hours=2))
+        public = LearningPost.objects.create(author=self.owner, organization=None, is_public=True, kind="video", title="SQL joins, recorded", duration=95)
+        ClassRecording.objects.create(live_class=live, created_by=self.owner, finished_at=timezone.now(), post=public)
+        LearningPost.objects.create(author=self.owner, is_public=True, kind="video", title="My holiday video")  # public, but not a class
+        self.client.force_login(self.student)
+        videos = self.client.get(self.url, {"tab": "videos"})
+        self.assertContains(videos, "SQL joins, recorded")
+        self.assertNotContains(videos, "My holiday video")
+        self.client.force_login(self.owner)
+        playlist = Playlist.objects.create(organization=self.organization, title="SQL")
+        self.client.post(self.playlist_url(playlist), {"action": "add", "post": [public.pk]})
+        self.assertEqual(self.order(playlist), ["SQL joins, recorded"])
+        self.assertContains(self.client.get(reverse("learning:detail", args=[public.pk])), "Save to a playlist")

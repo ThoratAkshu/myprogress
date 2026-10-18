@@ -15,7 +15,7 @@ from apps.accounts.models import Profile
 from apps.core.models import LearningPost
 from apps.notifications.models import Notification
 from . import recordings, services
-from .models import ClassRecording, LiveClass
+from .models import ClassRecording, LiveClass, Playlist
 
 MEDIA = tempfile.mkdtemp()
 UNKNOWN_SIZE = b"\x01\xff\xff\xff\xff\xff\xff\xff"
@@ -501,3 +501,16 @@ class RecordingEditorTests(TestCase):
         self.assertNotEqual(post.video_file.name, old.file_name)
         self.assertTrue(os.path.exists(recordings.file_path(old)))  # the file it used before is the source: kept
         self.assertEqual(post.captions, "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\nHi\n")
+
+    def test_a_recording_can_go_straight_into_a_playlist(self):
+        course = Playlist.objects.create(organization=self.organization, title="SQL, start to finish")
+        page = self.client.get(self.edit)
+        self.assertContains(page, "Add to a playlist")
+        self.assertContains(page, f'<option value="{course.pk}">SQL, start to finish</option>')
+        self.publish(playlist=str(course.pk))
+        post = LearningPost.objects.get()
+        self.assertEqual(list(course.items.values_list("post", flat=True)), [post.pk])
+        self.assertEqual(post.duration, 50)  # the length shown on its thumbnail
+        self.assertContains(self.client.get(self.edit), "Already in SQL, start to finish")
+        self.assertEqual(self.publish(playlist="999").status_code, 200)  # not one of this institute's playlists: refused
+        self.assertEqual(course.items.count(), 1)

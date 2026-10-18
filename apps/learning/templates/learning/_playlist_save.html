@@ -1,0 +1,6 @@
+{% load ui %}<details class="pl-save"><summary class="ig-icon-button" title="Save to a playlist" aria-label="Save to a playlist">{% icon "list" 23 %}</summary>
+<form method="post" action="{% url 'organizations:playlist_save' save_menu.organization.slug %}" class="pl-save-menu">{% csrf_token %}<input type="hidden" name="post" value="{{ post.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+<b>Save to a playlist</b><small>Playlists in {{ save_menu.organization.name }}'s class channel</small>
+{% for item, inside in save_menu.playlists %}<label><input type="checkbox" name="playlist" value="{{ item.pk }}"{% if inside %} checked{% endif %}><span>{{ item.title }}{% if item.group %} <small>{{ item.group }}</small>{% endif %}</span></label>{% empty %}<small class="muted">No playlists yet: start one here.</small>{% endfor %}
+<input name="new_title" maxlength="120" placeholder="New playlist" aria-label="New playlist">
+<button class="button primary">Save</button></form></details>

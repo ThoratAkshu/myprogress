@@ -1,0 +1,33 @@
+{% extends "organizations/base.html" %}{% load ui org_tags %}
+{% block title %}{{ playlist.title }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_tabs.html" %}
+<div class="playlist-page">
+<aside class="playlist-hero" style="--brand-from:{{ brand.from }};--brand-to:{{ brand.to }}">
+<a class="playlist-back" href="{% url 'organizations:channel' organization.slug %}?tab=playlists">{% icon "chevron-left" 14 %}All playlists</a>
+<span class="playlist-hero-cover {{ playlist|tone }}">{% if cover %}<img src="{{ cover.thumbnail_src }}" alt="">{% else %}{% icon "list" 40 %}{% endif %}</span>
+<h1>{{ playlist.title }}</h1>
+<p class="playlist-hero-meta"><b>{{ organization.name }}</b><span>{{ items|length }} lecture{{ items|length|pluralize }}{% if seconds %} · {{ seconds|clock }}{% endif %}{% if playlist.group %} · {{ playlist.group }}{% endif %}</span><span>Updated {{ playlist.updated_at|timesince }} ago</span></p>
+{% if not member.is_staff and items %}<div class="playlist-hero-progress" aria-label="{{ watched_count }} of {{ items|length }} watched"><span style="width:{% widthratio watched_count items|length 100 %}%"></span></div><small class="playlist-hero-note">{% if watched_count == items|length %}You've watched all of it.{% else %}{{ watched_count }} of {{ items|length }} watched{% endif %}</small>{% endif %}
+{% if items %}<div class="playlist-hero-actions"><a class="button playlist-play" href="{% url 'learning:detail' items.0.post.pk %}?list={{ playlist.pk }}">{% icon "play" 16 %}Play all</a>{% if resume %}<a class="button playlist-resume" href="{% url 'learning:detail' resume.pk %}?list={{ playlist.pk }}">Continue</a>{% endif %}</div>{% endif %}
+{% if playlist.description %}<p class="playlist-hero-description">{{ playlist.description|linebreaksbr }}</p>{% endif %}
+{% if member.is_staff %}<details class="playlist-edit"{% if form.errors %} open{% endif %}><summary>{% icon "edit" 14 %}Edit details</summary>
+<form method="post" class="org-form">{% csrf_token %}<input type="hidden" name="action" value="details"><label>Title{{ form.title }}{% for error in form.title.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label><label>Description{{ form.description }}</label><label>{{ form.group.label }}<input name="group" list="org-groups" value="{{ form.group.value|default:'' }}" maxlength="60"><datalist id="org-groups">{% for value in org_groups %}<option value="{{ value }}">{% endfor %}</datalist></label><button class="button primary">Save</button></form>
+<form method="post" data-confirm="Delete the playlist {{ playlist.title }}? Its lectures stay in the channel.">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="org-link-button danger">Delete playlist</button></form></details>{% endif %}
+</aside>
+<section class="playlist-list">
+{% for item in items %}{% with post=item.post %}<article class="playlist-row{% if post.pk in watched %} is-watched{% endif %}">
+<span class="playlist-index">{{ forloop.counter }}</span>
+<a class="playlist-row-link" href="{% url 'learning:detail' post.pk %}?list={{ playlist.pk }}"><span class="playlist-row-thumb {{ post|tone }}">{% if post.thumbnail %}<img src="{{ post.thumbnail_src }}" alt="" loading="lazy">{% elif post.kind == 'video' %}{% icon "play" 22 %}{% else %}{% icon "file-text" 22 %}{% endif %}{% if post.duration %}<span class="channel-duration">{{ post.duration|clock }}</span>{% elif post.kind != 'video' %}<span class="channel-duration">Notes</span>{% endif %}</span><span class="playlist-row-text"><b>{{ post.title }}</b><small>{{ post.author|public_name }}{% if post.kind != 'video' %} · {{ post.reading_minutes }} min read{% endif %}</small><small>{% if member.is_staff %}Opened by {{ opened|get_item:post.pk|default:0 }} of {{ member_count }}{% elif post.pk in watched %}{% icon "check" 12 %} Watched{% endif %}</small></span></a>
+{% if member.is_staff %}<form method="post" class="playlist-row-tools">{% csrf_token %}<input type="hidden" name="item" value="{{ item.pk }}"><button name="action" value="up" title="Move up" aria-label="Move {{ post.title }} up"{% if forloop.first %} disabled{% endif %}>{% icon "chevron-down" 16 %}</button><button name="action" value="down" title="Move down" aria-label="Move {{ post.title }} down"{% if forloop.last %} disabled{% endif %}>{% icon "chevron-down" 16 %}</button><button name="action" value="remove" title="Remove from this playlist" aria-label="Remove {{ post.title }} from this playlist">{% icon "x" 16 %}</button></form>{% endif %}
+</article>{% endwith %}
+{% empty %}<div class="card org-empty">{% icon "list" 28 %}<h2>No lectures in it yet</h2><p class="muted">{% if member.is_staff %}Tick lectures below and add them, or use Save on any lecture's page.{% else %}Your teachers haven't added lectures to this playlist yet.{% endif %}</p></div>{% endfor %}
+{% if member.is_staff %}<form method="post" class="card playlist-add">{% csrf_token %}<input type="hidden" name="action" value="add">
+<div class="card-heading"><h2>Add lectures</h2>{% if candidates %}<input type="search" placeholder="Find by title" aria-label="Find lectures by title" data-playlist-filter>{% endif %}</div>
+{% if candidates %}<ul class="playlist-candidates" data-playlist-candidates>{% for post in candidates %}<li data-title="{{ post.title|lower }}"><label><input type="checkbox" name="post" value="{{ post.pk }}"><span class="playlist-row-thumb small {{ post|tone }}">{% if post.thumbnail %}<img src="{{ post.thumbnail_src }}" alt="" loading="lazy">{% elif post.kind == 'video' %}{% icon "play" 16 %}{% else %}{% icon "file-text" 16 %}{% endif %}</span><span class="playlist-row-text"><b>{{ post.title }}</b><small>{% if post.kind == 'video' %}Video{% if post.duration %} · {{ post.duration|clock }}{% endif %}{% else %}Notes{% endif %} · {{ post.published_at|date:"M j" }}{% if post.publish_at and post.publish_at > post.published_at %} · released {{ post.publish_at|date:"M j" }}{% endif %}</small></span></label></li>{% endfor %}</ul>
+<p class="muted small" data-playlist-none hidden>No lectures match.</p>
+<div class="org-form-actions"><button class="button primary">{% icon "plus" 16 %}Add to playlist</button><small class="muted">They go to the end; move them with the arrows.</small></div>
+{% else %}<p class="muted">Every lecture in the channel is in this playlist already. <a href="{% url 'learning:create' %}?org={{ organization.slug }}&kind=video">Record another</a>.</p>{% endif %}</form>{% endif %}
+</section>
+</div>
+</div>{% endblock %}

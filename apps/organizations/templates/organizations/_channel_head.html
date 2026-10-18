@@ -10,6 +10,7 @@
 <nav class="class-channel-tabs" aria-label="Channel sections">
 <a href="?"{% if tab == 'home' %} aria-current="page"{% endif %}>Home</a>
 <a href="?tab=videos"{% if tab == 'videos' %} aria-current="page"{% endif %}>Videos{% if counts.videos %} <b>{{ counts.videos }}</b>{% endif %}</a>
+<a href="?tab=playlists"{% if tab == 'playlists' %} aria-current="page"{% endif %}>Playlists{% if counts.playlists %} <b>{{ counts.playlists }}</b>{% endif %}</a>
 <a href="?tab=notes"{% if tab == 'notes' %} aria-current="page"{% endif %}>Notes{% if counts.notes %} <b>{{ counts.notes }}</b>{% endif %}</a>
 <a href="?tab=posts"{% if tab == 'posts' %} aria-current="page"{% endif %}>Posts{% if counts.posts %} <b>{{ counts.posts }}</b>{% endif %}</a>
 <a href="?tab=about"{% if tab == 'about' %} aria-current="page"{% endif %}>About</a>

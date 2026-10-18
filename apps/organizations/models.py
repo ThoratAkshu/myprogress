@@ -282,3 +282,24 @@ class ClassMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["created_at", "pk"]
+class Playlist(models.Model):
+    """A course in the class channel: lectures and notes in the order students should take them."""
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="playlists")
+    title = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    group = models.CharField(max_length=60, blank=True, help_text="Only for this batch; empty for everyone")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["-updated_at", "-pk"]
+    def __str__(self):
+        return self.title
+class PlaylistItem(models.Model):
+    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name="items")
+    post = models.ForeignKey("core.LearningPost", on_delete=models.CASCADE, related_name="+")
+    position = models.PositiveIntegerField(default=0)
+    added_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["position", "pk"]
+        constraints = [models.UniqueConstraint(fields=["playlist", "post"], name="playlist_item_once")]

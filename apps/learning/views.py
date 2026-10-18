@@ -23,8 +23,8 @@ from apps.core.models import ArticleImage, ContentView, LearningPost, PostCommen
 from apps.core.services import complete_daily_step, record_activity, refresh_rank
 from apps.earnings.services import reverse_post_coins, sync_post_coins
 from apps.notifications.services import notify
-from apps.organizations.models import ClassRecording
-from apps.organizations.services import announce_lesson, membership, staff_organizations
+from apps.organizations.models import ClassRecording, Playlist, PlaylistItem
+from apps.organizations.services import announce_lesson, lesson_organization, membership, playlist_lectures, playlists_for, staff_organizations
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
@@ -83,8 +83,29 @@ def post_detail_view(request, post_id):
         "chapters": parse_chapters(post.chapters),
         "transcript": parse_captions(post.captions),
         "outline": article_outline(post.body) if not post.has_video else [],
+        **_playlist_context(request, post),
     }
     return render(request, "learning/post_detail.html", context)
+def _playlist_context(request, post):
+    """The class playlist this lecture is being watched in (?list=), with what comes before and after it, and,
+    for the class's teachers, the playlists to save it to."""
+    organization = lesson_organization(post) if request.user.is_authenticated else None
+    member = membership(organization, request.user) if organization else None
+    if member is None:
+        return {}
+    context = {}
+    list_id = request.GET.get("list", "")
+    playlist = playlists_for(organization, member).filter(pk=list_id).first() if list_id.isdigit() else None
+    items = playlist_lectures(playlist, member) if playlist else []
+    at = next((index for index, item in enumerate(items) if item.post_id == post.pk), None)
+    if at is not None:
+        watched = set(ContentView.objects.filter(viewer=request.user, post_id__in=[item.post_id for item in items]).values_list("post_id", flat=True))
+        context["playlist"] = {"playlist": playlist, "organization": organization, "items": items, "position": at + 1, "watched": watched, "previous": items[at - 1].post if at else None, "next": items[at + 1].post if at + 1 < len(items) else None}
+    if member.is_staff:
+        playlists = list(Playlist.objects.filter(organization=organization))
+        inside = set(PlaylistItem.objects.filter(post=post, playlist__in=playlists).values_list("playlist_id", flat=True))
+        context["save_menu"] = {"organization": organization, "playlists": [(item, item.pk in inside) for item in playlists]}
+    return context
 @login_required(login_url="landing:home")
 @rate_limit("publish", 10, 3600)
 def post_create_view(request):
