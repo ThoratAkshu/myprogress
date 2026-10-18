@@ -6,7 +6,7 @@ import re
 import secrets
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone as dt_timezone
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 import jwt
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -49,7 +49,7 @@ def visible_to(queryset, member):
     if member.is_staff:
         return queryset
     return queryset.filter(Q(group="") | Q(group__iexact=member.group))
-RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent", "classes-now"}
+RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent", "classes-now", "calendar"}
 def unique_slug(name):
     base = slugify(name)[:50] or "organization"
     if base in RESERVED_SLUGS:
@@ -274,11 +274,36 @@ def class_alerts(user):
 def _ics_text(text):
     """Text escaped for an iCalendar value: backslashes, semicolons, commas and line breaks."""
     return str(text).replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\r\n", "\\n").replace("\n", "\\n")
-def class_calendar(classes, page_url):
-    """An iCalendar file for one class or a series, with an alarm 15 minutes before each class.
+def _utc_stamp(moment):
+    return moment.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+def calendar_links(live, page_url):
+    """Links that open Google Calendar or Outlook with this one class filled in, ready to save."""
+    title = f"{live.title} ({live.organization.name})"
+    details = (live.agenda + "\n\n" if live.agenda else "") + f"Join from MyProgress: {page_url}"
+    return {
+        "google": "https://calendar.google.com/calendar/render?" + urlencode({"action": "TEMPLATE", "text": title, "dates": f"{_utc_stamp(live.starts_at)}/{_utc_stamp(live.ends_at)}", "details": details, "location": page_url}),
+        "outlook": "https://outlook.live.com/calendar/0/deeplink/compose?" + urlencode({"path": "/calendar/action/compose", "rru": "addevent", "subject": title, "startdt": live.starts_at.astimezone(dt_timezone.utc).isoformat(), "enddt": live.ends_at.astimezone(dt_timezone.utc).isoformat(), "body": details, "location": page_url}),
+    }
+def calendar_subscriptions(feed_url):
+    """Links that subscribe Google Calendar, Outlook or Apple Calendar to someone's class calendar address."""
+    webcal = "webcal://" + feed_url.split("://", 1)[1]
+    return {"google": "https://calendar.google.com/calendar/r?" + urlencode({"cid": webcal}), "outlook": "https://outlook.live.com/calendar/0/addfromweb?" + urlencode({"url": feed_url, "name": CALENDAR_NAME}), "apple": webcal, "address": feed_url}
+CALENDAR_NAME = "MyProgress classes"
+def calendar_feed_classes(user):
+    """The classes in someone's calendar subscription: every organization they're in, for their batch, from a
+    month back to a year ahead. A cancelled class is simply gone, so calendars drop it too."""
+    now, classes = timezone.now(), []
+    for member in Membership.objects.filter(user=user, status="active").select_related("organization"):
+        classes += classes_for(member.organization, member).filter(starts_at__gte=now - timedelta(days=30), starts_at__lte=now + timedelta(days=400)).select_related("organization")
+    return sorted(classes, key=lambda live: live.starts_at)
+def class_calendar(classes, page_url, name=None):
+    """An iCalendar file for one class or a series, with an alarm 15 minutes before each class. With a name, it's a
+    subscribed calendar, and apps are asked to check it for changes every hour.
     page_url(live) gives the class page; the meeting link itself stays in MyProgress, which takes attendance."""
-    stamp = lambda moment: moment.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = _utc_stamp
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MyProgress//Live classes//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"]
+    if name:
+        lines += [f"X-WR-CALNAME:{_ics_text(name)}", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H"]
     for live in classes:
         url = page_url(live)
         lines += ["BEGIN:VEVENT", f"UID:live-class-{live.pk}@myprogress", f"DTSTAMP:{stamp(timezone.now())}", f"DTSTART:{stamp(live.starts_at)}", f"DTEND:{stamp(live.ends_at)}",

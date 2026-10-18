@@ -36,7 +36,7 @@ from apps.notifications.services import notify
 from . import recordings, services
 from .middleware import OrganizationUnavailable
 from .forms import CertificateForm, ChannelPostForm, ParentForm, InviteForm, LiveClassForm, MemberForm, OrganizationForm, PlaylistForm, RecordingForm, ReviewForm, SubmissionForm, TaskForm
-from .models import Attendance, Certificate, ChannelPost, ClassMessage, ClassRecording, Playlist, PlaylistItem, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
+from .models import Attendance, CalendarFeed, Certificate, ChannelPost, ClassMessage, ClassRecording, Playlist, PlaylistItem, ParentAccess, ChannelSeen, Invite, LiveClass, Membership, Organization, Submission, Task
 logger = logging.getLogger(__name__)
 GROWTH_SORTS = [("score", "Score"), ("active", "Recently active"), ("attendance", "Attendance"), ("coding", "Coding days"), ("tasks", "Tasks done"), ("name", "Name")]
 
@@ -595,7 +595,7 @@ def classes_view(request, slug):
         mine = dict(Attendance.objects.filter(live_class__in=past, student=request.user).values_list("live_class_id", "status"))
         for live in past:
             live.mine = mine.get(live.pk, "absent")
-    return _render(request, "classes.html", organization, member, "classes", {"form": form, "upcoming": upcoming, "past": past, "in_app_video": bool(settings.JITSI_DOMAIN)})
+    return _render(request, "classes.html", organization, member, "classes", {"form": form, "upcoming": upcoming, "past": past, "in_app_video": bool(settings.JITSI_DOMAIN), "calendar": _calendar_menu(request, upcoming[0]) if upcoming else None})
 @login_required(login_url="landing:home")
 def class_detail_view(request, slug, class_id):
     organization, member = _organization(request, slug)
@@ -624,6 +624,8 @@ def class_detail_view(request, slug, class_id):
             messages.success(request, "Recording attached." if recording else "Recording removed.")
         return redirect("organizations:live_class", slug=slug, class_id=live.pk)
     context = {"live": live, "state": live.state(now), "now": now, "position": services.series_position(live), "in_app": services.video_room(live) is not None, "jitsi_domain": settings.JITSI_DOMAIN}
+    if context["state"] != "over":
+        context["calendar"] = _calendar_menu(request, live)
     if member.is_staff:
         roster = services.class_roster(live)
         context.update({"statuses": Attendance.STATUSES, "roster": roster, "came": len([row for row in roster if row["attendance"] and row["attendance"].status in {"present", "late"}]), "recordings": LearningPost.objects.filter(organization=organization, kind="video").order_by("-published_at")[:30], "class_recordings": _finished_recordings(live)})
@@ -678,6 +680,35 @@ def class_calendar_view(request, slug, class_id):
     response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{name}.ics"'
     return response
+def _calendar_menu(request, live):
+    """What the Add to calendar menu offers for a class: this class in Google Calendar or Outlook (or as a file),
+    and a subscription to all of the member's classes that keeps itself up to date."""
+    feed, _ = CalendarFeed.objects.get_or_create(user=request.user)
+    page = request.build_absolute_uri(reverse("organizations:live_class", args=[live.organization.slug, live.pk]))
+    return {**services.calendar_links(live, page), "file": reverse("organizations:class_calendar", args=[live.organization.slug, live.pk]),
+            "sync": services.calendar_subscriptions(request.build_absolute_uri(reverse("organizations:calendar_feed", args=[feed.token])))}
+def calendar_feed_view(request, token):
+    """Someone's class calendar, for calendar apps that subscribed to it. No sign-in: the private address is the
+    key, and turning it off makes a new one."""
+    feed = get_object_or_404(CalendarFeed.objects.select_related("user"), token=token)
+    if not feed.user.is_active:
+        raise Http404
+    CalendarFeed.objects.filter(pk=feed.pk).update(last_fetched_at=timezone.now())
+    classes = services.calendar_feed_classes(feed.user)
+    body = services.class_calendar(classes, lambda live: request.build_absolute_uri(reverse("organizations:live_class", args=[live.organization.slug, live.pk])), name=services.CALENDAR_NAME)
+    response = HttpResponse(body, content_type="text/calendar; charset=utf-8")
+    response["Content-Disposition"] = 'inline; filename="myprogress-classes.ics"'
+    response["Cache-Control"] = "private, max-age=300"
+    response["X-Robots-Tag"] = "noindex"
+    return response
+@login_required(login_url="landing:home")
+@require_POST
+def calendar_reset_view(request):
+    """Turn off the private calendar address; calendars subscribed to it stop getting classes. A new address is
+    made the next time the person opens Add to calendar."""
+    CalendarFeed.objects.filter(user=request.user).delete()
+    messages.success(request, "Your old calendar address no longer works. Calendars that used it stop updating; subscribe again to get a new one.")
+    return _back(request, reverse("organizations:home"))
 def _finished_recordings(live):
     """A class's recordings from the teaching board, newest first, each with its length to show."""
     finished = list(live.recordings.filter(finished_at__isnull=False).select_related("post"))

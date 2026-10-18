@@ -1,0 +1,14 @@
+{% load ui %}<details class="cal-menu" data-calendar data-cal-menu{% if live.current and live.current != "upcoming" %} hidden{% endif %}><summary class="button soft">{% icon "calendar" 16 %}Add to calendar{% icon "chevron-down" 14 %}</summary>
+<div class="cal-menu-panel">
+<p class="cal-menu-head">This class</p>
+<a href="{{ calendar.google }}" target="_blank" rel="noopener">{% icon "calendar" 16 %}<span>Google Calendar</span></a>
+<a href="{{ calendar.outlook }}" target="_blank" rel="noopener">{% icon "mail" 16 %}<span>Outlook</span></a>
+<a href="{{ calendar.file }}">{% icon "download" 16 %}<span>Apple Calendar or another app<small>Downloads a calendar file to open</small></span></a>
+<p class="cal-menu-head">All your classes, kept up to date</p>
+<small class="cal-menu-note">{% if live.series %}The whole series and any{% else %}Any{% endif %} new classes appear by themselves, changes follow, and cancelled classes disappear.</small>
+<a href="{{ calendar.sync.google }}" target="_blank" rel="noopener">{% icon "calendar" 16 %}<span>Subscribe in Google Calendar</span></a>
+<a href="{{ calendar.sync.outlook }}" target="_blank" rel="noopener">{% icon "mail" 16 %}<span>Subscribe in Outlook</span></a>
+<a href="{{ calendar.sync.apple }}">{% icon "calendar" 16 %}<span>Subscribe in Apple Calendar</span></a>
+<button type="button" data-copy-text="{{ calendar.sync.address }}">{% icon "copy" 16 %}<span>Copy the calendar address<small>For any other calendar app</small></span></button>
+<form method="post" action="{% url 'organizations:calendar_reset' %}" class="cal-menu-reset">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><small>The address is private: anyone who has it can see your class times.</small><button class="org-link-button">Turn off this address</button></form>
+</div></details>

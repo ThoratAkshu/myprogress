@@ -282,6 +282,15 @@ class ClassMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["created_at", "pk"]
+def calendar_token():
+    return secrets.token_urlsafe(32)  # 43 characters
+class CalendarFeed(models.Model):
+    """A private calendar address with someone's live classes, which calendar apps subscribe to and check for
+    changes. Whoever has the address can read the class times, so it can be turned off (and a new one made)."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="class_calendar")
+    token = models.CharField(max_length=64, unique=True, default=calendar_token)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_fetched_at = models.DateTimeField(null=True, blank=True)
 class Playlist(models.Model):
     """A course in the class channel: lectures and notes in the order students should take them."""
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="playlists")

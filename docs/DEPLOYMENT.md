@@ -140,6 +140,14 @@ on keyframes (the board records one every 2 seconds), so the server copies the
 kept parts without re-encoding: no ffmpeg, and an hour-long class is cut in
 seconds. Chapters and captions move to match the cuts.
 
+Add to calendar on a class opens it in Google Calendar or Outlook, or downloads a
+calendar file. It also offers each member a private subscription address
+(`/org/calendar/<token>.ics`) with all their classes, which calendar apps check
+for new, changed and cancelled classes. Google and Outlook fetch that address
+from their own servers, so subscriptions only work on the public HTTPS site, not
+on localhost, and Google picks up changes every few hours. Members can turn the
+address off from the same menu.
+
 Disk use per class: a seekable copy of the whole recording (kept so the teacher
 can restore anything they cut), plus the published lecture's file. An uncut
 lecture shares the copy's disk space through a hard link, so it only costs extra

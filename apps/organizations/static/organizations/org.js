@@ -55,6 +55,25 @@
     if (!composer.hidden) composer.querySelector("select, input, textarea")?.focus();
   });
 
+  // Add to calendar menus: close on a click elsewhere or Escape, and copy the private calendar address.
+  document.addEventListener("click", event => {
+    document.querySelectorAll("[data-cal-menu][open]").forEach(menu => { if (!menu.contains(event.target)) menu.open = false; });
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") document.querySelectorAll("[data-cal-menu][open]").forEach(menu => { menu.open = false; });
+  });
+  document.querySelectorAll("[data-copy-text]").forEach(button => button.addEventListener("click", async () => {
+    const label = button.querySelector("span");
+    const before = label.innerHTML;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copyText);
+      label.textContent = "Copied. Paste it into your calendar app's \"subscribe\" or \"add from URL\".";
+    } catch {
+      label.textContent = button.dataset.copyText;
+    }
+    setTimeout(() => { label.innerHTML = before; }, 4000);
+  }));
+
   // A playlist's "Add lectures" list: find lectures by title as you type.
   const filter = document.querySelector("[data-playlist-filter]");
   filter?.addEventListener("input", () => {

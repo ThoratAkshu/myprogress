@@ -1574,3 +1574,22 @@ body.app .playlist-hero h1{margin:4px 0 0;color:#fff;font:800 24px/1.2 Manrope,"
 .class-schedule{display:grid;gap:10px}
 .class-schedule .card-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 .class-schedule-later{margin:6px 2px 0;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+/* Add to calendar: this class in Google Calendar or Outlook, or a subscription that keeps every class in sync */
+.cal-menu{position:relative}
+.cal-menu[hidden]{display:none}
+.cal-menu summary{display:inline-flex;align-items:center;gap:6px;list-style:none;cursor:pointer}
+.cal-menu summary::-webkit-details-marker{display:none}
+.cal-menu[open] summary svg:last-child{transform:rotate(180deg)}
+.cal-menu-panel{position:absolute;top:calc(100% + 6px);left:0;z-index:30;display:grid;gap:2px;width:min(310px,calc(100vw - 32px));padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 14px 34px rgba(15,23,42,.18)}
+.live-class-actions .cal-menu-panel{right:0;left:auto}
+.cal-menu-head{margin:8px 8px 2px;color:var(--muted);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.cal-menu-head:first-child{margin-top:2px}
+.cal-menu-note{margin:0 8px 4px;color:var(--muted);font-size:12px;line-height:1.45}
+.cal-menu-panel>a,.cal-menu-panel>button{display:flex;align-items:center;gap:10px;width:100%;margin:0;padding:8px;border:0;border-radius:8px;background:none;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-align:left;text-decoration:none;cursor:pointer}
+.cal-menu-panel>a:hover,.cal-menu-panel>button:hover{background:var(--canvas)}
+.cal-menu-panel>a>svg,.cal-menu-panel>button>svg{flex:none;color:var(--violet)}
+.cal-menu-panel span{display:grid}
+.cal-menu-panel span small{color:var(--muted);font-size:12px;font-weight:400}
+.cal-menu-reset{display:grid;gap:4px;margin:6px 0 0;padding:8px 8px 0;border-top:1px solid var(--line)}
+.cal-menu-reset small{color:var(--muted);font-size:12px;line-height:1.4}
+.cal-menu-reset .org-link-button{justify-self:start;color:#b91c1c}

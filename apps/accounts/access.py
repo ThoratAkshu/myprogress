@@ -59,6 +59,7 @@ POLICY = {
     "learning:studio_files": CREATORS, "learning:studio_file": CREATORS, "learning:studio_assist": CREATORS,
     # Organizations. Only organization accounts start one; inside, membership and the member's role decide.
     "organizations:create": frozenset({ORGANIZATION}),
+    "organizations:calendar_feed": PUBLIC,  # calendar apps fetch it without signing in; the private address is the key
     "organizations:join": PUBLIC, "organizations:accept_invite": PUBLIC,  # explain the invitation first; joining needs a sign-in
     "organizations:certificate": PUBLIC,  # public certificate verification
     "organizations:parent_report": PUBLIC, "organizations:parent_emails": PUBLIC,  # the private link is the key
@@ -66,7 +67,7 @@ POLICY = {
         "home", "overview", "members", "member", "member_action", "parent_access", "invite", "import", "import_template", "leave",
         "channel", "channel_delete", "channel_publish", "release_now", "channel_file", "playlist", "playlist_create", "playlist_save", "tasks", "task", "task_delete", "task_file",
         "review", "submission_file", "settings", "leaderboard", "certificates", "classes", "live_class", "join_class", "class_room", "cancel_class",
-        "class_calendar", "live_now", "teaching_board", "recording_start", "recording_piece", "recording_finish", "recording_edit", "recording_file",
+        "class_calendar", "calendar_reset", "live_now", "teaching_board", "recording_start", "recording_piece", "recording_finish", "recording_edit", "recording_file",
         "watch", "class_stream", "class_stream_bytes", "class_chat",
     ]},
     # The finance console has its own sign-in for finance staff (see earnings.views.finance_required).

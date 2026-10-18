@@ -688,6 +688,42 @@ class LiveClassReminderTests(TestCase):
         self.client.force_login(self.other_batch)
         self.assertEqual(self.client.get(reverse("organizations:class_calendar", args=[self.organization.slug, first.pk])).status_code, 404)
         self.assertEqual(LiveClass.objects.count(), 2)
+    def test_add_to_calendar_opens_the_calendar_or_keeps_every_class_in_sync(self):
+        from datetime import timezone as dt_timezone
+        from urllib.parse import quote
+        from .models import CalendarFeed
+        first = self.live(60 * 24, title="Loops, part 1", series="week-plan")
+        self.live(60 * 48, title="Loops, part 2", series="week-plan")
+        self.live(60 * 24, title="Batch B only", group="Batch B")
+        self.live(-60 * 24 * 40, title="Long ago")
+        self.client.force_login(self.student)
+        page = self.client.get(reverse("organizations:live_class", args=[self.organization.slug, first.pk])).content.decode()
+        start = first.starts_at.astimezone(dt_timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        self.assertIn(f"https://calendar.google.com/calendar/render?action=TEMPLATE&amp;text=Loops%2C+part+1+%28Sunrise+Coding+Institute%29&amp;dates={start}%2F", page)
+        self.assertIn("https://outlook.live.com/calendar/0/deeplink/compose?", page)
+        self.assertIn(reverse("organizations:class_calendar", args=[self.organization.slug, first.pk]), page)  # the file, for Apple and other apps
+        token = CalendarFeed.objects.get(user=self.student).token
+        address = f"http://testserver{reverse('organizations:calendar_feed', args=[token])}"
+        self.assertIn(f'href="webcal://testserver{reverse("organizations:calendar_feed", args=[token])}"', page)
+        self.assertIn("https://calendar.google.com/calendar/r?cid=" + quote(f"webcal://testserver{reverse('organizations:calendar_feed', args=[token])}", safe=""), page)
+        self.assertIn(f'data-copy-text="{address}"', page)
+        # Calendar apps fetch the address without signing in, and see only this student's classes.
+        self.client.logout()
+        feed = self.client.get(address)
+        body = feed.content.decode()
+        self.assertEqual(feed["Content-Type"], "text/calendar; charset=utf-8")
+        for text in ["X-WR-CALNAME:MyProgress classes", "REFRESH-INTERVAL;VALUE=DURATION:PT1H", r"SUMMARY:Loops\, part 1 (Sunrise Coding Institute)", r"SUMMARY:Loops\, part 2"]:
+            self.assertIn(text, body)
+        self.assertNotIn("Batch B only", body)
+        self.assertNotIn("Long ago", body)
+        first.delete()  # a cancelled class leaves the subscribed calendar too
+        self.assertNotIn("part 1", self.client.get(address).content.decode())
+        self.assertIsNotNone(CalendarFeed.objects.get(user=self.student).last_fetched_at)
+        self.client.force_login(self.student)
+        self.client.post(reverse("organizations:calendar_reset"))
+        self.client.logout()
+        self.assertEqual(self.client.get(address).status_code, 404)  # turned off: the old address stops working
+        self.assertEqual(self.client.get(reverse("organizations:calendar_feed", args=["not-a-real-address"])).status_code, 404)
     def test_reminders_go_out_as_people_use_the_site_without_a_cron_job(self):
         self.live(5)
         self.client.force_login(self.other_batch)
