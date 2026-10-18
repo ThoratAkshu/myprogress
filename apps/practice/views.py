@@ -354,11 +354,15 @@ def submit_api(request, slug):
 @login_required(login_url="landing:home")
 @require_POST
 def ui_view(request):
-    """Switch between the developer UI (a code editor look) and the classic one."""
+    """Switch between the developer view (MyProgress as a code editor) and the normal view. The next page plays the
+    second half of the flip, and after switching on, shows what's new."""
     practice = services.profile(request.user)
     if practice and services.is_on(request.user):
-        practice.ide_ui = request.POST.get("ide") == "1"
-        practice.save(update_fields=["ide_ui"])
+        wanted = request.POST.get("ide") == "1"
+        if practice.ide_ui != wanted:
+            practice.ide_ui = wanted
+            practice.save(update_fields=["ide_ui"])
+            request.session[services.SWITCHED] = "on" if wanted else "off"
     target = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         target = reverse("landing:dashboard")

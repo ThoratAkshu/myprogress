@@ -150,6 +150,9 @@ def payload(question):
             "topic": question.topic, "prompt": question.prompt, "code": question.code, "choices": question.choices, "lang": question.language, "type": question.kind}
 
 
+SWITCHED = "practice_view_switched"  # session: "on" or "off" until the next page shows the switch
+
+
 def ide_on(user):
     """The developer UI: MyProgress dressed as a code editor, for people in developer mode who keep it on."""
     return is_on(user) and profile(user).ide_ui
@@ -196,6 +199,6 @@ def palette(user):
     items += [go(f"{item['number']}. {item['title']}", reverse("practice:problem", args=[item["slug"]]), item["difficulty"]) for item in problems.PROBLEMS]
     items += [go(f"Watch: {item['title']} ({'Python' if item['language'] == 'python' else 'JavaScript'})", reverse("practice:walkthrough", args=[item["key"]]), "watch")
               for item in lab.WALKTHROUGHS]
-    items += [{"label": "Switch to the classic look", "post": reverse("practice:ui"), "fields": {"ide": "0"}, "hint": "ui --classic"},
+    items += [{"label": "Switch to the normal view", "post": reverse("practice:ui"), "fields": {"ide": "0"}, "hint": "view --normal"},
               {"label": "Sign out", "post": reverse("landing:logout"), "fields": {}, "hint": "exit"}]
     return [item for item in items if item]

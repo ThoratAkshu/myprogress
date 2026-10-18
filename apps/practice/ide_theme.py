@@ -14,7 +14,8 @@ OUTPUT = CSS / "ide-auto.css"
 # The order app_base.html loads them, then page-specific sheets, then the ones loaded last.
 FIRST = ["style.css", "analytics.css", "git-hub.css", "portfolio.css", "recruiting.css", "learning.css"]
 LAST = ["legacy-readability.css", "app.css", "themes.css", "practice.css"]
-SKIP = {"site.css", "ide.css", "ide-auto.css"}  # site.css: the signed-out pages, which never use the developer UI
+# site.css: the signed-out pages, which never use the developer UI. view-switch.css: the same colours in both views.
+SKIP = {"site.css", "ide.css", "ide-auto.css", "view-switch.css"}
 
 COLOR = re.compile(r"#[0-9a-fA-F]{3,8}\b|\bwhite\b|\bblack\b|rgba?\([^)]*\)")
 

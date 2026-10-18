@@ -3,16 +3,12 @@
 :root{--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--term-bg:#0b1324;--term-line:#1e293b;--term-ink:#e2e8f0;--term-muted:#7c8aa3;
   --tok-key:#c4b5fd;--tok-str:#86efac;--tok-num:#fcd34d;--tok-com:#64748b;--tok-fn:#7dd3fc;--right:#16a34a;--right-soft:#dcfce7;--wrong:#dc2626;--wrong-soft:#fee2e2}
 
-/* The whole app in developer mode */
-body.dev-mode{background-image:radial-gradient(color-mix(in srgb,var(--violet) 10%,transparent) 1px,transparent 1.2px);background-size:22px 22px;background-attachment:fixed}
-body.dev-mode .kicker{font-family:var(--mono);letter-spacing:.02em;text-transform:none}
-body.dev-mode .kicker::before{content:"// ";opacity:.6}
-body.dev-mode .page-title h1::after{content:"_";margin-left:3px;color:var(--violet);font-weight:400;animation:dev-caret 1.1s steps(1) infinite}
+/* The developer view: an editor's dotted canvas, comment-style kickers and a caret (the normal view stays plain) */
+body.ide{background-image:radial-gradient(color-mix(in srgb,var(--violet) 10%,transparent) 1px,transparent 1.2px);background-size:22px 22px;background-attachment:fixed}
+body.ide .kicker{font-family:var(--mono);letter-spacing:.02em;text-transform:none}
+body.ide .kicker::before{content:"// ";opacity:.6}
+body.ide .page-title h1::after{content:"_";margin-left:3px;color:var(--violet);font-weight:400;animation:dev-caret 1.1s steps(1) infinite}
 .nav-file{display:none}
-.ide-switch{display:flex;margin:0}
-.ide-switch button{padding:3px 8px;border:1px solid rgba(255,255,255,.22);border-radius:7px;background:transparent;color:#7dd3fc;font:700 12px/1.2 var(--mono);cursor:pointer;transition:background .15s,border-color .15s}
-.ide-switch button:hover{border-color:#7dd3fc;background:rgba(125,211,252,.1)}
-.ide-switch button[aria-pressed=true]{border-color:#38bdf8;background:#0284c7;color:#fff}
 @keyframes dev-caret{50%{opacity:0}}
 
 /* Code, coloured like an editor */

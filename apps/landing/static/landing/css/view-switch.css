@@ -1,0 +1,87 @@
+/* Switching between the normal view and the developer view: the toggle by the logo, a 360° flip of the whole page
+   (half on the way out, half on the next page), and what's new after switching on. Its colours are the same in both
+   views, so ide_theme leaves this file alone. Motion is cut to a fade for people who ask for less. */
+
+/* The toggle */
+.ide-switch{display:flex;margin:0}
+.ide-switch button{display:inline-flex;padding:2px;border:0;border-radius:99px;background:none;cursor:pointer}
+.ide-switch button:focus-visible{outline:2px solid #38bdf8;outline-offset:2px}
+.ide-switch-track{position:relative;display:block;width:52px;height:26px;border:1px solid color-mix(in srgb,var(--header-fg,#e2e8f0) 30%,transparent);border-radius:99px;background:color-mix(in srgb,var(--header-fg,#e2e8f0) 8%,transparent);transition:background .3s,border-color .3s,box-shadow .3s}
+.ide-switch-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--header-fg,#e2e8f0);box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .35s cubic-bezier(.3,1.5,.5,1),background .3s}
+.ide-switch-glyph{position:absolute;top:50%;left:25px;color:#38bdf8;font:700 10px/1 "JetBrains Mono",ui-monospace,monospace;transform:translateY(-50%);transition:left .35s ease,color .3s}
+.ide-switch button:hover .ide-switch-track{border-color:#38bdf8}
+.ide-switch [aria-checked=true] .ide-switch-track{border-color:#38bdf8;background:#0284c7;box-shadow:0 0 14px rgba(56,189,248,.45)}
+.ide-switch [aria-checked=true] .ide-switch-knob{background:#fff;transform:translateX(26px)}
+.ide-switch [aria-checked=true] .ide-switch-glyph{left:7px;color:#fff}
+
+/* The flip: the page turns half way and disappears, and the next page turns the rest of the way in */
+body.view-leaving{overflow-x:hidden}
+body.view-leaving .app-stage{transform-origin:var(--flip-origin,50% 50vh);backface-visibility:hidden;animation:view-leave .8s cubic-bezier(.55,0,.7,.4) forwards}
+@keyframes view-leave{from{transform:perspective(1800px) rotateY(0) scale(1)}to{transform:perspective(1800px) rotateY(180deg) scale(.78)}}
+body.view-arriving{overflow-x:hidden}
+body.view-arriving .app-stage{transform-origin:50% 50vh;backface-visibility:hidden;animation:view-arrive .9s .35s cubic-bezier(.2,.7,.25,1) backwards}
+@keyframes view-arrive{from{transform:perspective(1800px) rotateY(-180deg) scale(.78)}to{transform:perspective(1800px) rotateY(0) scale(1)}}
+body.view-arriving .ide-status,body.view-arriving .dev-dock{animation:view-fade-in .4s 1.15s backwards}  /* outside the turning page */
+body.view-leaving .view-toast{display:none}
+body.view-leaving .ide-status,body.view-leaving .dev-dock{animation:view-fade-out .3s forwards}
+@keyframes view-fade-in{from{opacity:0}}
+@keyframes view-fade-out{to{opacity:0}}
+
+/* The overlay between the two halves: a spinning orb pulling code in, and a log of what's changing */
+.view-shift{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:radial-gradient(circle at 50% 42%,rgba(14,165,233,.14),transparent 50%),#060a14;color:#e2e8f0;pointer-events:none}
+.view-shift[hidden]{display:none}
+body.view-leaving .view-shift{animation:view-fade-in .55s .1s ease-out backwards}
+.view-shift.is-arriving{animation:view-shift-out .6s .8s ease-in forwards}
+@keyframes view-shift-out{to{opacity:0;visibility:hidden}}
+.view-shift-core{position:relative;z-index:1;display:grid;justify-items:center;gap:26px}
+.view-orb{position:relative;display:grid;place-items:center;width:136px;height:136px}
+.view-orb i{position:absolute;inset:0;border:2px solid transparent;border-top-color:#38bdf8;border-right-color:rgba(56,189,248,.3);border-radius:50%;animation:view-spin 1.1s linear infinite}
+.view-orb i:nth-child(2){inset:15px;border-top-color:#22c55e;border-right-color:rgba(34,197,94,.28);animation-duration:1.7s;animation-direction:reverse}
+.view-orb i:nth-child(3){inset:30px;border-top-color:#a78bfa;border-right-color:rgba(167,139,250,.28);animation-duration:.85s}
+.view-orb span{display:grid;place-items:center;width:52px;height:52px;border:1px solid #1e3a5f;border-radius:50%;background:#0b1324;color:#7dd3fc;font:700 15px "JetBrains Mono",ui-monospace,monospace;box-shadow:0 0 0 6px rgba(56,189,248,.07),0 0 40px rgba(56,189,248,.5);animation:view-pulse 1.2s ease-in-out infinite}
+.view-shift.is-off .view-orb span{color:#e2e8f0}
+@keyframes view-spin{to{transform:rotate(360deg)}}
+@keyframes view-pulse{50%{box-shadow:0 0 0 10px rgba(56,189,248,.04),0 0 64px rgba(56,189,248,.7)}}
+.view-shift-tokens{position:absolute;top:calc(50% - 60px);left:50%;width:0;height:0}
+.view-shift-tokens span{--a:calc(var(--i) * 36deg);position:absolute;color:#7dd3fc;font:600 13px "JetBrains Mono",ui-monospace,monospace;white-space:nowrap;opacity:0;animation:view-token 1.6s calc(var(--i) * 140ms) ease-in infinite}
+.view-shift-tokens span:nth-child(even){color:#86efac}
+@keyframes view-token{0%{opacity:0;transform:rotate(var(--a)) translateX(240px) rotate(calc(-1 * var(--a)))}25%{opacity:.9}100%{opacity:0;transform:rotate(var(--a)) translateX(24px) rotate(calc(-1 * var(--a))) scale(.6)}}
+.view-shift-log{display:grid;gap:6px;min-width:min(380px,86vw);margin:0;padding:14px 18px;border:1px solid #1e293b;border-radius:12px;background:#0b1324;color:#cbd5e1;font:13px/1.5 "JetBrains Mono",ui-monospace,monospace;white-space:pre-wrap}
+.view-shift-log b{color:#22c55e}
+.view-shift-log span{animation:view-line .35s calc(var(--i) * 150ms) ease-out backwards}
+.view-shift-log .is-ready{color:#86efac;font-weight:700}
+.view-shift.is-on .view-shift-log.is-off,.view-shift.is-off .view-shift-log.is-on,.view-shift:not(.is-on):not(.is-off) .view-shift-log.is-off{display:none}
+.view-shift.is-arriving .view-shift-log span{animation:none}
+.view-shift.is-arriving .view-shift-log .is-ready{animation:view-ready .5s .2s cubic-bezier(.2,1.6,.4,1) backwards}
+@keyframes view-line{from{opacity:0;transform:translateX(-8px)}}
+@keyframes view-ready{from{opacity:0;transform:scale(.8)}}
+
+/* After switching on: what's new */
+dialog.view-intro{position:fixed;inset:0;z-index:1001;width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 40px);margin:auto;padding:24px;border:1px solid #1f2a40;border-radius:16px;background:#0f1729;color:#e6edf7;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(56,189,248,.12);overflow:auto;animation:view-intro-in .5s 1.3s cubic-bezier(.2,1.2,.4,1) backwards}
+dialog.view-intro::backdrop{background:rgba(2,6,23,.62);backdrop-filter:blur(2px);animation:view-fade-in .4s 1.25s backwards}
+@keyframes view-intro-in{from{opacity:0;transform:translateY(18px) scale(.96)}}
+.view-intro-kicker{margin:0;color:#22c55e;font:600 12.5px "JetBrains Mono",ui-monospace,monospace}
+dialog.view-intro h2{margin:6px 0 4px;color:#fff;font-size:22px}
+.view-intro-lead{margin:0 0 16px;color:#94a3b8;font-size:14.5px}
+.view-intro-steps{display:grid;gap:10px;margin:0 0 20px;padding:0;list-style:none}
+.view-intro-steps li{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #1f2a40;border-radius:11px;background:#121c33;animation:view-line .4s calc(1.55s + var(--i) * 110ms) ease-out backwards}
+.view-intro-icon{display:grid;flex:none;place-items:center;grid-auto-flow:column;gap:2px;min-width:44px;height:36px;border-radius:9px;background:rgba(56,189,248,.12);color:#7dd3fc}
+.view-intro-icon kbd{padding:1px 4px;border:1px solid #2b3a55;border-radius:4px;background:#152038;color:#e6edf7;font:600 10.5px "JetBrains Mono",ui-monospace,monospace}
+.view-intro-steps li>span:last-child{display:grid;gap:1px;color:#94a3b8;font-size:13.5px;line-height:1.45}
+.view-intro-steps b{color:#e6edf7;font-size:14px}
+.view-intro-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;margin:0}
+.view-intro-actions .button.soft{border-color:#2b3a55;background:#152038;color:#e6edf7}
+
+/* After switching off */
+.view-toast{position:fixed;left:50%;bottom:28px;z-index:1001;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);margin:0;padding:11px 16px;border-radius:12px;background:#0b1324;color:#e2e8f0;font-size:14px;box-shadow:0 14px 40px rgba(15,23,42,.35);transform:translateX(-50%);pointer-events:none;animation:view-toast 5s 1.2s both}
+.view-toast svg{color:#22c55e}
+@keyframes view-toast{0%{opacity:0;transform:translate(-50%,16px)}8%,85%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,0);visibility:hidden}}
+
+@media (prefers-reduced-motion:reduce){
+  body.view-leaving .app-stage,body.view-arriving .app-stage{animation:none}
+  .view-shift *,.view-intro *{animation:none!important}
+  body.view-leaving .view-shift{animation:view-fade-in .2s backwards}
+  .view-shift.is-arriving{animation:view-shift-out .3s .2s forwards}
+  dialog.view-intro,dialog.view-intro::backdrop{animation:view-fade-in .3s .3s backwards}
+  .ide-switch-knob,.ide-switch-glyph,.ide-switch-track{transition:none}
+}

@@ -1975,7 +1975,6 @@ body.ide .checklist-tick{border:1px solid var(--line);color:var(--muted)}
 body.ide .company-checklist li.is-done .checklist-tick{border-color:#16a34a;background:#16a34a;color:#fff}
 body.ide .company-checklist li b a{color:var(--violet)}
 /* practice.css */
-body.ide.dev-mode .page-title h1::after{color:var(--violet)}
 body.ide .tok-key{color:var(--tok-key)}
 body.ide .tok-str{color:var(--tok-str)}
 body.ide .tok-num{color:var(--tok-num)}

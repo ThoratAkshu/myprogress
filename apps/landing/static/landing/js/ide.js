@@ -85,6 +85,11 @@
     for (const [name, value] of Object.entries({ ...command.fields, next: location.pathname + location.search })) {
       form.append(Object.assign(document.createElement("input"), { type: "hidden", name, value }));
     }
+    if ("ide" in command.fields && window.MyProgressView) {  // switching the view: play the flip
+      close();
+      window.MyProgressView.go(form);
+      return;
+    }
     form.submit();
   }
 

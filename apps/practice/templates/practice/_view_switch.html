@@ -1,0 +1,19 @@
+{% load ui %}<div class="view-shift{% if arrival %} is-arriving is-{{ arrival }}{% endif %}" data-view-shift{% if not arrival %} hidden{% endif %} aria-hidden="true">
+<div class="view-shift-tokens"><span style="--i:0">def</span><span style="--i:1">{ }</span><span style="--i:2">=&gt;</span><span style="--i:3">[ ]</span><span style="--i:4">return</span><span style="--i:5">print()</span><span style="--i:6">&amp;&amp;</span><span style="--i:7">0b1</span><span style="--i:8">for</span><span style="--i:9">#</span></div>
+<div class="view-shift-core"><div class="view-orb"><i></i><i></i><i></i><span>&lt;/&gt;</span></div>
+<pre class="view-shift-log is-on"><span style="--i:0"><b>$</b> myprogress --view developer</span><span style="--i:1">› dark editor theme</span><span style="--i:2">› file tabs: home.py · practice.sh · projects/</span><span style="--i:3">› status bar and Ctrl+K palette</span><span style="--i:4" class="is-ready">✓ developer view ready</span></pre>
+<pre class="view-shift-log is-off"><span style="--i:0"><b>$</b> myprogress --view normal</span><span style="--i:1">› light theme</span><span style="--i:2">› plain tabs and labels</span><span style="--i:3" class="is-ready">✓ normal view ready</span></pre></div>
+</div>
+{% if arrival == "on" %}<dialog class="view-intro" data-view-intro open aria-labelledby="view-intro-title">
+<p class="view-intro-kicker">$ developer-view --on</p>
+<h2 id="view-intro-title">You're in the developer view</h2>
+<p class="view-intro-lead">MyProgress now looks and works like a code editor. Here's what's new:</p>
+<ol class="view-intro-steps">
+<li style="--i:0"><span class="view-intro-icon">{% icon "folder" 18 %}</span><span><b>File tabs</b>Every section is a file: home.py, practice.sh, projects/.</span></li>
+<li style="--i:1"><span class="view-intro-icon"><kbd>Ctrl</kbd><kbd>K</kbd></span><span><b>Command palette</b>Jump to any page or problem, or run a command.</span></li>
+<li style="--i:2"><span class="view-intro-icon">{% icon "terminal" 18 %}</span><span><b>Status bar</b>Your languages, level, streak and today's answers, along the bottom.</span></li>
+<li style="--i:3"><span class="view-intro-icon">{% icon "target" 18 %}</span><span><b>Problems</b>Solve them in Python or JavaScript and dry-run your code line by line.</span></li>
+<li style="--i:4"><span class="view-intro-icon">{% icon "sliders" 18 %}</span><span><b>The toggle</b>By the logo. Turn it off for the normal view any time.</span></li>
+</ol>
+<form method="dialog" class="view-intro-actions"><a class="button primary" href="{% url 'practice:problems' %}">{% icon "target" 16 %} Solve a problem</a><button class="button soft" value="close" autofocus>Explore</button></form>
+</dialog>{% elif arrival == "off" %}<p class="view-toast" role="status">{% icon "check-circle" 16 %} Normal view is on. The toggle by the logo brings the developer view back.</p>{% endif %}

@@ -1,4 +1,4 @@
-"""The developer UI: MyProgress as a code editor, its generated dark theme, and switching it on and off."""
+"""The developer view: MyProgress as a code editor, its generated dark theme, and switching it on and off."""
 import json
 from django.core.cache import cache
 from django.test import TestCase
@@ -40,7 +40,9 @@ class SwitchTests(TestCase):
         self.assertContains(page, "ide-auto.css")
         self.assertContains(page, '<span class="nav-file" aria-hidden="true">home.py</span>')
         self.assertContains(page, "Python, JavaScript · Beginner")  # the status bar
-        self.assertContains(page, "Switch to the classic look")
+        self.assertContains(page, "Switch to the normal view")
+        self.assertContains(page, 'role="switch" aria-checked="true" aria-label="Developer view"')
+        self.assertNotContains(page, "view-arriving")
         commands = json.loads(page.content.decode().split('<script id="ide-commands" type="application/json">')[1].split("</script>")[0])
         labels = [command["label"] for command in commands]
         self.assertIn("New project", labels)
@@ -51,13 +53,37 @@ class SwitchTests(TestCase):
         page = self.client.get(reverse("landing:dashboard"))
         self.assertNotContains(page, "ide-auto.css")
         self.assertNotContains(page, "dev-mode ide")
-        self.assertContains(page, "Switch to the developer UI")
+        self.assertNotContains(page, "nav-file")  # the normal view's tabs are plain: Home, not home.py
+        self.assertNotContains(page, "ide-status")
+        self.assertContains(page, "Switch to the developer view")
+        self.assertContains(page, 'role="switch" aria-checked="false" aria-label="Developer view"')
         self.assertRedirects(self.client.post(reverse("practice:ui"), {"ide": "1", "next": "https://evil.example/"}), reverse("landing:dashboard"), fetch_redirect_response=False)
         self.assertTrue(services.profile(self.user.__class__.objects.get(pk=self.user.pk)).ide_ui)
+
+    def test_the_page_after_a_switch_turns_in_once(self):
+        self.client.post(reverse("practice:ui"), {"ide": "0", "next": "/dashboard/"})
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, "view-arriving view-to-off")
+        self.assertContains(page, "Normal view is on.")
+        self.assertNotContains(page, "data-view-intro")
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertNotContains(page, "view-arriving")  # only the first page after switching
+        self.assertNotContains(page, "Normal view is on.")
+        self.client.post(reverse("practice:ui"), {"ide": "0", "next": "/dashboard/"})  # already off: nothing to show
+        self.assertNotContains(self.client.get(reverse("landing:dashboard")), "view-arriving")
+        self.client.post(reverse("practice:ui"), {"ide": "1", "next": "/practice/problems/"})
+        page = self.client.get(reverse("practice:problems"))
+        self.assertContains(page, "view-arriving view-to-on")
+        self.assertContains(page, "You're in the developer view")
+        self.assertContains(page, '<form method="dialog"')
+        self.assertContains(page, "view-switch.js")
+        self.assertNotContains(self.client.get(reverse("practice:problems")), "data-view-intro")
 
     def test_without_developer_mode_there_is_no_editor(self):
         services.disable(self.user)
         page = self.client.get(reverse("landing:dashboard"))
         self.assertNotContains(page, "ide-auto.css")
         self.assertNotContains(page, "ide-status")
+        self.assertNotContains(page, "ide-switch")
+        self.assertNotContains(page, "view-switch.js")
         self.assertContains(page, "Turn on developer mode")

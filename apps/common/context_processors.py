@@ -23,6 +23,9 @@ def workspace_navigation(request):
     def ide():
         return practice.ide_on(user)
     @lru_cache(maxsize=None)
+    def view_switched():  # "on" or "off" on the first page after the developer view was switched, then gone
+        return request.session.pop(practice.SWITCHED, None) if hasattr(request, "session") else None
+    @lru_cache(maxsize=None)
     def nav_profile():
         return Profile.objects.get_or_create(user=user)[0]
     return {
@@ -40,6 +43,7 @@ def workspace_navigation(request):
         "nav_can_finance": lambda: user.is_superuser or (user.is_staff and user.has_perm("earnings.access_finance")),
         "nav_dev_mode": dev_mode,
         "nav_ide": ide,
+        "nav_view_switched": view_switched,
         "nav_ide_status": lambda: practice.status_bar(user),
         "nav_ide_commands": lambda: practice.palette(user),
     }
