@@ -28,6 +28,7 @@ def _workspace_section(kwargs):
 POLICY = {
     # Public pages, sign-in and account recovery.
     "landing:home": PUBLIC, "landing:register": PUBLIC, "landing:login": PUBLIC, "landing:logout": PUBLIC,
+    "landing:two_step": PUBLIC,  # the second step of signing in, before there's an account to check
     "landing:verify_email": PUBLIC, "landing:health": PUBLIC, "landing:search": PUBLIC, "landing:search_suggest": PUBLIC,
     "landing:public_profile": PUBLIC, "landing:project": PUBLIC,
     "landing:password_reset": PUBLIC, "landing:password_reset_done": PUBLIC, "landing:password_reset_confirm": PUBLIC, "landing:password_reset_complete": PUBLIC,
@@ -45,7 +46,7 @@ POLICY = {
     # Every signed-in account.
     "landing:dashboard": ALL_ROLES,  # sends each account type to its own home
     "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:channel_settings": ALL_ROLES, "landing:follow": ALL_ROLES,
-    "landing:resend_verification": ALL_ROLES, "landing:dismiss_verify_banner": ALL_ROLES, "landing:learning_view": ALL_ROLES,
+    "landing:security": ALL_ROLES, "landing:resend_verification": ALL_ROLES, "landing:dismiss_verify_banner": ALL_ROLES, "landing:learning_view": ALL_ROLES,
     "notifications:list": ALL_ROLES,
     "landing:workspace_section": _workspace_section,
     # A developer's own workspace: projects, repositories, Git keys, the daily loop, earnings, recruiter requests.

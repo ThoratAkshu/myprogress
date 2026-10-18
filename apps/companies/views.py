@@ -8,7 +8,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
-from apps.accounts.models import Profile
+from apps.accounts.models import Profile, TwoFactor
 from apps.code.invitations import ROLE_HELP, mask, name, problem
 from apps.common.ratelimit import rate_limit
 from apps.core.models import RepositoryCollaborator, invitation_expiry, invitation_token
@@ -60,12 +60,15 @@ def company_detail_view(request, slug):
     context = {"section": "code", "company": company, "member": member, "tab": tab, "is_owner": bool(member and member.role == "owner"),
                "member_count": company.members.count() if member else None, "repositories": services.visible_repositories(company, request.user)}
     if member:
-        context["can_create"] = not services.creation_problem(company, member, "private")
+        context["needs_two_step"] = company.require_two_factor and not services.uses_two_step(request.user)
+        context["can_create"] = not services.creation_problem(company, member, "private") and not context["needs_two_step"]
         context["can_create_public"] = not services.creation_problem(company, member, "public")
     if tab == "people":
         people = list(company.members.select_related("user__profile").annotate(team_count=Count("user__team_memberships", filter=Q(user__team_memberships__team__company=company))))
-        for person in people:  # members who joined before the company took only its domains
+        two_step = set(TwoFactor.objects.filter(user__in=[person.user_id for person in people], enabled_at__isnull=False).values_list("user_id", flat=True))
+        for person in people:  # members who joined before the company took only its domains, or required two steps
             person.off_domain = services.only_from_domains(company) and not services.on_domains(person.user.email, company.email_domains)
+            person.no_two_step = company.require_two_factor and person.user_id not in two_step
         context["people"] = people
         context["owner_count"] = company.members.filter(role="owner").count()
         if context["is_owner"]:
@@ -79,6 +82,8 @@ def company_detail_view(request, slug):
         context["base_roles"] = [(key, label, services.BASE_ROLE_HELP[key]) for key, label in Company.BASE_ROLES]
         context["creation_choices"] = [(key, label, services.CREATION_HELP[key]) for key, label in Company.REPOSITORY_CREATION]
         context["my_domain"] = services.domain_of(request.user.email)
+        context["i_use_two_step"] = services.uses_two_step(request.user)
+        context["without_two_step"] = company.members.exclude(user__two_factor__enabled_at__isnull=False).count()
     return render(request, "companies/detail.html", context)
 
 
@@ -284,7 +289,12 @@ def settings_view(request, slug):
             company.repository_creation = request.POST["repository_creation"]
         company.members_change_visibility = request.POST.get("members_change_visibility") == "on"
         company.members_invite_outside = request.POST.get("members_invite_outside") == "on"
-        company.save(update_fields=["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside"])
+        require = request.POST.get("require_two_factor") == "on"
+        if require and not company.require_two_factor and not services.uses_two_step(request.user):
+            messages.error(request, f"Turn on two-step sign-in for your own account first, in Security settings. Then you can require it for {company.name}.")
+            return redirect(_url(company, "settings") + "#security")
+        company.require_two_factor = require
+        company.save(update_fields=["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside", "require_two_factor"])
         messages.success(request, "Security settings saved." + (" Turn on “only people from these domains” to use them for joining." if company.email_domains and not company.members_from_domains else ""))
         return redirect(_url(company, "settings") + "#security")
     form = CompanyForm(request.POST, instance=company)

@@ -105,7 +105,10 @@ def repository_role(user, repository):
     collaborator = repository.collaborators.filter(user=user).values_list("role", flat=True).first()
     if not repository.company_id:
         return "owner" if repository.owner_id == user.id else collaborator
+    from apps.accounts.models import TwoFactor
     from apps.companies.models import CompanyMember, TeamRepository
+    if repository.company.require_two_factor and not TwoFactor.objects.filter(user=user, enabled_at__isnull=False).exists():
+        return None  # the company lets nobody in, owners included, until they sign in with two steps
     member = CompanyMember.objects.filter(company_id=repository.company_id, user=user).select_related("company").first()
     if member and member.role == "owner":
         return "owner"

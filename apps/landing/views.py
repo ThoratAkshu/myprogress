@@ -38,7 +38,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
-from apps.accounts import identity
+from apps.accounts import identity, two_factor
+from apps.accounts.views import begin_two_step, finish_sign_in
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
 from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer, user_can_change_visibility
@@ -119,13 +120,11 @@ def login_view(request):
         for key, _ in failure_keys:
             record_hit(key, LOGIN_FAILURE_WINDOW)
     if form.is_valid():
-        login(request, form.user)
-        record_activity(form.user, "login", "signed_in", 1)
-        request.session.set_expiry(60 * 60 * 24 * 30 if form.cleaned_data["remember"] else 0)
-        next_url = request.POST.get("next", "")
-        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
-            return redirect(next_url)
-        return redirect("landing:dashboard")
+        remember, next_url = form.cleaned_data["remember"], request.POST.get("next", "")
+        if two_factor.enabled(form.user):  # the password was right; now the code from their app
+            begin_two_step(request, form.user, remember, next_url)
+            return redirect("landing:two_step")
+        return finish_sign_in(request, form.user, remember, next_url)
     for errors in form.errors.values():
         for error in errors:
             messages.error(request, error)

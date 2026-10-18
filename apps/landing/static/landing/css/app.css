@@ -1728,3 +1728,40 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 .company-warn{color:#b45309;font-weight:700}
 .company-domain{color:#047857;font-weight:600}
 .company-form label>small{font-size:12px;font-weight:400;line-height:1.45}
+/* Security settings: two-step sign-in */
+.security-page{display:grid;gap:16px;max-width:820px}
+.security-card{display:grid;gap:14px;padding:22px}
+.security-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.security-head h2{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:18px}
+.security-head p{margin:0;font-size:14px;line-height:1.5}
+.security-status{flex:none;padding:4px 12px;border-radius:99px;background:#f1f5f9;color:#475569;font-size:12px;font-style:normal;font-weight:800}
+.security-status.is-on{background:#dcfce7;color:#166534}
+.security-note{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border-radius:10px;background:#fff8e6;color:#6b5114;font-size:13.5px}
+.security-state{margin:0;font-size:14px}
+.setup-steps{display:grid;gap:18px;margin:0;padding-left:20px}
+.setup-steps li{display:grid;gap:10px;font-size:14px}
+.setup-qr svg{display:block;width:200px;height:200px;border:1px solid var(--line);border-radius:12px}
+.setup-key{display:inline-block;margin:6px 0;padding:8px 12px;border-radius:8px;background:#f1f5f9;font-size:15px;letter-spacing:.06em;word-break:break-all}
+.setup-steps details summary{cursor:pointer;color:var(--violet);font-weight:600}
+.security-form{display:grid;gap:10px;max-width:360px;margin-top:10px}
+.security-form label{display:grid;gap:4px;margin:0;font-size:13px;font-weight:700}
+.security-form input{box-sizing:border-box;width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.security-form .button{justify-self:start}
+.security-inline{display:flex;flex-wrap:wrap;align-items:center;margin-top:0}
+.security-inline input{width:140px;letter-spacing:.2em;font-size:16px}
+.security-cancel{margin:0}
+.security-actions{display:grid;gap:10px}
+.security-action{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.security-action summary{cursor:pointer;font-weight:700;font-size:14px}
+.recovery-codes{display:grid;gap:10px;padding:16px;border:1px solid #bbf7d0;border-radius:12px;background:#f0fdf4}
+.recovery-codes h3{margin:0;font-size:16px}
+.recovery-codes p{margin:0;font-size:13.5px}
+.recovery-codes ol{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px;margin:0;padding-left:22px;font-size:15px}
+.recovery-codes code{letter-spacing:.04em}
+.recovery-actions{display:flex;gap:8px}
+@media (max-width:520px){.recovery-codes ol{grid-template-columns:minmax(0,1fr)}.security-head{flex-direction:column}}
+/* The second step of signing in */
+.two-step-code{letter-spacing:.3em;font-size:20px!important;text-align:center}
+.company-two-step{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0;padding:14px 16px;border-color:#f3e1b0!important;background:#fff8e6;color:#6b5114;font-size:14px}
+.company-two-step span{flex:1 1 260px}
+.security-page .security-head p.muted{font-size:13.5px;line-height:1.5}

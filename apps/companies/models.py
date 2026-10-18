@@ -21,6 +21,7 @@ class Company(models.Model):
     repository_creation = models.CharField(max_length=10, choices=REPOSITORY_CREATION, default="all", help_text="What members (not owners) can create")
     members_change_visibility = models.BooleanField(default=True, help_text="Repository admins who are members can make repositories public or private")
     members_invite_outside = models.BooleanField(default=True, help_text="Repository admins who are members can invite people from outside the company")
+    require_two_factor = models.BooleanField(default=False, help_text="Members and outside collaborators reach its repositories only with two-step sign-in on")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:

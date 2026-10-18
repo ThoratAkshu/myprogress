@@ -101,3 +101,15 @@ class Follow(models.Model):
         ordering = ["-created_at"]
     def __str__(self):
         return f"{self.follower} follows {self.following}"
+class TwoFactor(models.Model):
+    """Two-step sign-in with an authenticator app. It's on once enabled_at is set; until then it's being set up."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="two_factor")
+    secret = models.CharField(max_length=64, help_text="Base32 TOTP key, shown once as a QR code")
+    enabled_at = models.DateTimeField(null=True, blank=True)
+    last_step = models.BigIntegerField(default=0, help_text="The last 30-second step a code was used for, so each code works once")
+    created_at = models.DateTimeField(auto_now_add=True)
+class RecoveryCode(models.Model):
+    """A one-time code for signing in without the phone. Only its SHA-256 is kept."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recovery_codes")
+    code_hash = models.CharField(max_length=64, db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)

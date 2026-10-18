@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from apps.accounts.identity import DISPOSABLE_EMAIL_DOMAINS, PERSONAL_EMAIL_DOMAINS, domain_of
-from apps.accounts.models import Profile
+from apps.accounts.models import Profile, TwoFactor
 from apps.code.invitations import name
 from apps.core.git_service import initialize_repository, user_can_access
 from apps.core.models import Project, Repository, RepositoryCollaborator, RepositoryInvitation
@@ -198,8 +198,14 @@ def invite_problem(company, user, email):
     return ""
 
 
+def uses_two_step(user):
+    return TwoFactor.objects.filter(user=user, enabled_at__isnull=False).exists()
+
+
 def join_problem(company, user):
     """Why this account can't join ("" if it can), and whether confirming its email would fix it."""
+    if company.require_two_factor and not uses_two_step(user):
+        return f"{company.name} requires two-step sign-in. Turn it on in Security settings, then open this invitation again.", False
     if not only_from_domains(company):
         return "", False
     if not on_domains(user.email, company.email_domains):
