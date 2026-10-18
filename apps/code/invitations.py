@@ -35,8 +35,7 @@ def name(user):
 
 
 def label(repository):
-    owner = Profile.objects.filter(user=repository.owner).values_list("handle", flat=True).first() or repository.owner.username
-    return f"{owner}/{repository.slug}"
+    return repository.full_name
 
 
 def open_invitations(repository):

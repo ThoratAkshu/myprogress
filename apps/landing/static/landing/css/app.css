@@ -1617,3 +1617,77 @@ body.app .playlist-hero h1{margin:4px 0 0;color:#fff;font:800 24px/1.2 Manrope,"
 .repo-invite-banner>span:nth-child(2){display:grid;flex:1;min-width:200px}
 .repo-invite-banner small{color:var(--muted)}
 .repo-invite-banner>svg{color:var(--violet)}
+/* Companies: people who own repositories together, like organizations on GitHub */
+.company-page{display:grid;gap:16px;max-width:1080px;margin:0 auto}
+.company-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px;align-items:start}
+.company-card{display:flex;align-items:center;gap:12px;color:var(--ink);text-decoration:none}
+.company-card:hover{border-color:var(--violet)}
+.company-card>svg:last-child{color:var(--muted)}
+.company-card-text{display:grid;flex:1;gap:2px;min-width:0}
+.company-card-text small{color:var(--muted);font-size:12.5px}
+.company-logo{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;font:800 16px/1 Manrope,"DM Sans",sans-serif}
+.company-logo.lg{width:64px;height:64px;border-radius:16px;font-size:22px}
+.company-logo.team{background:var(--violet-soft);color:var(--violet)}
+.company-empty{display:grid;justify-items:center;gap:6px;padding:28px 18px;text-align:center}
+.company-empty>svg{color:var(--violet)}
+.company-empty h2{margin:4px 0 0;font-size:17px}
+.company-empty p{max-width:440px;margin:0}
+.company-new,.company-form{display:grid;gap:10px}
+.company-new h2{display:flex;align-items:center;gap:8px;margin:0;font-size:17px}
+.company-new label,.company-form label{display:grid;gap:4px;margin:0;font-size:13px;font-weight:700}
+.company-new input:not([type=radio]),.company-form input:not([type=radio]),.company-form select{box-sizing:border-box;width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-weight:400}
+.company-new .button,.company-form .button{justify-self:start}
+.company-head{display:flex;flex-wrap:wrap;align-items:center;gap:16px}
+.company-head-text{display:grid;flex:1;gap:4px;min-width:220px}
+body.app .company-head h1{margin:0;font-size:26px}
+.company-head p{margin:0}
+.company-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-size:13.5px}
+.company-meta span,.company-meta a{display:inline-flex;align-items:center;gap:5px}
+.company-tabs{display:flex;gap:4px;overflow-x:auto;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);scrollbar-width:none}
+.company-tabs a{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:9px;color:var(--muted);font-size:14px;font-weight:700;text-decoration:none;white-space:nowrap}
+.company-tabs a:hover{background:var(--canvas);color:var(--ink)}
+.company-tabs a[aria-current=page]{background:var(--violet-soft);color:var(--violet)}
+.company-new-repo summary{display:grid;grid-template-columns:auto 1fr;gap:0 10px;align-items:center;list-style:none;cursor:pointer}
+.company-new-repo summary::-webkit-details-marker{display:none}
+.company-new-repo summary>svg{grid-row:span 2;color:var(--violet)}
+.company-new-repo summary small{color:var(--muted)}
+.company-new-repo[open] summary{margin-bottom:14px}
+.company-choice{display:grid;gap:8px;margin:0;padding:0;border:0}
+.company-choice legend{margin-bottom:6px;padding:0;font-size:13px;font-weight:700}
+.company-choice label{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-weight:400;cursor:pointer}
+.company-choice label:has(input:checked){border-color:var(--violet);background:var(--violet-soft)}
+.company-choice input{flex:none;width:auto;margin:3px 0 0}
+.company-choice span{display:grid;gap:2px}
+.company-choice b{font-size:14px}
+.company-choice small{color:var(--muted);font-size:12px;font-weight:400}
+.company-repos{display:grid;padding:0!important;overflow:hidden}
+.company-repo{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:14px 18px;border-top:1px solid var(--line);color:var(--ink);text-decoration:none}
+.company-repo:first-child{border-top:0}
+.company-repo:hover{background:var(--canvas)}
+.company-repo>svg{color:var(--muted)}
+.company-repo>span{display:grid;flex:1;min-width:200px}
+.company-repo small{color:var(--muted);font-size:12.5px}
+.company-people .card-heading{display:grid;gap:2px;margin-bottom:6px}
+.company-people .card-heading h2{margin:0}
+.company-people .card-heading span{font-size:13px}
+.company-subhead{margin:16px 0 0;color:var(--muted);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.company-leave{margin:14px 0 0}
+.company-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start}
+.company-danger{border-color:#fecaca!important}
+.company-danger h2{margin:0;font-size:17px}
+.company-danger p{margin:0}
+.company-settings h2{margin:0;font-size:17px}
+.repo-invite-icon.is-company{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;font-weight:800}
+.company-access{display:grid;gap:4px;margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--canvas);font-size:13px}
+.company-access b{display:flex;align-items:center;gap:6px;font-size:14px}
+.company-access p{margin:0;color:#334155;line-height:1.5}
+.company-access small{color:var(--muted)}
+.repo-transfer{margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}
+.repo-transfer h3{margin:0 0 4px;font-size:15px}
+.repo-transfer p{margin:0 0 10px;color:var(--muted);font-size:12px}
+.repo-transfer form{display:flex;flex-wrap:wrap;gap:6px;max-width:none;padding:0}
+.repo-transfer select{width:auto;margin:0;padding:8px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-size:13px}
+.company-page .card+.card{margin-top:0}
+.company-people select{width:auto;margin:0;padding:8px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-size:13px}
+.company-people .button{padding:8px 12px;font-size:12px}
+.company-people .collaborator-row form{display:flex;flex-wrap:wrap;gap:6px;margin:0}

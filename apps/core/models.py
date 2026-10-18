@@ -161,12 +161,23 @@ class Repository(models.Model):
     default_branch = models.CharField(max_length=100, default="main")
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default="private")
     languages = models.JSONField(default=dict, blank=True, help_text="Bytes of code per language on the default branch")
+    company = models.ForeignKey("companies.Company", on_delete=models.SET_NULL, null=True, blank=True, related_name="repositories", help_text="The company that owns it; owner is then who made it")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["owner", "slug"], name="unique_owner_repository_slug")]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "slug"], name="unique_owner_repository_slug"),
+            models.UniqueConstraint(fields=["company", "slug"], condition=models.Q(company__isnull=False), name="unique_company_repository_slug"),
+        ]
     def __str__(self):
-        return f"{self.owner.username}/{self.slug}"
+        return self.full_name
+    @property
+    def full_name(self):
+        """How it's named, as on GitHub: company/name for a company's repository, else handle/name."""
+        if self.company_id:
+            return f"{self.company.slug}/{self.slug}"
+        profile = getattr(self.owner, "profile", None)
+        return f"{profile.handle if profile else self.owner.username}/{self.slug}"
 class RepositoryCollaborator(models.Model):
     """Someone the owner gave access to, as on GitHub: read (view and clone), write (push, merge), maintain
     (also the repository's settings) or admin (also visibility and who has access)."""

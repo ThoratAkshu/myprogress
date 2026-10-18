@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
 from apps.core.git_service import MAX_RAW_BYTES, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access, user_can_administer
-from apps.core.models import Issue, IssueComment, RepositoryCollaborator, RepositoryInvitation, invitation_expiry, invitation_token
+from apps.core.models import Issue, IssueComment, Repository, RepositoryCollaborator, RepositoryInvitation, invitation_expiry, invitation_token
 from apps.core.services import record_activity
 from apps.notifications.services import notify
 from . import invitations
@@ -36,7 +36,7 @@ def _name(user):
         return "Someone"
     return user.get_full_name() or Profile.objects.get_or_create(user=user)[0].handle
 def _repo_label(repository):
-    return f"{Profile.objects.get_or_create(user=repository.owner)[0].handle}/{repository.slug}"
+    return repository.full_name
 def _code_root(repository, ref=None):
     query = f"?ref={ref}" if ref and ref != repository.default_branch else ""
     return f'{reverse("landing:repository", args=[repository.pk])}{query}'
@@ -273,6 +273,24 @@ def _invite(request, repository, invitee, role):
     messages.success(request, f"Invitation sent to {invitee}. They get {invitation.get_role_display()} access when they accept it.")
 @login_required(login_url="landing:home")
 @require_POST
+def transfer_view(request, repository_id):
+    """Move your own repository into a company you're in. Its Git address stays; access then follows the company."""
+    from apps.companies import services as companies
+    from apps.companies.models import Company
+    repository = get_object_or_404(Repository.objects.select_related("owner__profile"), pk=repository_id, owner=request.user, company__isnull=True)
+    company = Company.objects.filter(slug=request.POST.get("company", ""), members__user=request.user).first()
+    if company is None:
+        messages.error(request, "Pick one of your companies.")
+        return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
+    try:
+        companies.transfer(repository, company)
+    except ValueError as error:
+        messages.error(request, str(error))
+        return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
+    messages.success(request, f"Moved to {company.name}: it's {repository.full_name} now. Its members reach it as the company allows, and its collaborators keep their access.")
+    return redirect("landing:repository", repository_id=repository.pk)
+@login_required(login_url="landing:home")
+@require_POST
 def leave_view(request, repository_id):
     """A collaborator gives up their access to someone else's repository."""
     membership = RepositoryCollaborator.objects.select_related("repository__owner").filter(repository_id=repository_id, user=request.user).first()
@@ -311,4 +329,5 @@ def invitation_list_view(request):
     waiting = list(invitations.pending_for(request.user))
     for invitation in waiting:
         invitation.abilities = invitations.abilities(invitation.role)
-    return render(request, "code/invitations.html", {"invitations": waiting, "section": "code"})
+    from apps.companies.services import pending_for as company_invitations
+    return render(request, "code/invitations.html", {"invitations": waiting, "company_invitations": list(company_invitations(request.user)), "section": "code"})

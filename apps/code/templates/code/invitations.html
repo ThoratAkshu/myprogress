@@ -1,10 +1,14 @@
 {% extends "landing/app_base.html" %}{% load ui %}
 {% block title %}Invitations{% endblock %}
 {% block content %}<div class="repo-invite-page">
-<header class="page-title"><div><span class="kicker">Repositories</span><h1>Invitations</h1><p>People who invited you to work on their projects. You get access when you accept.</p></div></header>
+<header class="page-title"><div><span class="kicker">Repositories</span><h1>Invitations</h1><p>Companies and people who invited you to work with them. You get access when you accept.</p></div></header>
+{% for invitation in company_invitations %}<article class="card repo-invite-row"><span class="repo-invite-icon small is-company">{{ invitation.company.initials }}</span>
+<div><b>{{ invitation.company.name }}</b><small>{% if invitation.invited_by %}{{ invitation.invited_by.get_full_name|default:invitation.invited_by.profile.handle }} invited you {% endif %}to join as {% if invitation.role == "owner" %}an owner{% else %}a member{% endif %} · {{ invitation.created_at|timesince }} ago</small><small class="muted">A company: its members work on its repositories together.</small></div>
+<form method="post" action="{% url 'companies:invitation' invitation.token %}" class="repo-invite-actions">{% csrf_token %}<button class="button primary" name="action" value="accept">Accept</button><button class="button soft" name="action" value="decline">Decline</button></form></article>{% endfor %}
 {% for invitation in invitations %}<article class="card repo-invite-row"><span class="repo-invite-icon small">{% icon "repo" 20 %}</span>
-<div><b>{{ invitation.repository.owner.profile.handle }}/{{ invitation.repository.slug }}</b><small>{% if invitation.invited_by %}{{ invitation.invited_by.get_full_name|default:invitation.invited_by.profile.handle }} invited you {% endif %}with {{ invitation.get_role_display }} access · {{ invitation.created_at|timesince }} ago</small>
+<div><b>{{ invitation.repository.full_name }}</b><small>{% if invitation.invited_by %}{{ invitation.invited_by.get_full_name|default:invitation.invited_by.profile.handle }} invited you {% endif %}with {{ invitation.get_role_display }} access · {{ invitation.created_at|timesince }} ago</small>
 <small class="muted">{{ invitation.abilities|join:". " }}.</small></div>
 <form method="post" action="{% url 'repository_invitations:detail' invitation.token %}" class="repo-invite-actions">{% csrf_token %}<button class="button primary" name="action" value="accept">Accept</button><button class="button soft" name="action" value="decline">Decline</button></form></article>
-{% empty %}<section class="card empty-state">{% icon "repo" 32 %}<h2>No invitations waiting</h2><p>When someone invites you to work on their repository, it shows up here and in your notifications.</p><a class="button soft" href="{% url 'landing:workspace_section' 'projects' %}">Your projects</a></section>{% endfor %}
+{% endfor %}
+{% if not invitations and not company_invitations %}<section class="card empty-state">{% icon "repo" 32 %}<h2>No invitations waiting</h2><p>When someone invites you to work on their repository, it shows up here and in your notifications.</p><a class="button soft" href="{% url 'landing:workspace_section' 'projects' %}">Your projects</a></section>{% endif %}
 </div>{% endblock %}

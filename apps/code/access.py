@@ -13,7 +13,7 @@ class RepositoryDenied(Exception):
         self.response = response
 def load_repository(request, repository_id, write=False):
     """Return a repository the user may read (or write), or raise RepositoryDenied with the right redirect."""
-    repository = Repository.objects.select_related("project", "owner").filter(pk=repository_id).first()
+    repository = Repository.objects.select_related("project", "owner__profile", "company").filter(pk=repository_id).first()
     if repository and user_can_access(request.user, repository, write=write):
         return repository
     if not request.user.is_authenticated:

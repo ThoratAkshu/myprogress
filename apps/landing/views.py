@@ -270,7 +270,9 @@ def workspace_section_view(request, section):
         context["project_skills"] = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0].lower()))
         context["repositories"] = request.user.repositories.select_related("project")
         context["shared_repositories"] = request.user.repository_memberships.select_related("repository__owner__profile")
-        context["repository_invitations"] = list(pending_for(request.user))
+        from apps.companies.services import pending_for as company_invitations
+        context["repository_invitations"] = list(pending_for(request.user)) + list(company_invitations(request.user))
+        context["companies"] = request.user.company_memberships.select_related("company")
         for project in projects:
             project.milestones_done = sum(milestone.is_complete for milestone in project.milestones.all())
         context["new_git_token"] = request.session.pop("new_git_token", None)
@@ -458,7 +460,9 @@ def repository_view(request, repository_id):
         contributors = list_contributors(repository, ref)
     context.update({"active_tab": active_tab, "ref": ref, "path": path, "crumbs": breadcrumbs(path), "parent_path": "/".join(path.split("/")[:-1]) if path else None, "files": files, "readme": readme, "latest_commit": latest, "commits": commits, "contributors": contributors, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.is_authenticated and request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "collaborators": repository.collaborators.select_related("user__profile").order_by("user__first_name") if active_tab == "settings" else [], "role_choices": RepositoryCollaborator.ROLE_CHOICES,
                     "invitations": open_invitations(repository) if active_tab == "settings" and can_admin else [], "role_help": ROLE_HELP,
-                    "my_abilities": abilities(context["my_role"]) if context["my_role"] not in {None, "owner"} else []})
+                    "my_abilities": abilities(context["my_role"]) if context["my_role"] not in {None, "owner"} else [],
+                    "company_teams": repository.team_access.select_related("team") if active_tab == "settings" and repository.company_id else [],
+                    "transfer_companies": [member.company for member in request.user.company_memberships.select_related("company")] if active_tab == "settings" and not repository.company_id and repository.owner_id == request.user.id else []})
     return render(request, "landing/repository.html", context)
 @login_required(login_url="landing:home")
 @require_POST
@@ -692,9 +696,9 @@ def search_view(request):
 def project_detail_view(request, project_id):
     project = get_object_or_404(Project.objects.select_related("owner", "repository").prefetch_related("milestones"), pk=project_id)
     is_owner = request.user == project.owner
-    if not project.is_public and not is_owner:
-        raise Http404
     repository = getattr(project, "repository", None)
+    if not project.is_public and not is_owner and not (repository and user_can_access(request.user, repository)):
+        raise Http404  # private: its owner, and the people with access to its code (collaborators, company members)
     visible_repository = repository if repository and user_can_access(request.user, repository) else None
     posts = project.learning_posts.all() if is_owner else project.learning_posts.filter(is_public=True)
     milestones = list(project.milestones.all())

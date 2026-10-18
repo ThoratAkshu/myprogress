@@ -97,12 +97,26 @@ def commit_file(repository, relative_path, content, user, message=""):
         run_git("push", "origin", repository.default_branch, cwd=checkout)
 ROLE_LEVELS = {"read": 1, "write": 2, "maintain": 3, "admin": 4}
 def repository_role(user, repository):
-    """"owner", a collaborator's role, or None."""
+    """"owner", a role from ROLE_LEVELS, or None. A company's repository is the company's: its owners have it all,
+    the member who made it is an admin while they're a member, every member gets the company's base permission,
+    and teams get what they were given; the highest of these, and of any collaborator role, counts."""
     if not user or not user.is_authenticated:
         return None
-    if repository.owner_id == user.id:
+    collaborator = repository.collaborators.filter(user=user).values_list("role", flat=True).first()
+    if not repository.company_id:
+        return "owner" if repository.owner_id == user.id else collaborator
+    from apps.companies.models import CompanyMember, TeamRepository
+    member = CompanyMember.objects.filter(company_id=repository.company_id, user=user).select_related("company").first()
+    if member and member.role == "owner":
         return "owner"
-    return repository.collaborators.filter(user=user).values_list("role", flat=True).first()
+    roles = [collaborator] if collaborator else []
+    if member:
+        if repository.owner_id == user.id:
+            roles.append("admin")
+        if member.company.base_role != "none":
+            roles.append(member.company.base_role)
+        roles += list(TeamRepository.objects.filter(repository=repository, team__memberships__user=user).values_list("role", flat=True))
+    return max(roles, key=lambda role: ROLE_LEVELS.get(role, 0)) if roles else None
 def _at_least(user, repository, role):
     found = repository_role(user, repository)
     return found == "owner" or (found is not None and ROLE_LEVELS.get(found, 0) >= ROLE_LEVELS[role])
