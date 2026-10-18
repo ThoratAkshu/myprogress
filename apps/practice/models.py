@@ -12,6 +12,7 @@ class PracticeProfile(models.Model):
     enabled = models.BooleanField(default=True)
     languages = models.JSONField(default=list, help_text="Language keys, Python first by default")
     level = models.CharField(max_length=20, choices=LEVELS, default="beginner")
+    ide_ui = models.BooleanField(default=True, help_text="Show MyProgress as a code editor: the developer UI")
     started_at = models.DateTimeField(auto_now_add=True)
 
     @property

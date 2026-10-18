@@ -14,8 +14,9 @@ class AppShellTests(TestCase):
         self.client.force_login(User.objects.get(username="dev@example.com"))
         rankings_url = reverse("landing:workspace_section", args=["rankings"])
         page = self.client.get(rankings_url)
-        for label in ["Home", "Rankings", "Projects", "Learn", "Notifications", "Create"]:
-            self.assertContains(page, f"<span>{label}</span>", html=False)
+        for label in ["Home", "Rankings", "Projects", "Learn", "Notifications"]:
+            self.assertContains(page, f'<span class="nav-label">{label}</span>', html=False)
+        self.assertContains(page, "<span>Create</span>", html=False)
         self.assertNotContains(page, "<span>Network</span>", html=False)
         self.assertContains(page, f'<a class="active" href="{rankings_url}">', html=False)
         old_network = self.client.get(reverse("landing:workspace_section", args=["network"]))
@@ -28,7 +29,7 @@ class AppShellTests(TestCase):
         self.client.logout()
         guest = self.client.get(reverse("landing:public_profile", args=["dev-eloper"]))
         self.assertContains(guest, "Join now")
-        self.assertNotContains(guest, "<span>Notifications</span>", html=False)
+        self.assertNotContains(guest, '<span class="nav-label">Notifications</span>', html=False)
     def test_users_without_a_profile_still_get_a_working_header(self):
         bare = User.objects.create_user(username="bare@example.com", email="bare@example.com", password="StrongPass!482", first_name="Bare", last_name="User")
         self.client.force_login(bare)

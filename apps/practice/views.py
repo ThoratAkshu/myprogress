@@ -6,6 +6,7 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from apps.common.ratelimit import rate_limit
@@ -263,3 +264,17 @@ def solved_api(request, key):
         solve.helped = solve.helped and helped  # solving it again on your own counts
         solve.save(update_fields=["code", "helped"])
     return JsonResponse({"solved": ChallengeSolve.objects.filter(user=request.user).count(), "helped": solve.helped})
+
+
+@login_required(login_url="landing:home")
+@require_POST
+def ui_view(request):
+    """Switch between the developer UI (a code editor look) and the classic one."""
+    practice = services.profile(request.user)
+    if practice and services.is_on(request.user):
+        practice.ide_ui = request.POST.get("ide") == "1"
+        practice.save(update_fields=["ide_ui"])
+    target = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        target = reverse("landing:dashboard")
+    return redirect(target)

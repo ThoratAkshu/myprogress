@@ -217,7 +217,7 @@ class OrganizationTests(TestCase):
         dashboard = self.client.get(reverse("landing:dashboard"))
         self.assertContains(dashboard, "Sunrise Coding Institute")
         self.assertContains(dashboard, "Read chapter 2")
-        self.assertContains(dashboard, "<span>Classes</span>")
+        self.assertContains(dashboard, '<span class="nav-label">Classes</span>')
         self.client.post(reverse("organizations:leave", args=[self.organization.slug]))
         self.assertFalse(Membership.objects.filter(user=self.student).exists())
         self.client.force_login(self.owner)

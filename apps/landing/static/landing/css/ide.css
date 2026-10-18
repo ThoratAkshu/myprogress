@@ -1,0 +1,79 @@
+/* The developer UI: MyProgress as a code editor. ide-auto.css (generated) turns every page dark; this file adds the
+   editor itself: a title bar with file tabs, a status bar, the command palette, and code type for headings. */
+body.app.ide{--ide-bg:#0a0f1c;--ide-panel:#0f1729;--ide-panel-2:#152038;--ide-line:#1f2a40;--ide-line-2:#2b3a55;--ide-ink:#e6edf7;--ide-muted:#94a3b8;--ide-accent:#38bdf8;
+  --ide-accent-strong:#0284c7;--ink:var(--ide-ink);--muted:var(--ide-muted);--line:var(--ide-line);--canvas:var(--ide-bg);--surface:var(--ide-panel);--field:var(--ide-line-2);
+  --violet:#38bdf8;--violet-dark:#0ea5e9;--violet-soft:rgba(56,189,248,.12);--accent:#22c55e;--accent-dark:#16a34a;
+  --header-bg:#070b15;--header-fg:#e6edf7;--header-muted:#8b9bb4;--term-bg:#070b15;--term-line:#1f2a40;--right-soft:rgba(34,197,94,.14);--wrong-soft:rgba(248,113,113,.14);
+  padding-bottom:26px;background-color:var(--ide-bg);background-image:linear-gradient(rgba(56,189,248,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(56,189,248,.035) 1px,transparent 1px);background-size:28px 28px;background-attachment:fixed;color:var(--ide-ink);color-scheme:dark}
+body.app.ide ::selection{background:rgba(56,189,248,.3)}
+body.app.ide h1,body.app.ide h2,body.app.ide h3,body.app.ide .card-head h2{font-family:var(--mono);letter-spacing:-.02em}
+body.app.ide h1{color:#fff}
+body.app.ide .card,body.app.ide .workspace-card{box-shadow:none}
+body.app.ide :where(input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,select){border-color:var(--ide-line-2);background-color:var(--ide-panel-2);color:var(--ide-ink)}
+body.app.ide :where(input,textarea)::placeholder{color:#64748b}
+body.app.ide .button.primary,body.app.ide button.primary{border-color:#0284c7;background:#0284c7;color:#fff}
+body.app.ide .button.primary:hover{background:#0369a1}
+body.app.ide kbd{border-color:var(--ide-line-2);background:var(--ide-panel-2);color:var(--ide-ink)}
+body.app.ide .muted{color:var(--ide-muted)}
+body.app.ide .app-main{position:relative}
+
+/* Title bar: window dots, the switch, file tabs */
+body.app.ide .app-header{border-bottom:1px solid var(--ide-line);background:#070b15;box-shadow:none}
+body.app.ide .app-header-inner{max-width:none;gap:12px}
+body.app.ide .app-logo::before{content:"";flex:none;width:46px;height:12px;margin-right:8px;background:radial-gradient(circle at 6px 6px,#ef4444 5px,transparent 5.5px),radial-gradient(circle at 23px 6px,#f59e0b 5px,transparent 5.5px),radial-gradient(circle at 40px 6px,#22c55e 5px,transparent 5.5px)}
+body.app.ide .app-search{border-color:var(--ide-line-2);background:var(--ide-panel)}
+body.app.ide .app-search input{background:transparent;font-family:var(--mono);font-size:13px}
+body.app.ide .app-nav{gap:0}
+body.app.ide .app-nav>a{flex-direction:row;gap:7px;min-width:0;padding:0 13px;border-top:2px solid transparent;border-right:1px solid var(--ide-line);border-bottom:0;color:#8b9bb4;font:500 12.5px var(--mono)}
+body.app.ide .app-nav>a:first-child{border-left:1px solid var(--ide-line)}
+body.app.ide .app-nav>a svg{display:none}
+body.app.ide .app-nav>a:hover{background:rgba(255,255,255,.03);color:#e6edf7}
+body.app.ide .app-nav>a.active{border-top-color:var(--ide-accent);background:var(--ide-bg);color:#fff}
+body.app.ide .app-nav .nav-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body.app.ide .app-nav .nav-file{display:inline}
+body.app.ide .app-menu>summary{color:#8b9bb4;font-family:var(--mono)}
+body.app.ide .app-menu-panel{border-color:var(--ide-line-2);background:var(--ide-panel);box-shadow:0 20px 50px rgba(0,0,0,.45)}
+body.app.ide .app-menu-panel a,body.app.ide .app-menu-panel button{color:var(--ide-ink)}
+body.app.ide .app-menu-panel a:hover,body.app.ide .app-menu-panel button:hover{background:var(--ide-panel-2)}
+body.app.ide .app-banner{border-bottom-color:#3b2f0b;background:#1c1606;color:#fde68a}
+body.app.ide .app-banner button,body.app.ide .app-banner .app-banner-action{border-color:#a16207;background:transparent;color:#fde68a}
+body.app.ide .app-messages p{border-color:var(--ide-line-2);background:var(--ide-panel-2);color:var(--ide-ink)}
+@media (max-width:1180px){body.app.ide .app-search{flex:0 1 160px}}
+@media (max-width:1000px){body.app.ide .app-nav>a{padding:0 10px}body.app.ide .app-nav>a svg{display:block}body.app.ide .app-nav .nav-file{display:none}}
+
+/* Status bar */
+.ide-status{position:fixed;right:0;bottom:0;left:0;z-index:55;display:flex;align-items:stretch;height:26px;padding:0 4px;background:#0369a1;color:#e0f2fe;font:500 11.5px var(--mono)}
+.ide-status>span,.ide-status-end>*{display:flex;align-items:center;gap:5px;padding:0 9px;white-space:nowrap}
+.ide-status-mode{background:#075985;font-weight:700}
+.ide-status-end{display:flex;margin-left:auto}
+.ide-status button{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.ide-status button:hover{background:rgba(255,255,255,.12)}
+body.app.ide .dev-dock{bottom:40px}
+
+/* Command palette */
+.ide-palette{position:fixed;inset:0;z-index:90;display:grid;align-items:start;justify-items:center;padding-top:12vh;background:rgba(2,6,23,.6);backdrop-filter:blur(2px)}
+.ide-palette[hidden]{display:none}
+.ide-palette-box{width:min(640px,calc(100vw - 32px));border:1px solid var(--ide-line-2);border-radius:12px;background:#0f1729;color:var(--ide-ink);box-shadow:0 30px 80px rgba(0,0,0,.55);overflow:hidden;animation:dev-dock-in .18s cubic-bezier(.2,.8,.2,1) both}
+.ide-palette-input{display:flex;align-items:center;gap:10px;margin:0;padding:12px 16px;border-bottom:1px solid var(--ide-line)}
+.ide-palette-input>span{color:#22c55e;font:700 16px var(--mono)}
+body.app.ide .ide-palette-input input{flex:1;padding:0;border:0;outline:0;background:transparent;color:#fff;font:15px var(--mono)}
+.ide-palette ul{max-height:52vh;margin:0;padding:6px;overflow-y:auto;list-style:none}
+.ide-palette li{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 10px;border-radius:7px;font:13.5px var(--mono);cursor:pointer}
+.ide-palette li[aria-selected=true]{background:rgba(56,189,248,.16);color:#fff}
+.ide-palette li small{flex:none;color:var(--ide-muted);font-size:12px}
+.ide-palette li mark{background:none;color:#38bdf8;font-weight:700}
+.ide-palette li.is-empty{color:var(--ide-muted);cursor:default}
+.ide-palette footer{display:flex;gap:16px;padding:8px 16px;border-top:1px solid var(--ide-line);color:var(--ide-muted);font:11.5px var(--mono)}
+.ide-palette kbd{padding:0 5px;border:1px solid var(--ide-line-2);border-radius:4px;background:var(--ide-panel-2);color:var(--ide-ink);font:11px var(--mono)}
+
+/* The home page's switch card */
+.ide-card{display:grid;gap:10px;padding:16px!important;overflow:hidden}
+.ide-card-preview{display:flex;align-items:center;gap:6px;margin:-16px -16px 2px;padding:8px 12px;border-bottom:1px solid var(--term-line,#1f2a40);background:#070b15}
+.ide-card-preview i{width:9px;height:9px;border-radius:50%;background:#ef4444}.ide-card-preview i:nth-child(2){background:#f59e0b}.ide-card-preview i:nth-child(3){background:#22c55e}
+.ide-card-preview code{margin-left:8px;color:#7dd3fc;font:12px var(--mono)}
+.ide-card h2{margin:0;font-size:16px}
+.ide-card p{margin:0;font-size:13.5px;line-height:1.5}
+.ide-card form{margin:0}
+
+@media (max-width:760px){.ide-status{display:none}body.app.ide{padding-bottom:0}}
+@media (prefers-reduced-motion:reduce){.ide-palette-box{animation:none}}

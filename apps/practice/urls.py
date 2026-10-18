@@ -15,4 +15,5 @@ urlpatterns = [
     path("code/<slug:key>/solution/", views.solution_api, name="solution"),
     path("code/<slug:key>/solved/", views.solved_api, name="solved"),
     path("watch/<slug:key>/", views.walkthrough_view, name="walkthrough"),
+    path("ui/", views.ui_view, name="ui"),
 ]

@@ -148,3 +148,52 @@ def payload(question):
     """A question for the browser, without its answer."""
     return {"id": question.pk, "language": question.get_language_display(), "level": question.get_level_display(), "kind": question.get_kind_display(),
             "topic": question.topic, "prompt": question.prompt, "code": question.code, "choices": question.choices, "lang": question.language, "type": question.kind}
+
+
+def ide_on(user):
+    """The developer UI: MyProgress dressed as a code editor, for people in developer mode who keep it on."""
+    return is_on(user) and profile(user).ide_ui
+
+
+def status_bar(user):
+    """What the developer UI's status bar shows: languages, level, streak and today's answers."""
+    practice = profile(user)
+    since = timezone.now() - timedelta(days=60)
+    days = {timezone.localdate(moment) for moment in Attempt.objects.filter(user=user, created_at__gte=since).values_list("created_at", flat=True)}
+    return {"languages": ", ".join(practice.language_labels) or "Python", "level": practice.get_level_display(), "streak": streak(days),
+            "today": Attempt.objects.filter(user=user, created_at__date=timezone.localdate()).count()}
+
+
+def palette(user):
+    """The developer UI's command palette (Ctrl+K): every place and action, by name."""
+    from django.urls import reverse
+    from apps.accounts.models import Profile
+    from . import lab
+    handle = Profile.objects.filter(user=user).values_list("handle", flat=True).first()
+
+    def go(label, url, hint):
+        return {"label": label, "url": url, "hint": hint}
+    projects = reverse("landing:workspace_section", args=["projects"])
+    items = [
+        go("Home", reverse("landing:dashboard"), "home.py"),
+        go("Projects", projects, "projects/"),
+        go("New project", f"{projects}#new-project", "project --new"),
+        go("Practice", reverse("practice:home"), "practice.sh"),
+        go("Start a quick quiz", f'{reverse("practice:quiz")}?new=1', "quiz --new"),
+        go("Code lab", reverse("practice:lab"), "lab/"),
+        go("Rankings", reverse("landing:workspace_section", args=["rankings"]), "rankings.json"),
+        go("Learn", reverse("landing:workspace_section", args=["learning"]), "learn.md"),
+        go("Write a post", reverse("learning:create"), "post --new"),
+        go("Classes", reverse("organizations:home"), "classes.ts"),
+        go("Notifications", reverse("notifications:list"), "inbox.log"),
+        go("Companies", reverse("companies:list"), "companies/"),
+        go("Your profile", reverse("landing:public_profile", args=[handle]), f"@{handle}") if handle else None,
+        go("Customize your channel", reverse("landing:channel_settings"), "channel.css"),
+        go("Security", reverse("landing:security"), "security.lock"),
+        go("Languages and level", reverse("practice:setup"), "settings.json"),
+    ]
+    items += [go(f"Watch: {item['title']} ({'Python' if item['language'] == 'python' else 'JavaScript'})", reverse("practice:walkthrough", args=[item["key"]]), "watch")
+              for item in lab.WALKTHROUGHS]
+    items += [{"label": "Switch to the classic look", "post": reverse("practice:ui"), "fields": {"ide": "0"}, "hint": "ui --classic"},
+              {"label": "Sign out", "post": reverse("landing:logout"), "fields": {}, "hint": "exit"}]
+    return [item for item in items if item]

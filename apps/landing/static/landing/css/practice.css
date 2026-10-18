@@ -8,7 +8,11 @@ body.dev-mode{background-image:radial-gradient(color-mix(in srgb,var(--violet) 1
 body.dev-mode .kicker{font-family:var(--mono);letter-spacing:.02em;text-transform:none}
 body.dev-mode .kicker::before{content:"// ";opacity:.6}
 body.dev-mode .page-title h1::after{content:"_";margin-left:3px;color:var(--violet);font-weight:400;animation:dev-caret 1.1s steps(1) infinite}
-body.dev-mode .app-logo::after{content:"</>";margin-left:8px;padding:2px 6px;border:1px solid rgba(255,255,255,.22);border-radius:6px;color:#7dd3fc;font:700 11px/1.2 var(--mono)}
+.nav-file{display:none}
+.ide-switch{display:flex;margin:0}
+.ide-switch button{padding:3px 8px;border:1px solid rgba(255,255,255,.22);border-radius:7px;background:transparent;color:#7dd3fc;font:700 12px/1.2 var(--mono);cursor:pointer;transition:background .15s,border-color .15s}
+.ide-switch button:hover{border-color:#7dd3fc;background:rgba(125,211,252,.1)}
+.ide-switch button[aria-pressed=true]{border-color:#38bdf8;background:#0284c7;color:#fff}
 @keyframes dev-caret{50%{opacity:0}}
 
 /* Code, coloured like an editor */
