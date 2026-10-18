@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
 from apps.core.git_service import MAX_RAW_BYTES, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access, user_can_administer
 from apps.core.models import Issue, IssueComment, Repository, RepositoryCollaborator, RepositoryInvitation, invitation_expiry, invitation_token
+from apps.core.audit import record
 from apps.core.services import record_activity
 from apps.notifications.services import notify
 from . import invitations
@@ -223,13 +224,20 @@ def collaborators_view(request, repository_id):
         removed = repository.collaborators.filter(pk=item).select_related("user").first()
         if removed:
             removed.delete()
+            record(request, "access.remove", f"removed {_name(removed.user)}'s access to {_repo_label(repository)}", repository=repository)
             notify(removed.user, request.user, "collaborator", f"{_name(request.user)} removed your access to {_repo_label(repository)}", reverse("landing:workspace_section", args=["projects"]))
             messages.success(request, f"{_name(removed.user)} no longer has access.")
     elif action == "update":
-        repository.collaborators.filter(pk=item).update(role=role)
+        changed = repository.collaborators.filter(pk=item).select_related("user").first()
+        if changed and changed.role != role:
+            repository.collaborators.filter(pk=item).update(role=role)
+            record(request, "access.role", f"changed {_name(changed.user)}'s access to {_repo_label(repository)} from {changed.get_role_display()} to {dict(RepositoryCollaborator.ROLE_CHOICES)[role]}", repository=repository)
         messages.success(request, f"Role changed to {dict(RepositoryCollaborator.ROLE_CHOICES)[role]}.")
     elif action == "cancel":
-        invitations.open_invitations(repository).filter(pk=item).delete()
+        cancelled = invitations.open_invitations(repository).filter(pk=item).first()
+        if cancelled:
+            cancelled.delete()
+            record(request, "access.uninvite", f"cancelled the invitation to {cancelled.invitee} for {_repo_label(repository)}", repository=repository)
         messages.success(request, "Invitation cancelled. Its link no longer works.")
     elif action == "resend":
         invitation = invitations.open_invitations(repository).filter(pk=item).first()
@@ -274,6 +282,7 @@ def _invite(request, repository, invitee, role):
     if user:
         notify(user, request.user, "collaborator", f"{_name(request.user)} invited you to collaborate on {_repo_label(repository)} ({invitation.get_role_display()} access)", reverse("repository_invitations:detail", args=[invitation.token]))
     invitations.send_email(request, invitation)
+    record(request, "access.invite", f"invited {_name(user) if user else email} to {_repo_label(repository)} with {invitation.get_role_display()} access", repository=repository)
     messages.success(request, f"Invitation sent to {invitee}. They get {invitation.get_role_display()} access when they accept it.")
 @login_required(login_url="landing:home")
 @require_POST
@@ -290,11 +299,13 @@ def transfer_view(request, repository_id):
     if refused:
         messages.error(request, refused)
         return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
+    old_label = _repo_label(repository)
     try:
         companies.transfer(repository, company)
     except ValueError as error:
         messages.error(request, str(error))
         return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
+    record(request, "repository.transfer", f"moved {old_label} into {company.name}", repository=repository)
     messages.success(request, f"Moved to {company.name}: it's {repository.full_name} now. Its members reach it as the company allows, and its collaborators keep their access.")
     return redirect("landing:repository", repository_id=repository.pk)
 @login_required(login_url="landing:home")
@@ -305,6 +316,7 @@ def leave_view(request, repository_id):
     if membership is None:
         raise Http404
     membership.delete()
+    record(request, "access.leave", f"left {_repo_label(membership.repository)}", repository=membership.repository)
     notify(membership.repository.owner, request.user, "collaborator", f"{_name(request.user)} left {_repo_label(membership.repository)}", f'{reverse("landing:repository", args=[repository_id])}?tab=settings#collaborators')
     messages.success(request, f"You left {_repo_label(membership.repository)}.")
     return redirect("landing:workspace_section", section="projects")
@@ -325,6 +337,7 @@ def invitation_detail_view(request, token):
                 messages.success(request, f"You declined the invitation to {_repo_label(invitation.repository)}.")
                 return redirect("repository_invitations:list")
             invitations.accept(invitation, request.user)
+            record(request, "access.join", f"accepted {invitation.get_role_display()} access to {_repo_label(invitation.repository)}", repository=invitation.repository)
             messages.success(request, f"You now have {invitation.get_role_display()} access to {_repo_label(invitation.repository)}.")
             return redirect("landing:repository", repository_id=invitation.repository_id)
     return render(request, "code/invitation.html", {

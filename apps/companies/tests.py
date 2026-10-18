@@ -225,6 +225,9 @@ class CompanySecurityTests(CompanyTestCase):
     def test_owners_decide_what_members_create_and_publish(self):
         self.join(self.teammate)
         self.security(repository_creation="private", members_change_visibility=None)
+        settings_page = self.client.get(f"{self.detail}?tab=settings")
+        self.assertContains(settings_page, 'name="repository_creation" value="private" checked')  # the choices are on the page, as saved
+        self.assertContains(settings_page, 'name="require_two_factor"')
         self.client.force_login(self.teammate)
         self.assertContains(self.client.get(self.detail), "Only Acme Labs's owners make public repositories")
         response = self.client.post(reverse("companies:repository_create", args=[self.company.slug]), {"title": "Leak", "visibility": "public"}, follow=True)

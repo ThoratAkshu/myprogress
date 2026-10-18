@@ -138,6 +138,14 @@ def face(subject):
     logo = _logo(subject)
     return format_html('<img src="{}" alt="" loading="lazy" decoding="async">', logo.url) if logo else initials(subject)
 @register.filter
+def ago(moment):
+    """When something happened, for logs: "just now", or "5 minutes ago"."""
+    from django.utils import timezone
+    from django.utils.timesince import timesince
+    if moment is None:
+        return ""
+    return "just now" if (timezone.now() - moment).total_seconds() < 60 else f"{timesince(moment)} ago"
+@register.filter
 def public_name(user):
     """How to name someone to people who aren't staff: their name, else their public handle. Never their email."""
     profile = getattr(user, "profile", None)

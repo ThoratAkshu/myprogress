@@ -11,13 +11,15 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile, TwoFactor
 from apps.code.invitations import ROLE_HELP, mask, name, problem
 from apps.common.ratelimit import rate_limit
+from apps.core.audit import company_log, record
 from apps.core.models import RepositoryCollaborator, invitation_expiry, invitation_token
+from django.core.paginator import Paginator
 from apps.notifications.services import notify
 from . import services
 from .forms import CompanyForm, TeamForm
 from .models import Company, CompanyInvitation, CompanyMember, Team, TeamMember, TeamRepository
 
-TABS = ("repositories", "people", "teams", "settings")
+TABS = ("repositories", "people", "teams", "settings", "log")
 
 
 def _url(company, tab=""):
@@ -40,6 +42,7 @@ def company_list_view(request):
     form = CompanyForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         company = services.create_company(request.user, form.cleaned_data["name"], form.cleaned_data["description"], form.cleaned_data["website"])
+        record(request, "company.create", f"created {company.name}", company=company)
         messages.success(request, f"{company.name} is ready, and you're its owner. Add a repository, then invite your team.")
         return redirect(_url(company))
     companies = services.companies_for(request.user).annotate(member_count=Count("members", distinct=True), repository_count=Count("repositories", distinct=True))
@@ -55,7 +58,7 @@ def company_detail_view(request, slug):
     company = get_object_or_404(Company, slug=slug)
     member = services.membership(company, request.user)
     tab = request.GET.get("tab") if request.GET.get("tab") in TABS else "repositories"
-    if (tab in {"people", "teams"} and not member) or (tab == "settings" and not (member and member.role == "owner")):
+    if (tab in {"people", "teams"} and not member) or (tab in {"settings", "log"} and not (member and member.role == "owner")):
         tab = "repositories"
     context = {"section": "code", "company": company, "member": member, "tab": tab, "is_owner": bool(member and member.role == "owner"),
                "member_count": company.members.count() if member else None, "repositories": services.visible_repositories(company, request.user)}
@@ -84,6 +87,8 @@ def company_detail_view(request, slug):
         context["my_domain"] = services.domain_of(request.user.email)
         context["i_use_two_step"] = services.uses_two_step(request.user)
         context["without_two_step"] = company.members.exclude(user__two_factor__enabled_at__isnull=False).count()
+    elif tab == "log":
+        context["log"] = Paginator(company_log(company), 50).get_page(request.GET.get("page"))
     return render(request, "companies/detail.html", context)
 
 
@@ -106,6 +111,7 @@ def repository_create_view(request, slug):
     except Exception:
         messages.error(request, "Repository storage couldn't be set up. Try again.")
         return redirect(_url(company))
+    record(request, "repository.create", f"created {repository.full_name} as a {visibility} repository", repository=repository)
     messages.success(request, f"Created {repository.full_name}. Everyone in {company.name} can reach it as the company allows; push to it with your write key.")
     return redirect("landing:repository", repository_id=repository.pk)
 
@@ -139,6 +145,7 @@ def people_view(request, slug):
             messages.error(request, "You're the only owner. Make someone else an owner first, or delete the company.")
             return redirect(back)
         services.let_go(member, request.user)
+        record(request, "member.leave", f"left {company.name}", company=company)
         messages.success(request, f"You left {company.name}. Your projects there stay with the company.")
         return redirect("companies:list")
     if member.role != "owner":
@@ -154,19 +161,25 @@ def people_view(request, slug):
             messages.error(request, "A company needs at least one owner. Make someone else an owner first.")
         elif action == "role":
             CompanyMember.objects.filter(pk=target.pk).update(role=role)
+            record(request, "member.role", f"made {name(target.user)} {'an owner' if role == 'owner' else 'a member'}", company=company)
             messages.success(request, f"{name(target.user)} is now {'an owner' if role == 'owner' else 'a member'}.")
         else:
             services.let_go(target, request.user)
+            record(request, "member.remove", f"removed {name(target.user)} from {company.name}", company=company)
             notify(target.user, request.user, "collaborator", f"{name(request.user)} removed you from {company.name}", reverse("companies:list"))
             messages.success(request, f"{name(target.user)} is no longer in {company.name}. Their projects there passed to you.")
     elif action == "remove_outside":
         person = User.objects.filter(pk=item).exclude(company_memberships__company=company).first()
         if person:
             services.remove_outside(company, person)
+            record(request, "outside.remove", f"removed {name(person)}'s access to every {company.name} repository", company=company)
             notify(person, request.user, "collaborator", f"{name(request.user)} removed your access to {company.name}'s repositories", reverse("landing:workspace_section", args=["projects"]))
             messages.success(request, f"{name(person)} no longer has access to {company.name}'s repositories.")
     elif action == "cancel":
-        services.open_invitations(company).filter(pk=item).delete()
+        invitation = services.open_invitations(company).filter(pk=item).first()
+        if invitation:
+            invitation.delete()
+            record(request, "member.uninvite", f"cancelled the invitation to {invitation.invitee}", company=company)
         messages.success(request, "Invitation cancelled. Its link no longer works.")
     elif action == "resend":
         invitation = services.open_invitations(company).filter(pk=item).first()
@@ -200,6 +213,7 @@ def people_view(request, slug):
         if user:
             notify(user, request.user, "collaborator", f"{name(request.user)} invited you to join {company.name}", reverse("companies:invitation", args=[invitation.token]))
         services.send_invitation(request, invitation)
+        record(request, "member.invite", f"invited {name(user) if user else email} to join as {'an owner' if role == 'owner' else 'a member'}", company=company)
         messages.success(request, f"Invitation sent. They join {company.name} as {'an owner' if role == 'owner' else 'a member'} when they accept.")
     return redirect(back)
 
@@ -215,6 +229,7 @@ def team_create_view(request, slug):
     team = form.save(commit=False)
     team.company, team.slug = company, services.team_slug(company, team.name)
     team.save()
+    record(request, "team.create", f"created the {team.name} team", company=company)
     messages.success(request, f"Team {team.name} created. Add its people and the repositories it works on.")
     return redirect("companies:team", slug=company.slug, team_slug=team.slug)
 
@@ -235,24 +250,35 @@ def team_view(request, slug, team_slug):
         if action == "add_member":
             joining = company.members.filter(pk=item).select_related("user").first()
             if joining:
-                TeamMember.objects.get_or_create(team=team, user=joining.user)
+                _, added = TeamMember.objects.get_or_create(team=team, user=joining.user)
+                if added:
+                    record(request, "team.member", f"added {name(joining.user)} to the {team.name} team", company=company)
                 notify(joining.user, request.user, "collaborator", f"{name(request.user)} added you to the {team.name} team in {company.name}", reverse("companies:team", args=[company.slug, team.slug]))
         elif action == "remove_member":
-            team.memberships.filter(pk=item).delete()
+            leaving = team.memberships.filter(pk=item).select_related("user").first()
+            if leaving:
+                leaving.delete()
+                record(request, "team.member", f"removed {name(leaving.user)} from the {team.name} team", company=company)
         elif action == "add_repository":
             repository = company.repositories.filter(pk=item).first()
             if repository:
                 TeamRepository.objects.update_or_create(team=team, repository=repository, defaults={"role": role})
-        elif action == "update_repository":
-            team.repositories.filter(pk=item).update(role=role)
-        elif action == "remove_repository":
-            team.repositories.filter(pk=item).delete()
+                record(request, "team.access", f"gave the {team.name} team {dict(RepositoryCollaborator.ROLE_CHOICES)[role]} access to {repository.full_name}", repository=repository)
+        elif action in {"update_repository", "remove_repository"}:
+            access = team.repositories.filter(pk=item).select_related("repository__company").first()
+            if access and action == "update_repository":
+                team.repositories.filter(pk=item).update(role=role)
+                record(request, "team.access", f"changed the {team.name} team's access to {access.repository.full_name} to {dict(RepositoryCollaborator.ROLE_CHOICES)[role]}", repository=access.repository)
+            elif access:
+                access.delete()
+                record(request, "team.access", f"removed the {team.name} team's access to {access.repository.full_name}", repository=access.repository)
         elif action == "details":
             form = TeamForm(request.POST, instance=team)
             if form.is_valid():
                 form.save()
         elif action == "delete":
             team.delete()
+            record(request, "team.delete", f"deleted the {team.name} team", company=company)
             messages.success(request, f"Deleted the {team.name} team. Its people are still in {company.name}.")
             return redirect(_url(company, "teams"))
         return redirect("companies:team", slug=company.slug, team_slug=team.slug)
@@ -279,6 +305,7 @@ def settings_view(request, slug):
         messages.success(request, f"Deleted {company.name}. Its repositories went back to the members who made them.")
         return redirect("companies:list")
     if request.POST.get("action") == "security":
+        before = {field: getattr(company, field) for field in services.SECURITY_FIELDS}
         try:
             company.email_domains = services.clean_domains(company, request.user, request.POST.get("email_domains", ""))
         except ValueError as error:
@@ -294,15 +321,22 @@ def settings_view(request, slug):
             messages.error(request, f"Turn on two-step sign-in for your own account first, in Security settings. Then you can require it for {company.name}.")
             return redirect(_url(company, "settings") + "#security")
         company.require_two_factor = require
-        company.save(update_fields=["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside", "require_two_factor"])
+        company.save(update_fields=services.SECURITY_FIELDS)
+        for change in services.security_changes(before, company):
+            record(request, "company.security", change, company=company)
         messages.success(request, "Security settings saved." + (" Turn on “only people from these domains” to use them for joining." if company.email_domains and not company.members_from_domains else ""))
         return redirect(_url(company, "settings") + "#security")
+    old_name, old_base = company.name, company.get_base_role_display()
     form = CompanyForm(request.POST, instance=company)
     if form.is_valid():
         company = form.save(commit=False)
         if request.POST.get("base_role") in dict(Company.BASE_ROLES):
             company.base_role = request.POST["base_role"]
         company.save()
+        if company.name != old_name:
+            record(request, "company.rename", f"renamed the company from {old_name} to {company.name}", company=company)
+        if company.get_base_role_display() != old_base:
+            record(request, "company.base_role", f"changed what every member can do from {old_base} to {company.get_base_role_display()}", company=company)
         messages.success(request, "Company settings saved.")
     else:
         messages.error(request, "Check the company's name and website.")
@@ -324,6 +358,7 @@ def invitation_view(request, token):
             messages.success(request, f"You declined the invitation to {invitation.company.name}.")
             return redirect("repository_invitations:list")
         services.accept(invitation, request.user)
+        record(request, "member.join", f"joined {invitation.company.name} as {'an owner' if invitation.role == 'owner' else 'a member'}", company=invitation.company)
         messages.success(request, f"Welcome to {invitation.company.name}.")
         return redirect(_url(invitation.company))
     return render(request, "companies/invitation.html", {

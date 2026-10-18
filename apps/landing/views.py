@@ -39,6 +39,7 @@ from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
 from apps.accounts import identity, two_factor
+from apps.core.audit import record, repository_log
 from apps.accounts.views import begin_two_step, finish_sign_in
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
@@ -349,6 +350,7 @@ def update_project_view(request, project_id):
     if repository and repository.visibility != ("public" if public else "private"):
         repository.visibility = "public" if public else "private"  # one visibility for the project and its code
         repository.save(update_fields=["visibility", "updated_at"])
+        record(request, "repository.visibility", f"made {repository.full_name} {repository.visibility}", repository=repository)
     completed_ids = {int(value) for value in request.POST.getlist("milestones") if value.isdigit()}
     milestones = list(project.milestones.all())
     for milestone in milestones:
@@ -402,6 +404,7 @@ def create_repository_view(request, project_id):
         messages.error(request, "Repository storage could not be initialized.")
         return redirect("landing:workspace_section", section="projects")
     record_activity(request.user, "project", "created_repository", 5, {"repository_id": repository.pk})
+    record(request, "repository.create", f"created {repository.full_name} as a {repository.visibility} repository", repository=repository)
     messages.success(request, "Repository created. Create a token before your first push.")
     return redirect("landing:repository", repository_id=repository.pk)
 def repository_view(request, repository_id):
@@ -434,11 +437,13 @@ def repository_view(request, repository_id):
                 visibility = request.POST.get("visibility")
                 default_branch = request.POST.get("default_branch")
                 branch_names = {branch["name"] for branch in list_branches(repository)}
-                if visibility in {"private", "public"} and context["can_change_visibility"]:  # maintainers change the branch; admins, if their company lets them, who can see it
+                if visibility in {"private", "public"} and context["can_change_visibility"] and visibility != repository.visibility:  # maintainers change the branch; admins, if their company lets them, who can see it
                     repository.visibility = visibility
                     Project.objects.filter(pk=repository.project_id).update(is_public=visibility == "public")  # the project shows the same
-                if default_branch in branch_names:
+                    record(request, "repository.visibility", f"made {repository.full_name} {visibility}", repository=repository)
+                if default_branch in branch_names and default_branch != repository.default_branch:
                     repository.default_branch = default_branch
+                    record(request, "repository.branch", f"changed the default branch of {repository.full_name} to {default_branch}", repository=repository)
                 repository.save(update_fields=["visibility", "default_branch", "updated_at"])
                 refresh_repository_languages(repository)
                 messages.success(request, "Repository settings updated.")
@@ -475,6 +480,7 @@ def repository_view(request, repository_id):
         contributors = list_contributors(repository, ref)
     context.update({"active_tab": active_tab, "ref": ref, "path": path, "crumbs": breadcrumbs(path), "parent_path": "/".join(path.split("/")[:-1]) if path else None, "files": files, "readme": readme, "latest_commit": latest, "commits": commits, "contributors": contributors, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.is_authenticated and request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "collaborators": repository.collaborators.select_related("user__profile").order_by("user__first_name") if active_tab == "settings" else [], "role_choices": RepositoryCollaborator.ROLE_CHOICES,
                     "invitations": open_invitations(repository) if active_tab == "settings" and can_admin else [], "role_help": ROLE_HELP,
+                    "access_log": repository_log(repository) if active_tab == "settings" and can_admin else [],
                     "my_abilities": abilities(context["my_role"]) if context["my_role"] not in {None, "owner"} else [],
                     "company_teams": repository.team_access.select_related("team") if active_tab == "settings" and repository.company_id else [],
                     "transfer_companies": [member.company for member in request.user.company_memberships.select_related("company")] if active_tab == "settings" and not repository.company_id and repository.owner_id == request.user.id else []})

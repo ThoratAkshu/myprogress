@@ -1765,3 +1765,19 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 .company-two-step{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0;padding:14px 16px;border-color:#f3e1b0!important;background:#fff8e6;color:#6b5114;font-size:14px}
 .company-two-step span{flex:1 1 260px}
 .security-page .security-head p.muted{font-size:13.5px;line-height:1.5}
+/* Change logs: a company's, a repository's, and your security events */
+.company-log{display:grid;gap:4px}
+.log-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.log-row:first-of-type{border-top:0}
+.log-row p{margin:0;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.log-row time{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.log-row.is-personal{grid-template-columns:minmax(0,1fr) auto auto}
+.log-pages{display:flex;gap:8px;padding-top:10px}
+.repo-access-log{display:grid;gap:4px;margin-top:22px}
+.repo-access-log h3{margin:0;font-size:16px}
+.repo-access-log>p{margin:0 0 6px;color:var(--muted);font-size:13px}
+.security-title{display:flex;align-items:center;gap:8px;margin:0;font-size:18px}
+.security-page .security-sub{margin:0;font-size:13.5px}
+@media (max-width:560px){.log-row,.log-row.is-personal{grid-template-columns:auto minmax(0,1fr)}.log-row time,.log-row small{grid-column:2}}
+.security-page .log-row p{font-size:14px}
+.security-page .log-row{padding:9px 0}

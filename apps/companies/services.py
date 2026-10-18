@@ -253,5 +253,26 @@ def remove_outside(company, user):
         RepositoryInvitation.objects.filter(repository__company=company, user=user, accepted_at__isnull=True, declined_at__isnull=True).delete()
 
 
+SECURITY_FIELDS = ["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside", "require_two_factor"]
+
+
+def security_changes(before, company):
+    """One sentence for the change log per security setting an owner changed."""
+    changes = []
+    if before["email_domains"] != company.email_domains:
+        changes.append(f"set the email domains to {', '.join(company.email_domains)}" if company.email_domains else "removed the email domains")
+    if before["members_from_domains"] != company.members_from_domains:
+        changes.append("let only people from its email domains join" if company.members_from_domains else "let people from any email domain join")
+    if before["repository_creation"] != company.repository_creation:
+        changes.append(f"set who creates repositories to “{company.get_repository_creation_display()}”")
+    if before["members_change_visibility"] != company.members_change_visibility:
+        changes.append("let repository admins change visibility" if company.members_change_visibility else "kept visibility changes to owners")
+    if before["members_invite_outside"] != company.members_invite_outside:
+        changes.append("let repository admins invite people from outside the company" if company.members_invite_outside else "kept access for people outside the company to owners")
+    if before["require_two_factor"] != company.require_two_factor:
+        changes.append("required two-step sign-in" if company.require_two_factor else "stopped requiring two-step sign-in")
+    return changes
+
+
 def team_slug(company, text):
     return unique_slug(text, lambda slug: Team.objects.filter(company=company, slug=slug).exists(), limit=80)

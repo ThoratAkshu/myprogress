@@ -269,3 +269,16 @@ class IssueComment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["created_at"]
+class AuditEvent(models.Model):
+    """The change log: who changed access, visibility or security settings, and when. A company's events are for its
+    owners, a repository's for its admins, and a person's own (sign-ins, two-step sign-in) for them alone."""
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="security_events", help_text="Whose account it's about, for their security log")
+    company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, null=True, blank=True, related_name="audit_events")
+    repository = models.ForeignKey(Repository, on_delete=models.SET_NULL, null=True, blank=True, related_name="audit_events", help_text="Kept as text in the event if the repository goes")
+    action = models.CharField(max_length=40, db_index=True)
+    text = models.CharField(max_length=300, help_text="What happened, after the actor's name: made acme/api public")
+    ip = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    class Meta:
+        ordering = ["-created_at", "-pk"]
