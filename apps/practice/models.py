@@ -57,3 +57,16 @@ class Attempt(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class ChallengeSolve(models.Model):
+    """A code-lab challenge solved: every test passed in the person's browser. helped: after "Show me how"."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="challenge_solves")
+    key = models.SlugField(max_length=80)
+    language = models.CharField(max_length=20, choices=LANGUAGES)
+    code = models.TextField()
+    helped = models.BooleanField(default=False)
+    solved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "key"], name="challenge_solved_once")]

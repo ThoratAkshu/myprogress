@@ -1,6 +1,7 @@
 {% extends "landing/app_base.html" %}{% load static ui %}
 {% block title %}Developer mode{% endblock %}
 {% block content %}<div class="practice-page setup">
+{% if is_on %}{% include "practice/_tabs.html" with tab="setup" %}{% endif %}
 <section class="dev-terminal setup-hero" aria-label="Developer mode">
 <div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>developer-mode</span></div>
 <p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>{% if welcome %}welcome --to developer-mode{% elif is_on %}developer-mode --status{% else %}developer-mode --on{% endif %}</span></p>

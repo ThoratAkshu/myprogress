@@ -46,6 +46,7 @@ POLICY = {
     # Developer mode: coding practice for students and professionals, at sign-in, in the Learn dock and the Practice tab.
     "practice:home": DEVELOPERS, "practice:setup": DEVELOPERS, "practice:level": DEVELOPERS, "practice:warmup": DEVELOPERS, "practice:quiz": DEVELOPERS,
     "practice:next": DEVELOPERS, "practice:answer": DEVELOPERS,
+    "practice:lab": DEVELOPERS, "practice:challenge": DEVELOPERS, "practice:solution": DEVELOPERS, "practice:solved": DEVELOPERS, "practice:walkthrough": DEVELOPERS,
     # Every signed-in account.
     "landing:dashboard": ALL_ROLES,  # sends each account type to its own home
     "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:channel_settings": ALL_ROLES, "landing:follow": ALL_ROLES,

@@ -14,9 +14,13 @@
   function highlight(element, language) {
     if (element.dataset.highlighted) return;
     element.dataset.highlighted = "1";
+    element.replaceChildren(tokens(element.textContent, language));
+  }
+
+  // The source as coloured spans, for highlight() and for the code editor as you type.
+  function tokens(source, language) {
     const words = new Set((KEYWORDS[language] || "").split(" "));
     const pattern = new RegExp(`(${COMMENT[language] || "(?!)"})|(${STRING})|(\\b\\d+(?:\\.\\d+)?\\b)|([A-Za-z_]\\w*)(?=\\s*\\()|([A-Za-z_]\\w*)`, "g");
-    const source = element.textContent;
     const out = document.createDocumentFragment();
     let last = 0;
     const span = (text, kind) => {
@@ -37,7 +41,7 @@
       last = match.index + text.length;
     }
     out.append(source.slice(last));
-    element.replaceChildren(out);
+    return out;
   }
 
   function typeOut(element) {
@@ -73,6 +77,6 @@
     root.querySelectorAll("[data-count]").forEach(countUp);
   }
 
-  window.MyProgressPractice = { highlight, enhance };
+  window.MyProgressPractice = { highlight, tokens, enhance, calm };
   enhance();
 })();
