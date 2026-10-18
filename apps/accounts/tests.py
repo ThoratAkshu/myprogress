@@ -70,7 +70,7 @@ class AuthenticationFlowTests(TestCase):
         from apps.core.git_service import repository_path
         from apps.core.models import GitAccessToken, Project
         user = User.objects.create_user(username="git@example.com", password="StrongPass!482")
-        project = Project.objects.create(owner=user, title="Native Git")
+        project = Project.objects.create(owner=user, title="Native Git", is_public=False)
         self.client.force_login(user)
         with tempfile.TemporaryDirectory() as storage:
             with override_settings(GIT_REPOSITORY_ROOT=storage):

@@ -40,7 +40,7 @@ from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
-from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
+from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
 from urllib.parse import urlencode
 import logging
@@ -313,12 +313,14 @@ def create_project_view(request):
     if not title:
         messages.error(request, "Project title is required.")
         return redirect("landing:dashboard")
-    project = request.user.projects.create(title=title[:140], summary=request.POST.get("summary", "").strip(), skills=request.POST.get("skills", "").strip(), status="planning")
+    # Like a new repository on GitHub: private unless you choose public, and it applies to the project and its code.
+    public = request.POST.get("visibility") == "public"
+    project = request.user.projects.create(title=title[:140], summary=request.POST.get("summary", "").strip(), skills=request.POST.get("skills", "").strip(), status="planning", is_public=public)
     ProjectMilestone.objects.bulk_create([ProjectMilestone(project=project, title=title, position=position) for position, title in enumerate(["Plan the solution", "Build the core", "Document the work", "Publish a demo"])])
     record_activity(request.user, "project", "created_project", 3, {"project_id": project.pk})
     complete_daily_step(request.user, "build")
     refresh_rank(request.user)
-    messages.success(request, "Project created. You can now add its proof of work.")
+    messages.success(request, f"{'Public' if public else 'Private'} project created. You can now add its proof of work.")
     return redirect("landing:dashboard")
 @login_required(login_url="landing:home")
 @require_POST
@@ -334,7 +336,16 @@ def update_project_view(request, project_id):
     project.summary = request.POST.get("summary", "").strip()
     project.skills = ", ".join(dict.fromkeys(skill.strip() for skill in request.POST.get("skills", "").split(",") if skill.strip()))[:500]
     project.live_url = live_url[:200]
-    project.is_public = request.POST.get("is_public") == "on"
+    visibility = request.POST.get("visibility")
+    public = visibility == "public" if visibility in {"public", "private"} else request.POST.get("is_public") == "on"
+    repository = getattr(project, "repository", None)
+    if repository and public != project.is_public and not user_can_administer(request.user, repository):
+        messages.error(request, "Only the repository's admins can change who can see its code, so the visibility stayed the same.")
+        public = project.is_public
+    project.is_public = public
+    if repository and repository.visibility != ("public" if public else "private"):
+        repository.visibility = "public" if public else "private"  # one visibility for the project and its code
+        repository.save(update_fields=["visibility", "updated_at"])
     completed_ids = {int(value) for value in request.POST.getlist("milestones") if value.isdigit()}
     milestones = list(project.milestones.all())
     for milestone in milestones:
@@ -379,7 +390,7 @@ def create_repository_view(request, project_id):
     while Repository.objects.filter(owner=request.user, slug=slug).exists():
         slug = f"{base_slug[:85]}-{counter}"
         counter += 1
-    visibility = request.POST.get("visibility") if request.POST.get("visibility") in {"private", "public"} else "private"
+    visibility = "public" if project.is_public else "private"  # the code is as visible as its project
     repository = Repository.objects.create(project=project, owner=request.user, slug=slug, visibility=visibility)
     try:
         initialize_repository(repository)
@@ -422,6 +433,7 @@ def repository_view(request, repository_id):
                 branch_names = {branch["name"] for branch in list_branches(repository)}
                 if visibility in {"private", "public"} and can_admin:  # maintainers change the branch, admins who can see it
                     repository.visibility = visibility
+                    Project.objects.filter(pk=repository.project_id).update(is_public=visibility == "public")  # the project shows the same
                 if default_branch in branch_names:
                     repository.default_branch = default_branch
                 repository.save(update_fields=["visibility", "default_branch", "updated_at"])

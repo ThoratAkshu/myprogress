@@ -1,11 +1,15 @@
+import tempfile
 from datetime import timedelta
+from importlib import import_module
 from io import StringIO
+from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from apps.accounts.models import Follow, Profile
+from apps.core.git_service import initialize_repository
 from apps.core.models import ActivityEvent, Project, ProjectMilestone, Repository
 from apps.core.services import calculate_score, leaderboard, refresh_rank, score_breakdown
 def make_developer(email, first_name="Dev", last_name="Eloper", **profile_fields):
@@ -175,3 +179,57 @@ class ProjectUpdateTests(TestCase):
         self.assertEqual((project.summary, project.live_url), ("", ""))
         self.client.force_login(intruder)
         self.assertEqual(self.client.post(url, {"summary": "Hacked"}).status_code, 404)
+class ProjectVisibilityTests(TestCase):
+    """A project and its code share one visibility: private unless its owner makes it public."""
+    def setUp(self):
+        self.storage = tempfile.TemporaryDirectory()
+        self.override = override_settings(GIT_REPOSITORY_ROOT=self.storage.name)
+        self.override.enable()
+        self.owner = make_developer("vis@example.com", "Vera", "Owner")
+        self.client.force_login(self.owner)
+    def tearDown(self):
+        self.override.disable()
+        self.storage.cleanup()
+    def private_repository(self, owner=None):
+        project = Project.objects.create(owner=self.owner, title="Ledger", is_public=False)
+        repository = Repository.objects.create(project=project, owner=owner or self.owner, slug="ledger", visibility="private")
+        initialize_repository(repository)
+        return project, repository
+    def test_new_projects_are_private_unless_made_public_and_their_code_follows(self):
+        page = self.client.get(reverse("landing:workspace_section", args=["projects"]))
+        self.assertContains(page, 'name="visibility" value="private" checked')
+        self.client.post(reverse("landing:create_project"), {"title": "Quiet tool"})
+        self.client.post(reverse("landing:create_project"), {"title": "Open tool", "visibility": "public"})
+        quiet, loud = self.owner.projects.get(title="Quiet tool"), self.owner.projects.get(title="Open tool")
+        self.assertEqual((quiet.is_public, loud.is_public), (False, True))
+        for project, asked in [(quiet, "public"), (loud, "private")]:  # the code can't be set apart from its project
+            self.client.post(reverse("landing:create_repository", args=[project.pk]), {"visibility": asked})
+        self.assertEqual((quiet.repository.visibility, loud.repository.visibility), ("private", "public"))
+        page = self.client.get(reverse("landing:workspace_section", args=["projects"]))
+        self.assertContains(page, 'name="visibility" value="public" checked')  # the open project's Update dialog
+        self.assertContains(page, "is-private")
+    def test_changing_it_on_the_project_or_the_repository_changes_both(self):
+        project, repository = self.private_repository()
+        self.client.post(reverse("landing:update_project", args=[project.pk]), {"summary": "Now open", "visibility": "public"})
+        project.refresh_from_db()
+        repository.refresh_from_db()
+        self.assertEqual((project.is_public, repository.visibility, project.summary), (True, "public", "Now open"))
+        self.client.post(reverse("landing:repository", args=[repository.pk]), {"action": "settings", "visibility": "private", "default_branch": "main"})
+        project.refresh_from_db()
+        repository.refresh_from_db()
+        self.assertEqual((project.is_public, repository.visibility), (False, "private"))
+    def test_only_the_repositorys_admins_change_who_sees_its_code(self):
+        project, repository = self.private_repository(owner=make_developer("maker@example.com"))
+        response = self.client.post(reverse("landing:update_project", args=[project.pk]), {"summary": "Edited", "visibility": "public"}, follow=True)
+        self.assertContains(response, "Only the repository&#x27;s admins can change who can see its code")
+        project.refresh_from_db()
+        repository.refresh_from_db()
+        self.assertEqual((project.is_public, repository.visibility, project.summary), (False, "private", "Edited"))
+    def test_existing_projects_take_their_repositorys_visibility(self):
+        project, repository = self.private_repository()
+        Project.objects.filter(pk=project.pk).update(is_public=True)  # how projects started before
+        loose = add_project(self.owner, "No code yet")
+        import_module("apps.core.migrations.0018_project_visibility_follows_repository").align(django_apps, None)
+        project.refresh_from_db()
+        loose.refresh_from_db()
+        self.assertEqual((project.is_public, loose.is_public), (False, True))

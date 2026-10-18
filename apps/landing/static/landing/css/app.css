@@ -1691,3 +1691,13 @@ body.app .company-head h1{margin:0;font-size:26px}
 .company-people select{width:auto;margin:0;padding:8px;border:1px solid #d5dce5;border-radius:8px;font:inherit;font-size:13px}
 .company-people .button{padding:8px 12px;font-size:12px}
 .company-people .collaborator-row form{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+/* Choosing who can see a project and its code (beats the dialogs' full-width inputs and grid labels) */
+.visibility-choice{display:grid;gap:8px;margin:0;padding:0;border:0}
+.visibility-choice legend{margin-bottom:6px;padding:0;font-size:13px;font-weight:700}
+fieldset.visibility-choice label{display:flex;align-items:flex-start;gap:10px;margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-weight:400;cursor:pointer}
+.visibility-choice label:has(input:checked){border-color:var(--violet);background:var(--violet-soft)}
+fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;margin:3px 0 0;padding:0}
+.visibility-choice span{display:grid;gap:2px}
+.visibility-choice b{display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.visibility-choice small{color:var(--muted);font-size:12px;line-height:1.4}
+.pill.is-private{display:inline-flex;align-items:center;gap:4px}
