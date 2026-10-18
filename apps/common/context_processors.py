@@ -2,6 +2,7 @@ from functools import lru_cache
 from django.conf import settings
 from apps.accounts.models import Profile
 from apps.organizations.services import staff_organizations
+from apps.practice.services import is_on as practice_is_on
 from apps.recruiting.models import RECRUITER_ROLES
 THEMES = {"ocean", "emerald", "midnight"}
 def ui_theme(request):
@@ -31,4 +32,5 @@ def workspace_navigation(request):
         "nav_org": lambda: staff_organizations(user).first(),
         "nav_has_organizations": lambda: user.org_memberships.filter(status="active").exists(),
         "nav_can_finance": lambda: user.is_superuser or (user.is_staff and user.has_perm("earnings.access_finance")),
+        "nav_dev_mode": lambda: practice_is_on(user),
     }

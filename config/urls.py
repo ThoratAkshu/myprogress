@@ -14,6 +14,7 @@ urlpatterns = [
     path("org/", include("apps.organizations.urls")),
     path("repositories/invitations/", include("apps.code.invitation_urls")),
     path("companies/", include("apps.companies.urls")),
+    path("practice/", include("apps.practice.urls")),
     path("repositories/<int:repository_id>/", include("apps.code.urls")),
     path("", include("apps.landing.urls")),
     re_path(r"^static/(?P<path>.*)$", serve_static),

@@ -1,0 +1,9 @@
+{% load ui %}<div class="dev-dock" data-dock data-next-url="{% url 'practice:next' %}" data-answer-url="{% url 'practice:answer' %}">
+<section class="dev-dock-panel" id="dev-dock-panel" aria-label="Quick question" hidden>
+<header><b>{% icon "zap" 15 %} Quick question</b><span class="dev-dock-stats" data-dock-stats></span><button type="button" class="dev-dock-close" data-dock-close aria-label="Close">{% icon "x" 16 %}</button></header>
+<div class="dev-dock-body" data-dock-body aria-live="polite"></div>
+<footer><a href="{% url 'practice:home' %}">Open Practice</a><button type="button" class="button soft" data-dock-next>Another question {% icon "chevron-right" 14 %}</button></footer>
+<form hidden data-dock-csrf>{% csrf_token %}</form>
+</section>
+<button type="button" class="dev-dock-toggle" aria-expanded="false" aria-controls="dev-dock-panel" data-dock-toggle>{% icon "terminal" 16 %}<span>Practice</span></button>
+</div>

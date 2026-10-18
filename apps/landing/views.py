@@ -39,6 +39,7 @@ from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
 from apps.accounts import identity, two_factor
+from apps.practice.services import enable as enable_practice
 from apps.core.audit import record, repository_log
 from apps.accounts.views import begin_two_step, finish_sign_in
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
@@ -98,11 +99,14 @@ def register_view(request):
         login(request, user)
         request.session.cycle_key()
         send_verification_email(request, user)
+        practising = role == "developer" and form.cleaned_data["developer_mode"]
+        if practising:
+            enable_practice(user)
         messages.success(request, f"Welcome! {f'{organization.name} is ready. ' if organization else ''}We sent a confirmation link to {user.email}.")
         next_url = request.POST.get("next", "")
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
             return redirect(next_url)  # back to an organization invite, for example
-        return redirect("landing:dashboard")
+        return redirect(f'{reverse("practice:setup")}?welcome=1' if practising else "landing:dashboard")
     if request.method == "POST":
         for errors in form.errors.values():
             for error in errors:

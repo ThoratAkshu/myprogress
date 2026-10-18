@@ -1,0 +1,12 @@
+{% load ui practice_tags %}<article class="pq{% if attempt %} is-answered {% if attempt.correct %}is-right{% else %}is-wrong{% endif %}{% endif %}" data-question>
+<header class="pq-meta"><span class="pq-lang lang-{{ question.language }}">{{ question.get_language_display }}</span><span>{{ question.get_level_display }}</span><span>{{ question.topic }}</span><span class="pq-kind">{{ question.get_kind_display }}</span></header>
+<h2 class="pq-prompt">{{ question.prompt }}</h2>
+{% if question.code %}<div class="pq-code"><div class="pq-code-bar" aria-hidden="true"><i></i><i></i><i></i><span>{{ question.get_language_display }}</span></div><pre><code data-code="{{ question.language }}">{{ question.code }}</code></pre></div>{% endif %}
+<form method="post" class="pq-form">{% csrf_token %}
+<fieldset class="pq-choices"{% if attempt %} disabled{% endif %}><legend class="visually-hidden">Your answer</legend>
+{% for choice in question.choices %}<label class="pq-choice{% if attempt %}{% if forloop.counter0 == question.answer %} is-answer{% elif forloop.counter0 == attempt.chosen %} is-chosen{% endif %}{% endif %}" style="--i:{{ forloop.counter0 }}"><input type="radio" name="choice" value="{{ forloop.counter0 }}" required{% if attempt and forloop.counter0 == attempt.chosen %} checked{% endif %}><span class="pq-letter">{{ forloop.counter|letter }}</span>{% if question.kind == "output" %}<code class="pq-text">{{ choice }}</code>{% else %}<span class="pq-text">{{ choice }}</span>{% endif %}{% if attempt and forloop.counter0 == question.answer %}<span class="pq-mark">{% icon "check" 14 %}</span>{% endif %}</label>{% endfor %}
+</fieldset>
+{% if not attempt %}<button class="button primary pq-check">{% icon "terminal" 16 %} {{ check_label|default:"Check answer" }}</button>{% endif %}
+</form>
+{% if attempt %}<div class="pq-result" role="status"><b>{% if attempt.correct %}{% icon "check-circle" 18 %} Right!{% else %}{% icon "alert-circle" 18 %} Not quite. The answer is {{ question.answer|add:1|letter }}.{% endif %}</b><p>{{ question.explanation }}</p></div>{% endif %}
+</article>

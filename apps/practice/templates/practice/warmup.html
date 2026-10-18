@@ -1,0 +1,10 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Sign-in question{% endblock %}
+{% block body_class %}warmup-focus{% endblock %}
+{% block content %}<div class="warmup">
+<header class="warmup-intro"><span class="kicker">Sign-in warm-up</span><h1 data-type>{% if attempt %}{% if attempt.correct %}Nice. You're in.{% else %}Good try. You're in.{% endif %}{% else %}One question, then you're in.{% endif %}</h1>
+<p>{% if attempt %}Every sign-in brings a new question{% if practice %} in {{ practice.language_labels|join:", " }}{% endif %}.{% else %}Right or wrong, answering lets you in, and you'll see why.{% endif %}</p></header>
+{% include "practice/_question.html" with check_label="Answer and continue" %}
+{% if attempt %}<a class="button primary large warmup-go" href="{{ next_url }}" autofocus>Continue {% icon "chevron-right" 16 %}</a>
+{% else %}<form method="post" action="{% url 'landing:logout' %}" class="warmup-out">{% csrf_token %}<button class="org-link-button">Sign out instead</button></form>{% endif %}
+</div>{% endblock %}

@@ -30,9 +30,12 @@ def finish_sign_in(request, user, remember, next_url, how=""):
     record(request, "account.sign_in", f"signed in{how}", user=user)
     record_activity(user, "login", "signed_in", 1)
     request.session.set_expiry(60 * 60 * 24 * 30 if remember else 0)
-    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
-        return redirect(next_url)
-    return redirect("landing:dashboard")
+    if not (next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure())):
+        next_url = reverse("landing:dashboard")
+    from apps.practice.services import start_warmup
+    if start_warmup(request, user, next_url):  # developer mode: one question before going on
+        return redirect("practice:warmup")
+    return redirect(next_url)
 
 
 @never_cache

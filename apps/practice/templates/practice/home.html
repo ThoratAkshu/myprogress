@@ -1,0 +1,32 @@
+{% extends "landing/app_base.html" %}{% load ui practice_tags %}
+{% block title %}Practice{% endblock %}
+{% block content %}<div class="practice-page">
+<section class="dev-terminal" aria-label="Your practice">
+<div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>practice — {{ user.get_short_name|default:user.username|lower }}</span></div>
+<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>practice --lang {% for key in practice.languages %}{{ key }}{% if not forloop.last %},{% endif %}{% endfor %} --level {{ practice.level }}</span></p>
+<div class="dev-stats">
+<div><b data-count="{{ progress.answered }}">{{ progress.answered }}</b><small>answered</small></div>
+<div><b>{% if progress.accuracy is None %}–{% else %}<span data-count="{{ progress.accuracy }}">{{ progress.accuracy }}</span>%{% endif %}</b><small>right</small></div>
+<div><b data-count="{{ progress.streak }}">{{ progress.streak }}</b><small>day streak</small></div>
+<div><b data-count="{{ progress.today }}">{{ progress.today }}</b><small>today</small></div>
+</div>
+<div class="dev-terminal-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "zap" 16 %} Start a quick quiz</a><a class="button soft" href="{% url 'practice:setup' %}">{% icon "sliders" 16 %} Languages and level</a></div>
+</section>
+
+{% if level_up %}<form method="post" action="{% url 'practice:level' %}" class="card level-up">{% csrf_token %}<input type="hidden" name="level" value="{{ level_up }}"><span>{% icon "trending-up" 20 %}</span><p><b>You got 8 of your last 10 {{ practice.get_level_display }} questions right.</b> Ready for {{ levels|item:level_up }} questions?</p><button class="button primary">Move up</button></form>{% endif %}
+
+<div class="practice-grid">
+<section class="card practice-langs"><h2>{% icon "code" 18 %} Your languages</h2>
+{% for row in progress.languages %}<div class="lang-row"><span class="pq-lang lang-{{ row.key }}">{{ row.name }}</span><div class="lang-bar" title="{{ row.seen }} of {{ row.available }} questions seen"><i style="--w:{{ row.percent }}%"></i></div><small>{{ row.seen }}/{{ row.available }} seen{% if row.accuracy is not None %} · {{ row.accuracy }}% right{% endif %}</small></div>{% endfor %}
+<p class="muted small">New questions come first. Once you've seen them all, the ones you missed come back.</p></section>
+
+<section class="card practice-anywhere"><h2>{% icon "terminal" 18 %} Learn anywhere</h2>
+<ul><li><b>At sign-in</b><span>A new question waits each time you sign in.</span></li><li><b>On every page</b><span>Press <kbd>Practice</kbd> at the bottom right for a quick question without leaving the page.</span></li><li><b>Here</b><span>Five-question quizzes, with the reason behind every answer.</span></li></ul></section>
+</div>
+
+<section class="card practice-recent"><h2>{% icon "activity" 18 %} Recent answers</h2>
+{% for attempt in recent %}<details class="recent-row"><summary><span class="recent-mark {% if attempt.correct %}is-right{% else %}is-wrong{% endif %}">{% if attempt.correct %}{% icon "check" 14 %}{% else %}{% icon "x" 14 %}{% endif %}</span><span class="recent-text"><b>{{ attempt.question.prompt }}</b><small>{{ attempt.question.get_language_display }} · {{ attempt.question.topic }} · {{ attempt.get_context_display }} · {{ attempt.created_at|ago }}</small></span></summary>
+{% if attempt.question.code %}<pre class="recent-code"><code data-code="{{ attempt.question.language }}">{{ attempt.question.code }}</code></pre>{% endif %}
+<p><b>{{ attempt.question.answer|add:1|letter }}. {{ attempt.question.choices|item:attempt.question.answer }}</b>{% if not attempt.correct %} (you chose {{ attempt.chosen|add:1|letter }}){% endif %}</p><p class="muted">{{ attempt.question.explanation }}</p></details>
+{% empty %}<p class="muted">Nothing yet. Start a quiz, or press Practice on any page.</p>{% endfor %}</section>
+</div>{% endblock %}

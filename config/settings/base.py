@@ -44,6 +44,7 @@ LOCAL_APPS = [
     "apps.earnings",
     "apps.organizations",
     "apps.companies",
+    "apps.practice",
 ]
 INSTALLED_APPS = (
     DJANGO_APPS
@@ -65,6 +66,7 @@ MIDDLEWARE = [
     "apps.accounts.middleware.RoleAccessMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.organizations.middleware.OrganizationAccessMiddleware",
+    "apps.practice.middleware.WarmupMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
 # -----------------------------------------------------------------------------

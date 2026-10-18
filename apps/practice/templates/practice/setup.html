@@ -1,0 +1,27 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}Developer mode{% endblock %}
+{% block content %}<div class="practice-page setup">
+<section class="dev-terminal setup-hero" aria-label="Developer mode">
+<div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>developer-mode</span></div>
+<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>{% if welcome %}welcome --to developer-mode{% elif is_on %}developer-mode --status{% else %}developer-mode --on{% endif %}</span></p>
+<h1>{% if welcome %}Welcome to developer mode{% elif is_on %}Developer mode is on{% else %}Turn on developer mode{% endif %}</h1>
+<p>Practise in the languages you choose, at your level, everywhere on MyProgress: a question at every sign-in, a quick question on any page, and quizzes with the reason behind every answer.</p>
+</section>
+
+<form method="post" class="setup-form">{% csrf_token %}
+<section class="card setup-step"><h2><span class="step-no">1</span> Choose your languages</h2><p class="muted">Pick one or more. You can change them any time.</p>
+<div class="lang-choices">{% for language in languages %}<label class="lang-choice"><input type="checkbox" name="languages" value="{{ language.key }}"{% if language.checked %} checked{% endif %}><span class="lang-badge lang-{{ language.key }}">{% if language.key == "python" %}Py{% elif language.key == "javascript" %}JS{% elif language.key == "java" %}Jv{% else %}C++{% endif %}</span><span class="lang-text"><b>{{ language.name }}</b><small>{{ language.note }}</small><small class="lang-count">{{ language.count }} questions</small></span><span class="lang-tick">{% icon "check" 14 %}</span></label>{% endfor %}</div></section>
+
+<section class="card setup-step"><h2><span class="step-no">2</span> Choose your level</h2><p class="muted">Questions start here. After 8 right out of 10, we'll suggest moving up.</p>
+<div class="level-choices">{% for level in levels %}<label class="level-choice"><input type="radio" name="level" value="{{ level.key }}"{% if level.checked %} checked{% endif %}><span class="level-bars" aria-hidden="true">{% for _ in "123" %}<i class="{% if forloop.counter <= forloop.parentloop.counter %}is-on{% endif %}"></i>{% endfor %}</span><b>{{ level.name }}</b><small>{{ level.note }}</small></label>{% endfor %}</div></section>
+
+<section class="card setup-step how-it-works"><h2><span class="step-no">3</span> How it works</h2>
+<ol class="how-steps"><li style="--i:0"><span>{% icon "shield" 18 %}</span><div><b>A question at every sign-in</b><small>After your password, one new question. Answer it, right or wrong, to go on; you'll see the reason either way.</small></div></li>
+<li style="--i:1"><span>{% icon "terminal" 18 %}</span><div><b>Practice on any page</b><small>The Practice button at the bottom right opens a quick question without leaving what you're doing.</small></div></li>
+<li style="--i:2"><span>{% icon "zap" 18 %}</span><div><b>Quizzes in the Practice tab</b><small>Five questions at a time. New questions come first; ones you missed come back later.</small></div></li></ol></section>
+
+<div class="setup-actions"><button class="button primary large">{% if is_on %}Save{% else %}{% icon "terminal" 16 %} Turn on and start a quiz{% endif %}</button>{% if is_on %}<a class="button soft" href="{% url 'practice:home' %}">Back to Practice</a>{% endif %}</div>
+</form>
+{% if is_on %}<form method="post" class="setup-off">{% csrf_token %}<input type="hidden" name="action" value="off"><button class="org-link-button">Turn off developer mode</button><small class="muted">No more sign-in questions or Practice button. Your answers are kept.</small></form>{% endif %}
+</div>{% endblock %}
+{% block scripts %}{% if not is_on %}<script src="{% static 'landing/js/practice.js' %}"></script>{% endif %}{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Quick quiz{% endblock %}
+{% block content %}<div class="practice-page quiz">
+{% if finished %}<section class="card quiz-done"><div class="quiz-ring" style="--score:{% widthratio right total 100 %}"><b>{{ right }}<small>/{{ total }}</small></b></div>
+<h1 data-type>{% if right == total %}Perfect run.{% elif right >= 3 %}Solid work.{% else %}Every miss is a lesson.{% endif %}</h1>
+<p class="muted">{% if total %}You got {{ right }} of {{ total }} right. The ones you missed come back later, so you can try them again.{% else %}There are no questions for your languages and level yet.{% endif %}</p>
+<div class="quiz-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "rotate-ccw" 16 %} Another quiz</a><a class="button soft" href="{% url 'practice:home' %}">Back to Practice</a></div></section>
+{% else %}<header class="quiz-head"><a class="back-link" href="{% url 'practice:home' %}">{% icon "chevron-left" 16 %} Practice</a><span class="quiz-count">Question {{ number }} of {{ total }}</span></header>
+<div class="quiz-bar" aria-hidden="true"><i style="width:{{ percent }}%"></i></div>
+{% include "practice/_question.html" %}
+{% if attempt %}<a class="button primary large quiz-next" href="{% url 'practice:quiz' %}?step=next" autofocus>{% if last %}See your score{% else %}Next question{% endif %} {% icon "chevron-right" 16 %}</a>{% endif %}
+{% endif %}</div>{% endblock %}
