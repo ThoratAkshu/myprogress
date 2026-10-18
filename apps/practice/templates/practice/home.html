@@ -11,7 +11,7 @@
 <div><b data-count="{{ progress.streak }}">{{ progress.streak }}</b><small>day streak</small></div>
 <div><b data-count="{{ progress.today }}">{{ progress.today }}</b><small>today</small></div>
 </div>
-<div class="dev-terminal-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "zap" 16 %} Start a quick quiz</a><a class="button soft" href="{% url 'practice:lab' %}">{% icon "terminal" 16 %} Code lab</a><a class="button soft" href="{% url 'practice:setup' %}">{% icon "sliders" 16 %} Languages and level</a></div>
+<div class="dev-terminal-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "zap" 16 %} Start a quick quiz</a><a class="button soft" href="{% url 'practice:problems' %}">{% icon "target" 16 %} Problems</a><a class="button soft" href="{% url 'practice:lab' %}">{% icon "terminal" 16 %} Code lab</a><a class="button soft" href="{% url 'practice:setup' %}">{% icon "sliders" 16 %} Languages and level</a></div>
 </section>
 
 {% if level_up %}<form method="post" action="{% url 'practice:level' %}" class="card level-up">{% csrf_token %}<input type="hidden" name="level" value="{{ level_up }}"><span>{% icon "trending-up" 20 %}</span><p><b>You got 8 of your last 10 {{ practice.get_level_display }} questions right.</b> Ready for {{ levels|item:level_up }} questions?</p><button class="button primary">Move up</button></form>{% endif %}

@@ -60,14 +60,18 @@ class Attempt(models.Model):
         ordering = ["-created_at", "-pk"]
 
 
-class ChallengeSolve(models.Model):
-    """A code-lab challenge solved: every test passed in the person's browser. helped: after "Show me how"."""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="challenge_solves")
-    key = models.SlugField(max_length=80)
+class Submission(models.Model):
+    """A problem submitted: every test (hidden ones too) ran in the person's browser, and this is how it went."""
+    STATUSES = [("accepted", "Accepted"), ("wrong", "Wrong Answer"), ("error", "Runtime Error"), ("limit", "Time Limit Exceeded"), ("compile", "Compile Error")]
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="submissions")
+    slug = models.SlugField(max_length=80, db_index=True)
     language = models.CharField(max_length=20, choices=LANGUAGES)
     code = models.TextField()
-    helped = models.BooleanField(default=False)
-    solved_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=STATUSES)
+    passed = models.PositiveSmallIntegerField(default=0)
+    total = models.PositiveSmallIntegerField(default=0)
+    runtime_ms = models.FloatField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["user", "key"], name="challenge_solved_once")]
+        ordering = ["-created_at", "-pk"]

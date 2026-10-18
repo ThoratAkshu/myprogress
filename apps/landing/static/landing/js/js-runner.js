@@ -156,6 +156,18 @@
       return text.length > 80 ? `${text.slice(0, 77)}...` : text;
     }
     const canonical = value => JSON.stringify(value, (key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => (a < b ? -1 : 1))) : item);
+    const asJson = value => { try { return JSON.parse(JSON.stringify(value === undefined ? null : value)); } catch { return undefined; } };
+    function same(got, expected, compare) {  // answers are compared as JSON, like the Python runner does
+      const value = asJson(got);
+      if (value === undefined || (got === undefined && expected !== null)) return false;
+      if (compare === "float") return typeof value === "number" && Math.abs(value - expected) < 1e-5;
+      if (compare === "sorted") return Array.isArray(value) && JSON.stringify(value.map(canonical).sort()) === JSON.stringify(expected.map(canonical).sort());
+      if (compare === "nested") {
+        const key = groups => groups.map(group => JSON.stringify(group.map(canonical).sort())).sort();
+        return Array.isArray(value) && value.every(Array.isArray) && JSON.stringify(key(value)) === JSON.stringify(key(expected));
+      }
+      return canonical(value) === canonical(expected);
+    }
     addEventListener("message", async event => {
       const { id, code, trace, limit, tests } = event.data;
       const steps = [];
@@ -176,15 +188,30 @@
       const __v = get => { try { return get(); } catch { return HIDDEN; } };
       const __in = name => { stack.push(name); };
       const __ex = () => { stack.pop(); };
+      const __missing = name => { throw new Error(`There's no function called ${name}. Keep the name the starter code gave it.`); };
+      const __t = call => {  // one test: its answer, what it printed, and how long it took
+        const before = printed.length;
+        const started = performance.now();
+        try {
+          const value = call();
+          return { ok: true, value, out: printed.slice(before), ms: performance.now() - started };
+        } catch (failure) {
+          if (failure instanceof Stop) throw failure;
+          return { ok: false, value: `${failure?.name || "Error"}: ${failure?.message ?? failure}`, out: printed.slice(before), ms: performance.now() - started, line: current };
+        }
+      };
       let error = null;
       let results = [];
       try {
-        const outcome = new Function("__s", "__v", "__in", "__ex", "console", code)(__s, __v, __in, __ex, fakeConsole);
+        const outcome = new Function("__s", "__v", "__in", "__ex", "__t", "__missing", "console", code)(__s, __v, __in, __ex, __t, __missing, fakeConsole);
         results = (tests || []).map((test, index) => {
           const entry = outcome[index];
-          let expected;
-          try { expected = JSON.parse(test.expected); } catch { expected = test.expected; }
-          return { call: test.call, expected: test.expected, got: entry.ok ? show(entry.value) : entry.value, passed: entry.ok && canonical(entry.value) === canonical(expected) };
+          const result = { passed: null, stdout: entry.out.slice(0, 4000), ms: Math.round(entry.ms * 100) / 100 };
+          if (!entry.ok) return { ...result, error: entry.value, line: entry.line, passed: "expected" in test ? false : null };
+          const value = asJson(entry.value);
+          result.got = value === undefined ? show(entry.value) : entry.value === undefined ? "undefined" : JSON.stringify(value);
+          if ("expected" in test) result.passed = same(entry.value, test.expected, test.compare || "exact");
+          return result;
         });
       } catch (failure) {
         error = failure instanceof Stop ? { line: null, message: `Stopped after ${limit.toLocaleString("en")} steps. Is there a loop that never ends?` }
@@ -227,7 +254,8 @@
     } catch (failure) {
       return { output: "", steps: [], tests: [], error: { line: failure.loc?.line ?? null, message: `SyntaxError: ${String(failure.message).replace(/ \(\d+:\d+\)$/, "")}` } };
     }
-    if (tests.length) code += `\n;return [${tests.map(test => `(()=>{try{return {ok:true,value:(${test.call})}}catch(e){return {ok:false,value:String(e)}}})()`).join(",")}];`;
+    // Each test calls the function with its JSON arguments; typeof is safe even when the function was renamed away.
+    if (tests.length) code += `\n;return [${tests.map(test => `__t(()=>(typeof ${test.fn}==="function"?${test.fn}:__missing(${JSON.stringify(test.fn)}))(...${JSON.stringify(test.args)}))`).join(",")}];`;
     await sandbox();
     return new Promise(resolve => {
       const id = ++next;

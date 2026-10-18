@@ -1,0 +1,6 @@
+<div class="dry-controls"><button type="button" data-dry-first title="First step" aria-label="First step">⏮</button><button type="button" data-dry-back title="Back" aria-label="Back">◀</button><button type="button" class="is-play" data-dry-play>Play</button><button type="button" data-dry-next title="Next step" aria-label="Next step">▶</button>
+<input type="range" min="0" max="0" value="0" data-dry-range aria-label="Step"><span class="dry-count" data-dry-count></span>
+<select data-dry-speed aria-label="Speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><button type="button" class="dry-close" data-dry-close>Stop dry run</button></div>
+<p class="dry-say" data-dry-say>{{ hint }}</p>
+<div class="dry-grid"><section><h4>Variables</h4><table class="dry-vars"><tbody data-dry-vars></tbody></table></section>
+<section><h4>Call stack</h4><ol class="dry-stack" data-dry-stack></ol><h4>Output so far</h4><pre class="dry-out" data-dry-out></pre></section></div>

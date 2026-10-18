@@ -4,19 +4,15 @@
 {% include "practice/_tabs.html" with tab="lab" %}
 <section class="dev-terminal" aria-label="Code lab">
 <div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>code-lab</span></div>
-<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>run --step-by-step {% if chosen == "python" %}solution.py{% else %}solution.js{% endif %}</span></p>
+<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>run --step-by-step {% if chosen == "python" %}walkthrough.py{% else %}walkthrough.js{% endif %}</span></p>
 <h1>Code lab</h1>
-<p>Write code and run it right here in your browser. Dry run any program to watch it one line at a time: the line about to run, every variable, the call stack and the output.</p>
-<div class="dev-stats lab-stats"><div><b>{{ solved_count }}<small>/{{ total }}</small></b><small>challenges solved</small></div><div><b>{{ walkthroughs|length }}</b><small>walkthroughs</small></div></div>
+<p>Watch a program type itself in, then run it one line at a time: the line about to run, every variable, the call stack and the output. Change it and run it again. To write your own solutions against tests, open <a href="{% url 'practice:problems' %}">Problems</a>.</p>
+<div class="dev-stats lab-stats"><div><b>{{ walkthroughs|length }}</b><small>walkthroughs</small></div></div>
 </section>
 <nav class="lab-langs" aria-label="Language">{% for key, label, mine in languages %}<a href="?language={{ key }}"{% if key == chosen %} aria-current="page"{% endif %}><span class="pq-lang lang-{{ key }}">{{ label }}</span>{% if not mine %}<small>not in your languages</small>{% endif %}</a>{% endfor %}</nav>
 {% if not_runnable %}<p class="muted small lab-note">{{ not_runnable|join:" and " }} can't run in the browser here yet; practise {% if not_runnable|length == 1 %}it{% else %}them{% endif %} in Questions.</p>{% endif %}
 
-<section class="card lab-section"><h2>{% icon "target" 18 %} Challenges</h2><p class="muted">Write the function, then run the tests. Stuck? <b>Show me how</b> types in a worked solution and steps through it.</p>
-{% for level, label, items in levels %}<h3 class="lab-level">{{ label }}</h3><div class="lab-list">{% for item in items %}<a class="lab-item{% if item.solved %} is-solved{% endif %}" href="{% url 'practice:challenge' item.key %}"><span class="lab-check" aria-hidden="true">{% icon "check" 14 %}</span><span class="lab-item-text"><b>{{ item.title }}</b><small>{{ item.topic }} · {{ item.tests|length }} tests{% if item.solved %} · solved{% if item.solved.helped %} with help{% endif %}{% endif %}</small></span>{% icon "chevron-right" 16 %}</a>{% endfor %}</div>{% endfor %}
-</section>
-
-<section class="card lab-section"><h2>{% icon "play" 18 %} Walkthroughs</h2><p class="muted">Watch a program type itself in, then run step by step with every variable on screen.</p>
+<section class="card lab-section"><h2>{% icon "play" 18 %} Walkthroughs</h2><p class="muted">Each one plays on its own when you open it. Pause it, step back, or change the code and dry-run your version.</p>
 <div class="lab-walks">{% for item in walkthroughs %}<a class="lab-walk" href="{% url 'practice:walkthrough' item.key %}"><span class="pq-meta"><span>{{ item.level|title }}</span><span>{{ item.topic }}</span></span><b>{{ item.title }}</b><pre><code data-code="{{ item.language }}">{{ item.preview }}</code></pre></a>{% endfor %}</div>
 </section>
 </div>{% endblock %}

@@ -1,4 +1,4 @@
-"""The code lab: its content is right, the Python runner traces and tests code, and solves are recorded."""
+"""The code lab: its walkthroughs run, the Python runner traces code and checks problem tests, and the pages open."""
 import importlib.util
 import json
 from pathlib import Path
@@ -7,7 +7,6 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from . import lab, services
-from .models import ChallengeSolve
 from .tests import make_user
 
 spec = importlib.util.spec_from_file_location("python_runner", Path(settings.BASE_DIR) / "apps/landing/static/landing/js/python_runner.py")
@@ -22,16 +21,6 @@ def run(code, **options):
 
 
 class ContentTests(TestCase):
-    def test_every_python_solution_passes_and_every_starter_fails(self):
-        python = [item for item in lab.CHALLENGES if item["language"] == "python"]
-        self.assertEqual(len(python), 6)
-        for item in python:
-            with self.subTest(item["key"]):
-                solved = run(item["solution"], tests=item["tests"])
-                self.assertIsNone(solved["error"])
-                self.assertTrue(all(test["passed"] for test in solved["tests"]), solved["tests"])
-                self.assertFalse(all(test["passed"] for test in run(item["starter"], tests=item["tests"])["tests"]))
-
     def test_python_walkthroughs_run_cleanly_in_a_few_steps(self):
         for item in lab.WALKTHROUGHS:
             if item["language"] == "python":
@@ -42,12 +31,11 @@ class ContentTests(TestCase):
                     self.assertLess(len(result["steps"]), 200)
                     self.assertTrue(result["steps"][-1]["done"])
 
-    def test_every_item_is_complete_and_both_languages_match(self):
-        for item in lab.CHALLENGES + lab.WALKTHROUGHS:
+    def test_every_walkthrough_is_complete_in_both_languages(self):
+        for item in lab.WALKTHROUGHS:
             self.assertIn(item["language"], lab.RUNNABLE)
             self.assertTrue(item["prompt"] and item["title"])
         for language in lab.RUNNABLE:
-            self.assertEqual(len([item for item in lab.CHALLENGES if item["language"] == language]), 6)
             self.assertEqual(len([item for item in lab.WALKTHROUGHS if item["language"] == language]), 6)
 
 
@@ -67,8 +55,29 @@ class RunnerTests(TestCase):
         self.assertEqual(run("def f(:\n    pass\n")["error"]["line"], 1)
         self.assertIn("Stopped after 500 steps", run("while True:\n    pass\n", limit=500)["error"]["message"])
         self.assertIn("input() can't ask you anything here", run("name = input()\n")["error"]["message"])
-        tests = run("def double(n):\n    return n * 3\n", tests=[{"call": "double(2)", "expected": "4"}, {"call": "double('x')", "expected": "'xx'"}])["tests"]
-        self.assertEqual([(test["got"], test["passed"]) for test in tests], [("6", False), ("'xxx'", False)])
+
+    def test_problem_tests_compare_answers_as_json(self):
+        code = "def pair(a, b):\n    print('checking', a)\n    return (a, b)\n\ndef half(n):\n    return n / 2\n\ndef flag(n):\n    return 1 if n else 0\n"
+        tests = run(code, tests=[
+            {"fn": "pair", "args": [0, 1], "expected": [0, 1]},  # a tuple is a JSON list
+            {"fn": "pair", "args": [1, 0], "expected": [0, 1], "compare": "sorted"},
+            {"fn": "pair", "args": [1, 0], "expected": [0, 1]},
+            {"fn": "half", "args": [1], "expected": 0.5000001, "compare": "float"},
+            {"fn": "flag", "args": [1], "expected": True},  # 1 isn't true
+            {"fn": "half", "args": ["x"], "expected": 1},
+            {"fn": "missing", "args": [], "expected": 1},
+            {"fn": "half", "args": [3]},  # your own case: no answer to check
+        ])["tests"]
+        self.assertEqual([test["passed"] for test in tests], [True, True, False, True, False, False, False, None])
+        self.assertEqual((tests[0]["got"], tests[0]["stdout"]), ("[0, 1]", "checking 0\n"))
+        self.assertIn("TypeError", tests[5]["error"])
+        self.assertEqual(tests[5]["line"], 6)
+        self.assertEqual(tests[6]["error"], "NameError: There's no function called missing. Keep the name the starter code gave it.")
+        self.assertEqual(tests[7]["got"], "1.5")
+        nested = run("def groups():\n    return [['b', 'a'], ['c']]\n", tests=[{"fn": "groups", "args": [], "expected": [["c"], ["a", "b"]], "compare": "nested"}])
+        self.assertTrue(nested["tests"][0]["passed"])
+        args = run("def grow(items):\n    items.append(1)\n    return len(items)\n", tests=[{"fn": "grow", "args": [[]], "expected": 1}] * 2)
+        self.assertEqual([test["passed"] for test in args["tests"]], [True, True])  # each test gets fresh arguments
 
 
 class LabPageTests(TestCase):
@@ -78,53 +87,29 @@ class LabPageTests(TestCase):
         self.user = make_user("dev@example.com", languages=["javascript", "java"])
         self.client.force_login(self.user)
 
-    def test_the_lab_lists_challenges_and_walkthroughs_in_your_language(self):
+    def test_the_lab_lists_walkthroughs_in_your_language(self):
         page = self.client.get(reverse("practice:lab"))
-        self.assertContains(page, "Reverse the words")
-        self.assertContains(page, 'href="/practice/code/js-sum-evens/"')
         self.assertContains(page, 'href="/practice/watch/js-factorial/"')
         self.assertContains(page, "Java can't run in the browser here yet")
-        self.assertContains(self.client.get(reverse("practice:lab"), {"language": "python"}), 'href="/practice/code/py-sum-evens/"')
-        self.assertEqual(self.client.get(reverse("practice:challenge", args=["nope"])).status_code, 404)
-        self.assertEqual(self.client.get(reverse("practice:challenge", args=["py-swap"])).status_code, 404)  # a walkthrough, not a challenge
+        self.assertContains(page, reverse("practice:problems"))
+        self.assertContains(self.client.get(reverse("practice:lab"), {"language": "python"}), 'href="/practice/watch/py-factorial/"')
+        self.assertEqual(self.client.get(reverse("practice:walkthrough", args=["nope"])).status_code, 404)
 
-    def test_a_challenge_is_solved_with_or_without_help(self):
-        page = self.client.get(reverse("practice:challenge", args=["py-two-sum"]))
-        self.assertContains(page, "Two numbers that add up")
-        data = page.context["data"]
-        self.assertEqual((data["starter"], data["tests"][0]["call"]), (lab.CHALLENGE_BY_KEY["py-two-sum"]["starter"], "two_sum([2, 7, 11, 15], 9)"))
-        self.assertNotIn("solution", data)  # only on request
-        self.assertNotContains(page, "seen[target - n]")
-        solved = reverse("practice:solved", args=["py-two-sum"])
-        self.client.post(solved, {"code": "def two_sum(nums, target): ..."})
-        self.assertFalse(ChallengeSolve.objects.get(user=self.user, key="py-two-sum").helped)
-        self.assertEqual(self.client.get(reverse("practice:solution", args=["py-sum-evens"])).json()["solution"], lab.CHALLENGE_BY_KEY["py-sum-evens"]["solution"])
-        response = self.client.post(reverse("practice:solved", args=["py-sum-evens"]), {"code": "x"}).json()
-        self.assertEqual((response["solved"], response["helped"]), (2, True))
-        self.assertContains(self.client.get(reverse("practice:lab"), {"language": "python"}), "solved with help")
-        self.client.post(reverse("practice:solved", args=["py-sum-evens"]), {"code": "y"})
-        self.assertTrue(ChallengeSolve.objects.get(key="py-sum-evens").helped)  # still after help in this session
-        session = self.client.session
-        session["practice_lab_helped"] = []
-        session.save()
-        self.client.post(reverse("practice:solved", args=["py-sum-evens"]), {"code": "z"})
-        solve = ChallengeSolve.objects.get(key="py-sum-evens")
-        self.assertEqual((solve.helped, solve.code), (False, "z"))  # solved again on their own
-        self.assertEqual(self.client.post(reverse("practice:solved", args=["py-swap"]), {"code": "x"}).status_code, 404)
+    def test_old_challenge_links_go_to_the_problem_they_became(self):
+        self.assertRedirects(self.client.get("/practice/code/js-two-sum/"), "/practice/problems/two-sum/?language=javascript", status_code=301)
+        self.assertRedirects(self.client.get("/practice/code/py-sum-evens/"), "/practice/problems/sum-of-even-numbers/?language=python", status_code=301)
+        self.assertRedirects(self.client.get("/practice/code/py-char-counts/"), "/practice/problems/", status_code=301)
 
-    def test_every_challenge_and_walkthrough_page_opens(self):
-        for item in lab.CHALLENGES:
-            self.assertContains(self.client.get(reverse("practice:challenge", args=[item["key"]])), item["title"])
+    def test_every_walkthrough_page_opens(self):
         for item in lab.WALKTHROUGHS:
             self.assertContains(self.client.get(reverse("practice:walkthrough", args=[item["key"]])), item["title"])
-        self.assertEqual(self.client.get(reverse("practice:challenge", args=["py-binary-search"])).context["mode"], "challenge")  # shares its key with a walkthrough
-        self.assertEqual(self.client.get(reverse("practice:walkthrough", args=["py-binary-search"])).context["mode"], "walkthrough")
 
     def test_walkthroughs_and_who_can_use_the_lab(self):
         page = self.client.get(reverse("practice:walkthrough", args=["py-bubble-sort"]))
         self.assertEqual(page.context["data"]["code"], lab.WALKTHROUGH_BY_KEY["py-bubble-sort"]["code"])
         self.assertContains(page, "python-worker.js")
+        self.assertContains(page, "lab-core.js")
         self.assertContains(self.client.get(reverse("practice:walkthrough", args=["js-bubble-sort"])), "acorn@8.12.1")
         services.disable(self.user)
         self.assertRedirects(self.client.get(reverse("practice:lab")), reverse("practice:setup"))
-        self.assertEqual(self.client.get(reverse("practice:solution", args=["py-sum-evens"])).status_code, 404)
+        self.assertRedirects(self.client.get(reverse("practice:walkthrough", args=["py-bubble-sort"])), reverse("practice:setup"))

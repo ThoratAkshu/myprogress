@@ -2085,18 +2085,10 @@ body.ide .dev-stats b small{color:var(--term-muted)}
 body.ide .lab-langs a{border:1px solid var(--line);background:var(--ide-panel);color:var(--ink)}
 body.ide .lab-langs a[aria-current]{border-color:var(--violet)}
 body.ide .lab-langs small{color:var(--muted)}
-body.ide .lab-level{color:var(--muted)}
-body.ide .lab-item{border:1px solid var(--line);color:var(--ink)}
-body.ide .lab-item:hover{border-color:var(--violet)}
-body.ide .lab-check{border:1px solid var(--line);color:transparent}
-body.ide .lab-item.is-solved .lab-check{border-color:var(--right);background:var(--right);color:#fff}
-body.ide .lab-item-text small{color:var(--muted)}
 body.ide .lab-walk{border:1px solid var(--line);color:var(--ink)}
 body.ide .lab-walk:hover{border-color:var(--violet)}
 body.ide .lab-walk pre{background:var(--term-bg);color:var(--term-ink)}
-body.ide .lab-solved{background:var(--right);color:#fff}
 body.ide .lab-brief h3{color:var(--muted)}
-body.ide .lab-examples code{background:var(--ide-panel)}
 body.ide .lab-editor-card{border:1px solid var(--term-line);background:var(--term-bg)}
 body.ide .lab-toolbar{border-bottom:1px solid var(--term-line);background:#0f1a30}
 body.ide .lab-file{color:var(--term-muted)}
@@ -2125,15 +2117,6 @@ body.ide .lab-tabs button[aria-selected=true]{border-bottom-color:var(--violet);
 body.ide .lab-output{background:var(--term-bg);color:var(--term-ink)}
 body.ide .lab-error{color:#fca5a5}
 body.ide .lab-quiet{color:var(--term-muted)}
-body.ide .lab-tests-summary.is-pass{color:var(--right)}
-body.ide .lab-tests-summary.is-fail{color:var(--wrong)}
-body.ide .lab-tests li{border:1px solid var(--line)}
-body.ide .lab-tests li.is-pass{border-color:hsla(141,60%,55%,.35);background:var(--ide-panel)}
-body.ide .lab-tests li.is-fail{border-color:hsla(0,60%,55%,.35);background:var(--ide-panel)}
-body.ide .lab-test-mark{color:#fff}
-body.ide .is-pass .lab-test-mark{background:var(--right)}
-body.ide .is-fail .lab-test-mark{background:var(--wrong)}
-body.ide .lab-tests small{color:var(--muted)}
 body.ide .dry-controls button{border:1px solid var(--line);background:var(--ide-panel);color:var(--ink)}
 body.ide .dry-controls .is-play{border-color:var(--violet);background:var(--ide-accent-strong);color:#fff}
 body.ide .dry-count{color:var(--muted)}
@@ -2148,3 +2131,88 @@ body.ide .dry-vars tr.is-new th,body.ide .dry-vars tr.is-new td{background:var(-
 body.ide .dry-stack li{background:var(--ide-panel)}
 body.ide .dry-stack li.is-top{background:var(--ide-accent-strong);color:#fff}
 body.ide .dry-out{background:var(--term-bg);color:var(--term-ink)}
+body.ide .lab-to-problems{color:var(--violet)}
+body.ide .diff-easy{background:hsla(149,70%,60%,.13);color:hsl(163,90%,72%)}
+body.ide .diff-medium{background:hsla(48,70%,60%,.13);color:hsl(26,90%,72%)}
+body.ide .diff-hard{background:hsla(0,70%,60%,.13);color:hsl(0,84%,72%)}
+body.ide .problems-ring{background:conic-gradient(var(--right) calc(var(--done) * 1%),#e2e8f0 0)}
+body.ide .problems-ring-core{background:var(--ide-panel)}
+body.ide .problems-ring b small{color:var(--muted)}
+body.ide .problems-ring-core span{color:var(--muted)}
+body.ide .problems-bars b small{color:var(--muted)}
+body.ide .problems-bars .bar{background:var(--ide-panel-2)}
+body.ide .diff-bar-easy i{background:#10b981}
+body.ide .diff-bar-medium i{background:#f59e0b}
+body.ide .diff-bar-hard i{background:#ef4444}
+body.ide .problem-today{border-left:4px solid var(--violet)!important;color:var(--ink)}
+body.ide .problem-today-tag{color:var(--violet)}
+body.ide .problem-today-name small{color:var(--muted)}
+body.ide .problem-today-done{color:var(--right)}
+body.ide .problems-filters select,body.ide .problems-search input{border:1px solid var(--line);background:var(--ide-panel);color:var(--ink)}
+body.ide .problems-search{border:1px solid var(--line);background:var(--ide-panel);color:var(--muted)}
+body.ide .problems-search input{border:0;background:transparent}
+body.ide .problems-search:focus-within{border-color:var(--violet)}
+body.ide .problems-table th{border-bottom:1px solid var(--line);color:var(--muted)}
+body.ide .problems-table td{border-bottom:1px solid var(--line)}
+body.ide .problems-table tr:last-child td{border-bottom:0}
+body.ide .problems-table tbody tr:nth-child(even){background:var(--ide-panel)}
+body.ide .problems-table tbody tr:hover{background:var(--ide-panel)}
+body.ide .state-solved{background:var(--right);color:#fff}
+body.ide .state-tried{border:2px solid #f59e0b}
+body.ide .problems-name{color:var(--ink)}
+body.ide .problems-name:hover{color:var(--violet)}
+body.ide .problems-topics{color:var(--muted)}
+body.ide .problems-empty{color:var(--muted)}
+body.ide .problem-step{color:var(--muted)}
+body.ide .problem-step a{border:1px solid var(--line);background:var(--ide-panel);color:var(--ink)}
+body.ide .problem-step a:hover{border-color:var(--violet)}
+body.ide .problem-count{background:var(--ide-panel-2)}
+body.ide .problem-solved{color:var(--right)}
+body.ide .problem-topic{background:var(--ide-panel);color:var(--muted)}
+body.ide .problem-topic:hover{color:var(--ink)}
+body.ide .problem-text code,body.ide .problem-hint code,body.ide .problem-constraints code{border:1px solid var(--line);background:var(--ide-panel)}
+body.ide .problem-example pre{border-left:3px solid hsla(213,60%,55%,.35);background:var(--ide-panel);color:var(--ink)}
+body.ide .problem-hint{border:1px solid var(--line)}
+body.ide .problem-hint summary{color:var(--muted)}
+body.ide .problem-hint[open] summary{color:var(--ink)}
+body.ide .problem-stats{border-top:1px solid var(--line)}
+body.ide .problem-stats small{color:var(--muted)}
+body.ide .problem-complexity{color:var(--muted)}
+body.ide .problem-solution{border:1px solid var(--line)}
+body.ide .problem-code{background:var(--term-bg);color:var(--term-ink)}
+body.ide .problem-subs th{border-bottom:1px solid var(--line);color:var(--muted)}
+body.ide .problem-subs td{border-bottom:1px solid var(--line)}
+body.ide .problem-subs td small{color:var(--muted)}
+body.ide .sub-status{border:0;background:none}
+body.ide .sub-status.is-accepted{color:var(--right)}
+body.ide .sub-status.is-wrong,body.ide .sub-status.is-error,body.ide .sub-status.is-limit,body.ide .sub-status.is-compile{color:var(--wrong)}
+body.ide .sub-detail-head span{color:var(--muted)}
+body.ide .problem-lang select{border:1px solid #334155;background:#16223a;color:#e2e8f0}
+body.ide .lab-button.is-confirming{border-color:#f87171;color:#fecaca}
+body.ide .case-pick{background:var(--ide-panel)}
+body.ide .case-pick.is-current{background:var(--ide-panel-2)}
+body.ide .case-tab{border:0;background:var(--ide-panel);color:var(--muted)}
+body.ide .case-pick .case-tab{background:transparent}
+body.ide .case-tab[aria-pressed=true]{background:var(--ide-panel-2);color:var(--ink)}
+body.ide .case-tab.is-pass::before{background:var(--right)}
+body.ide .case-tab.is-fail::before{background:var(--wrong)}
+body.ide .case-tab.is-own::before{background:#94a3b8}
+body.ide .case-remove{border:0;background:none;color:var(--muted)}
+body.ide .case-remove:hover{color:var(--wrong)}
+body.ide .case-add{border:1px dashed var(--line);background:none;color:var(--muted)}
+body.ide .case-add:hover{border-color:var(--violet);color:var(--violet)}
+body.ide .case-field span{color:var(--muted)}
+body.ide .lab .case-input{border:1px solid var(--line);background:var(--ide-panel);color:var(--ink)}
+body.ide .lab .case-input:focus{border-color:var(--violet)}
+body.ide .lab .case-input.is-invalid{border-color:var(--wrong)}
+body.ide .result-head span{color:var(--muted)}
+body.ide .result-head.is-accepted b{color:var(--right)}
+body.ide .result-head.is-ran b{color:var(--ink)}
+body.ide .result-head.is-wrong b,body.ide .result-head.is-error b,body.ide .result-head.is-limit b,body.ide .result-head.is-compile b{color:var(--wrong)}
+body.ide .result-body h4,body.ide [data-result]>h4{color:var(--muted)}
+body.ide .result-value{background:var(--ide-panel);color:var(--ink)}
+body.ide .result-value.is-wrong,body.ide .result-value.is-error{background:var(--ide-panel);color:hsl(0,84%,72%)}
+body.ide .result-name{color:var(--muted)}
+body.ide .result-note{color:var(--muted)}
+body.ide .result-note.is-error{color:var(--wrong)}
+body.ide .result-accepted{background:var(--ide-panel);color:hsl(143,74%,72%)}

@@ -1,17 +1,20 @@
-"""Developer mode: setting it up, the question at sign-in, the Practice tab, quizzes, and the Learn dock's API."""
+"""Developer mode: setting it up, the question at sign-in, the Practice tab, quizzes, problems, the code lab, and the Learn dock's API."""
+import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from apps.common.ratelimit import rate_limit
-from . import lab, services
-from .models import LANGUAGES, LEVELS, Attempt, ChallengeSolve, Question
+from . import lab, problems, services
+from .models import LANGUAGES, LEVELS, Attempt, Question, Submission
 
 QUIZ = "practice_quiz"
 
@@ -164,10 +167,7 @@ def answer_api(request):
                          "progress": {"answered": progress["answered"], "accuracy": progress["accuracy"], "streak": progress["streak"]}})
 
 
-# The code lab: challenges with tests and walkthroughs, run in the browser (see lab.py).
-HELPED = "practice_lab_helped"  # session: challenges whose worked solution was shown
-
-
+# The code lab: walkthroughs to watch, run in the browser (see lab.py).
 def _lab_language(request):
     practice = services.profile(request.user)
     mine = [key for key in ((practice.languages if practice else None) or []) if key in lab.RUNNABLE] or ["python"]
@@ -175,53 +175,23 @@ def _lab_language(request):
     return (chosen if chosen in lab.RUNNABLE else mine[0]), mine, practice
 
 
+def _runner_urls():
+    return {"workerUrl": static("landing/js/python-worker.js"), "runnerUrl": static("landing/js/python_runner.py")}
+
+
 @login_required(login_url="landing:home")
 @never_cache
 def lab_view(request):
-    """Challenges to solve and walkthroughs to watch, in a runnable language."""
+    """Walkthroughs to watch, in a runnable language."""
     if not services.is_on(request.user):
         return redirect("practice:setup")
     chosen, mine, practice = _lab_language(request)
-    solved = {solve.key: solve for solve in ChallengeSolve.objects.filter(user=request.user)}
-    levels = []
-    for level, label in LEVELS:
-        items = [dict(item, solved=solved.get(item["key"])) for item in lab.CHALLENGES if item["language"] == chosen and item["level"] == level]
-        if items:
-            levels.append((level, label, items))
     walkthroughs = [dict(item, preview="\n".join(item["code"].splitlines()[:5])) for item in lab.WALKTHROUGHS if item["language"] == chosen]
-    total = sum(len(items) for _, _, items in levels)
     return render(request, "practice/lab.html", {
-        "section": "practice", "practice": practice, "chosen": chosen, "levels": levels, "walkthroughs": walkthroughs, "total": total,
-        "solved_count": sum(1 for _, _, items in levels for item in items if item["solved"]),
+        "section": "practice", "practice": practice, "chosen": chosen, "walkthroughs": walkthroughs,
         "languages": [(key, label, key in mine) for key, label in lab.RUNNABLE.items()],
         "not_runnable": [dict(LANGUAGES)[key] for key in ((practice.languages if practice else None) or []) if key not in lab.RUNNABLE],
     })
-
-
-def _workspace(request, item, mode):
-    same = [other for other in (lab.CHALLENGES if mode == "challenge" else lab.WALKTHROUGHS) if other["language"] == item["language"]]
-    position = same.index(item)
-    data = {"mode": mode, "key": item["key"], "language": item["language"], "title": item["title"],
-            "workerUrl": static("landing/js/python-worker.js"), "runnerUrl": static("landing/js/python_runner.py")}
-    solve = None
-    if mode == "challenge":
-        solve = ChallengeSolve.objects.filter(user=request.user, key=item["key"]).first()
-        data.update(starter=item["starter"], tests=item["tests"], solvedUrl=reverse("practice:solved", args=[item["key"]]), solutionUrl=reverse("practice:solution", args=[item["key"]]))
-    else:
-        data.update(code=item["code"])
-    return render(request, "practice/workspace.html", {"section": "practice", "item": item, "mode": mode, "data": data, "solved": solve,
-                                                       "language_label": lab.RUNNABLE[item["language"]], "next_item": same[position + 1] if position + 1 < len(same) else None})
-
-
-@login_required(login_url="landing:home")
-@never_cache
-def challenge_view(request, key):
-    item = lab.CHALLENGE_BY_KEY.get(key)
-    if not services.is_on(request.user):
-        return redirect("practice:setup")
-    if not item:
-        raise Http404
-    return _workspace(request, item, "challenge")
 
 
 @login_required(login_url="landing:home")
@@ -232,38 +202,153 @@ def walkthrough_view(request, key):
         return redirect("practice:setup")
     if not item:
         raise Http404
-    return _workspace(request, item, "walkthrough")
+    same = [other for other in lab.WALKTHROUGHS if other["language"] == item["language"]]
+    position = same.index(item)
+    data = {"language": item["language"], "code": item["code"], **_runner_urls()}
+    return render(request, "practice/workspace.html", {"section": "practice", "item": item, "data": data, "language_label": lab.RUNNABLE[item["language"]],
+                                                       "next_item": same[position + 1] if position + 1 < len(same) else None})
+
+
+@login_required(login_url="landing:home")
+def old_challenge_view(request, key):
+    """The code lab's challenges became problems: old links go to the problem each one turned into."""
+    language = "javascript" if key.startswith("js-") else "python"
+    slug = lab.OLD_CHALLENGES.get(key[3:] if key[:3] in ("py-", "js-") else key)
+    if not slug:
+        return redirect("practice:problems", permanent=True)
+    return redirect(f'{reverse("practice:problem", args=[slug])}?language={language}', permanent=True)
+
+
+# Problems, like LeetCode's (see problems.py). The person's browser runs the tests; the server keeps what it reports.
+ACCEPTANCE_FROM = 5  # acceptance rates show once a problem has this many submissions, so a rate means something
+STATES = [("todo", "To do"), ("attempted", "Attempted"), ("solved", "Solved")]
+
+
+def _acceptance(row):
+    if not row or row["total"] < ACCEPTANCE_FROM:
+        return None
+    return round(100 * row["accepted"] / row["total"], 1)
+
+
+def _submission_row(submission):
+    return {"id": submission.pk, "status": submission.status, "label": submission.get_status_display(), "passed": submission.passed,
+            "total": submission.total, "ms": round(submission.runtime_ms, 1), "language": submission.language,
+            "languageLabel": lab.RUNNABLE.get(submission.language, submission.language), "code": submission.code,
+            "when": date_format(timezone.localtime(submission.created_at), "j M Y, H:i")}
+
+
+def _as_json(value):
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 @login_required(login_url="landing:home")
 @never_cache
-def solution_api(request, key):
-    """The worked solution for "Show me how". Solving afterwards counts as solved with help."""
-    item = lab.CHALLENGE_BY_KEY.get(key)
+def problems_view(request):
+    """The problem set: filters, the problem of the day, what you've solved by difficulty, and acceptance rates."""
+    if not services.is_on(request.user):
+        return redirect("practice:setup")
+    mine = Submission.objects.filter(user=request.user)
+    solved = set(mine.filter(status="accepted").values_list("slug", flat=True))
+    tried = set(mine.values_list("slug", flat=True))
+    counts = {row["slug"]: row for row in Submission.objects.values("slug").annotate(total=Count("pk"), accepted=Count("pk", filter=Q(status="accepted")))}
+    query = request.GET.get("q", "").strip()[:80]
+    difficulty = request.GET.get("difficulty", "")
+    topic = request.GET.get("topic", "")
+    state = request.GET.get("status", "")
+    rows = []
+    for item in problems.PROBLEMS:
+        mark = "solved" if item["slug"] in solved else "attempted" if item["slug"] in tried else "todo"
+        if query and query.lower() not in item["title"].lower() and query.lstrip("#") != str(item["number"]):
+            continue
+        if difficulty in problems.LABELS and item["difficulty"] != difficulty:
+            continue
+        if topic in problems.TOPICS and topic not in item["topics"]:
+            continue
+        if state in dict(STATES) and mark != state:
+            continue
+        rows.append(dict(item, state=mark, acceptance=_acceptance(counts.get(item["slug"]))))
+    by_difficulty = []
+    for key, label in problems.DIFFICULTIES:
+        slugs = [item["slug"] for item in problems.PROBLEMS if item["difficulty"] == key]
+        done = sum(1 for slug in slugs if slug in solved)
+        by_difficulty.append({"key": key, "label": label, "solved": done, "total": len(slugs), "percent": round(100 * done / len(slugs)) if slugs else 0})
+    today = problems.of_the_day(timezone.localdate())
+    return render(request, "practice/problems.html", {
+        "section": "practice", "rows": rows, "total": len(problems.PROBLEMS), "solved_count": len(solved), "by_difficulty": by_difficulty,
+        "today": dict(today, state="solved" if today["slug"] in solved else "attempted" if today["slug"] in tried else "todo"),
+        "query": query, "difficulty": difficulty, "topic": topic, "state": state, "filtered": bool(query or difficulty or topic or state),
+        "difficulties": problems.DIFFICULTIES, "topics": problems.TOPICS, "states": STATES, "acceptance_from": ACCEPTANCE_FROM,
+    })
+
+
+@login_required(login_url="landing:home")
+@never_cache
+def problem_view(request, slug):
+    """A problem: its description, editorial and your submissions, beside an editor that runs the tests in the browser."""
+    item = problems.BY_SLUG.get(slug)
+    if not services.is_on(request.user):
+        return redirect("practice:setup")
+    if not item:
+        raise Http404
+    chosen, mine, practice = _lab_language(request)
+    submissions = list(Submission.objects.filter(user=request.user, slug=slug)[:30])
+    counts = Submission.objects.filter(slug=slug).aggregate(total=Count("pk"), accepted=Count("pk", filter=Q(status="accepted")))
+    position = problems.PROBLEMS.index(item)
+    examples = [{"inputs": [(name, _as_json(value)) for name, value in zip(item["params"], test["args"])], "output": _as_json(test["expected"]), "why": test["why"]}
+                for test in item["tests"][:item["examples"]]]
+    data = {
+        "slug": slug, "language": chosen, "params": item["params"], "compare": item["compare"],
+        "languages": {key: {"label": lab.RUNNABLE[key], "fn": value["fn"], "starter": value["starter"], "solution": value["solution"]} for key, value in item["languages"].items()},
+        "cases": [{"args": test["args"], "expected": test["expected"]} for test in item["tests"][:item["examples"]]],
+        "submissions": [_submission_row(submission) for submission in submissions],
+        "testsUrl": reverse("practice:problem_tests", args=[slug]), "submitUrl": reverse("practice:submit", args=[slug]), **_runner_urls(),
+    }
+    return render(request, "practice/problem.html", {
+        "section": "practice", "item": item, "data": data, "examples": examples, "chosen": chosen,
+        "statement": [problems.inline_code(part) for part in item["statement"].split("\n\n")],
+        "editorial": [problems.inline_code(part) for part in item["editorial"].split("\n\n")],
+        "hints": [problems.inline_code(hint) for hint in item["hints"]],
+        "solved": Submission.objects.filter(user=request.user, slug=slug, status="accepted").exists(),
+        "stats": dict(counts, rate=_acceptance(counts)), "acceptance_from": ACCEPTANCE_FROM,
+        "previous": problems.PROBLEMS[position - 1] if position else None, "total": len(problems.PROBLEMS),
+        "next": problems.PROBLEMS[position + 1] if position + 1 < len(problems.PROBLEMS) else None,
+        "languages": list(lab.RUNNABLE.items()),
+    })
+
+
+@login_required(login_url="landing:home")
+@never_cache
+def problem_tests_api(request, slug):
+    """Every test, hidden ones too, for Submit to run in the browser."""
+    item = problems.BY_SLUG.get(slug)
     if not services.is_on(request.user) or not item:
         raise Http404
-    helped = set(request.session.get(HELPED, []))
-    helped.add(key)
-    request.session[HELPED] = sorted(helped)
-    return JsonResponse({"solution": item["solution"]})
+    return JsonResponse({"compare": item["compare"], "tests": [{"args": test["args"], "expected": test["expected"]} for test in item["tests"]]})
 
 
 @login_required(login_url="landing:home")
 @require_POST
-@rate_limit("practice-solved", 60, 600)
-def solved_api(request, key):
-    """Every test passed in the browser: keep the code that passed."""
-    item = lab.CHALLENGE_BY_KEY.get(key)
+@rate_limit("practice-submit", 60, 600)
+def submit_api(request, slug):
+    """Keep a submission: the code, and how it did against every test in the person's browser."""
+    item = problems.BY_SLUG.get(slug)
     if not services.is_on(request.user) or not item:
         raise Http404
-    helped = key in request.session.get(HELPED, [])
-    code = request.POST.get("code", "")[:20000]
-    solve, created = ChallengeSolve.objects.get_or_create(user=request.user, key=key, defaults={"language": item["language"], "code": code, "helped": helped})
-    if not created:
-        solve.code = code
-        solve.helped = solve.helped and helped  # solving it again on your own counts
-        solve.save(update_fields=["code", "helped"])
-    return JsonResponse({"solved": ChallengeSolve.objects.filter(user=request.user).count(), "helped": solve.helped})
+    language = request.POST.get("language", "")
+    status = request.POST.get("status", "")
+    code = request.POST.get("code", "")
+    try:
+        passed, total = int(request.POST.get("passed", "")), int(request.POST.get("total", ""))
+        runtime = float(request.POST.get("runtime_ms", "0"))
+    except ValueError:
+        return JsonResponse({"error": "That submission didn't come through properly. Submit again."}, status=400)
+    if (language not in item["languages"] or status not in dict(Submission.STATUSES) or not code.strip() or len(code) > 20000
+            or total != len(item["tests"]) or not 0 <= passed <= total or (status == "accepted") != (passed == total) or not 0 <= runtime < 600000):
+        return JsonResponse({"error": "That submission didn't come through properly. Submit again."}, status=400)
+    first = status == "accepted" and not Submission.objects.filter(user=request.user, slug=slug, status="accepted").exists()
+    submission = Submission.objects.create(user=request.user, slug=slug, language=language, code=code, status=status, passed=passed, total=total, runtime_ms=runtime)
+    return JsonResponse({"submission": _submission_row(submission), "firstSolve": first,
+                         "solved": Submission.objects.filter(user=request.user, status="accepted").values("slug").distinct().count()})
 
 
 @login_required(login_url="landing:home")

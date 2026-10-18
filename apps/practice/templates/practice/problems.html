@@ -1,0 +1,40 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Problems{% endblock %}
+{% block content %}<div class="practice-page problems-page">
+{% include "practice/_tabs.html" with tab="problems" %}
+<div class="problems-top">
+<section class="dev-terminal" aria-label="Problems">
+<div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>problems</span></div>
+<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>ls problems/ --sort=number</span></p>
+<h1>Problems</h1>
+<p>Interview-style coding problems. Write a function in Python or JavaScript, run it on the examples, then submit it against every test, hidden ones too. Dry-run any test case to watch your code line by line. It all runs in your browser.</p>
+</section>
+<aside class="card problems-progress" aria-label="What you've solved">
+<div class="problems-ring" style="--done:{% widthratio solved_count total 100 %}"><span class="problems-ring-core"><b>{{ solved_count }}<small>/{{ total }}</small></b><span>solved</span></span></div>
+<ul class="problems-bars">{% for row in by_difficulty %}<li><span class="diff diff-{{ row.key }}">{{ row.label }}</span><b>{{ row.solved }}<small>/{{ row.total }}</small></b><i class="bar diff-bar-{{ row.key }}"><i style="width:{{ row.percent }}%"></i></i></li>{% endfor %}</ul>
+</aside>
+</div>
+
+<a class="card problem-today" href="{% url 'practice:problem' today.slug %}"><span class="problem-today-tag">{% icon "calendar" 15 %} Problem of the day</span>
+<span class="problem-today-name"><b>{{ today.number }}. {{ today.title }}</b><small>{{ today.topics|join:" · " }}</small></span>
+<span class="diff diff-{{ today.difficulty }}">{{ today.difficulty|title }}</span>{% if today.state == "solved" %}<span class="problem-today-done">{% icon "check" 14 %} Solved</span>{% else %}<span class="button primary">Solve it {% icon "chevron-right" 14 %}</span>{% endif %}</a>
+
+<form class="problems-filters" method="get" role="search" aria-label="Filter problems">
+<label class="problems-search">{% icon "search" 16 %}<span class="visually-hidden">Search</span><input type="search" name="q" value="{{ query }}" placeholder="Search by title or number" maxlength="80"></label>
+<label><span class="visually-hidden">Difficulty</span><select name="difficulty"><option value="">Any difficulty</option>{% for key, label in difficulties %}<option value="{{ key }}"{% if key == difficulty %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<label><span class="visually-hidden">Topic</span><select name="topic"><option value="">Any topic</option>{% for name in topics %}<option{% if name == topic %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+<label><span class="visually-hidden">Status</span><select name="status"><option value="">Any status</option>{% for key, label in states %}<option value="{{ key }}"{% if key == state %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<button class="button soft" type="submit">Filter</button>{% if filtered %}<a class="problems-clear" href="{% url 'practice:problems' %}">Clear</a>{% endif %}
+</form>
+
+<div class="card problems-list">
+<table class="problems-table"><thead><tr><th scope="col"><span class="visually-hidden">Status</span></th><th scope="col">Title</th><th scope="col" class="problems-rate">Acceptance</th><th scope="col">Difficulty</th></tr></thead>
+<tbody>{% for item in rows %}<tr class="is-{{ item.state }}">
+<td class="problems-state">{% if item.state == "solved" %}<span class="state-solved" title="Solved">{% icon "check" 14 %}</span>{% elif item.state == "attempted" %}<span class="state-tried" title="Attempted"></span>{% endif %}<span class="visually-hidden">{% if item.state == "solved" %}Solved{% elif item.state == "attempted" %}Attempted{% else %}To do{% endif %}</span></td>
+<td><a class="problems-name" href="{% url 'practice:problem' item.slug %}">{{ item.number }}. {{ item.title }}</a><small class="problems-topics">{{ item.topics|join:" · " }}</small></td>
+<td class="problems-rate">{% if item.acceptance is not None %}{{ item.acceptance }}%{% else %}<span class="muted" title="Shown once {{ acceptance_from }} solutions have been submitted">—</span>{% endif %}</td>
+<td><span class="diff diff-{{ item.difficulty }}">{{ item.difficulty|title }}</span></td></tr>
+{% empty %}<tr><td colspan="4" class="problems-empty">No problems match those filters. <a href="{% url 'practice:problems' %}">Show them all</a></td></tr>{% endfor %}</tbody></table>
+</div>
+<p class="muted small">Acceptance is the share of submissions that passed every test. It shows once a problem has {{ acceptance_from }} submissions.</p>
+</div>{% endblock %}

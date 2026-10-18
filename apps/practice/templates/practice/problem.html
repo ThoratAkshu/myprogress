@@ -1,0 +1,57 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}{{ item.number }}. {{ item.title }}{% endblock %}
+{% block main_class %}problem-main{% endblock %}
+{% block content %}<div class="lab problem-page" data-problem>
+<header class="problem-head"><a class="back-link" href="{% url 'practice:problems' %}">{% icon "chevron-left" 16 %} Problems</a>
+<nav class="problem-step" aria-label="Other problems">{% if previous %}<a href="{% url 'practice:problem' previous.slug %}" title="{{ previous.number }}. {{ previous.title }}">{% icon "chevron-left" 16 %}<span class="visually-hidden">Previous problem</span></a>{% endif %}<span>{{ item.number }} / {{ total }}</span>{% if next %}<a href="{% url 'practice:problem' next.slug %}" title="{{ next.number }}. {{ next.title }}">{% icon "chevron-right" 16 %}<span class="visually-hidden">Next problem</span></a>{% endif %}</nav></header>
+
+<div class="problem-grid">
+<section class="card problem-info">
+<div class="lab-tabs" role="tablist"><button type="button" role="tab" data-info-tab="description" aria-selected="true">{% icon "file-text" 14 %} Description</button><button type="button" role="tab" data-info-tab="editorial" aria-selected="false">{% icon "book-open" 14 %} Editorial</button><button type="button" role="tab" data-info-tab="submissions" aria-selected="false">{% icon "list" 14 %} Submissions <span class="problem-count" data-sub-count>{{ data.submissions|length }}</span></button></div>
+
+<div class="problem-pane" data-info="description">
+<h1>{{ item.number }}. {{ item.title }}</h1>
+<p class="problem-tags"><span class="diff diff-{{ item.difficulty }}">{{ item.difficulty|title }}</span><span class="problem-solved" data-solved{% if not solved %} hidden{% endif %}>{% icon "check-circle" 14 %} Solved</span>{% for topic in item.topics %}<a class="problem-topic" href="{% url 'practice:problems' %}?topic={{ topic|urlencode }}">{{ topic }}</a>{% endfor %}</p>
+<div class="problem-text">{% for part in statement %}<p>{{ part }}</p>{% endfor %}</div>
+{% for example in examples %}<div class="problem-example"><h3>Example {{ forloop.counter }}</h3><pre><b>Input:</b> {% for name, value in example.inputs %}{{ name }} = {{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}
+<b>Output:</b> {{ example.output }}{% if example.why %}
+<b>Explanation:</b> {{ example.why }}{% endif %}</pre></div>{% endfor %}
+<h3 class="problem-sub">Constraints</h3><ul class="problem-constraints">{% for line in item.constraints %}<li><code>{{ line }}</code></li>{% endfor %}</ul>
+{% for hint in hints %}<details class="problem-hint"><summary>{% icon "zap" 14 %} Hint {{ forloop.counter }}</summary><p>{{ hint }}</p></details>{% endfor %}
+<p class="problem-stats">{% if stats.rate is not None %}<span><small>Accepted</small><b>{{ stats.accepted }}</b></span><span><small>Submissions</small><b>{{ stats.total }}</b></span><span><small>Acceptance</small><b>{{ stats.rate }}%</b></span>{% else %}<span class="muted small">Acceptance shows once {{ acceptance_from }} solutions have been submitted{% if stats.total %} ({{ stats.total }} so far){% endif %}.</span>{% endif %}</p>
+</div>
+
+<div class="problem-pane" data-info="editorial" hidden>
+<h2>Approach</h2><div class="problem-text">{% for part in editorial %}<p>{{ part }}</p>{% endfor %}</div>
+<p class="problem-complexity">{% icon "clock" 14 %} {{ item.complexity }}</p>
+<details class="problem-solution"><summary>Show the solution</summary>
+{% for key, value in data.languages.items %}<div data-solution="{{ key }}"{% if key != chosen %} hidden{% endif %}><pre class="problem-code"><code data-code="{{ key }}">{{ value.solution }}</code></pre></div>{% endfor %}
+<button type="button" class="button soft" data-action="watch">{% icon "play" 15 %} Watch it run</button><p class="muted small">Types the solution into the editor and dry-runs it on the selected test case. Your code is kept: <b>Back to my code</b> brings it back.</p>
+</details>
+</div>
+
+<div class="problem-pane" data-info="submissions" hidden>
+<p class="muted" data-subs-empty{% if data.submissions %} hidden{% endif %}>No submissions yet. <b>Submit</b> runs every test, hidden ones too, and keeps the result here.</p>
+<table class="problem-subs" data-subs-table{% if not data.submissions %} hidden{% endif %}><thead><tr><th scope="col">Status</th><th scope="col">Language</th><th scope="col">Runtime</th><th scope="col">When</th></tr></thead><tbody data-subs></tbody></table>
+<div class="problem-sub-detail" data-sub-detail hidden></div>
+</div>
+</section>
+
+<section class="lab-work problem-work">
+<div class="lab-editor-card"><div class="lab-toolbar">
+<label class="problem-lang"><span class="visually-hidden">Language</span><select data-language>{% for key, label in languages %}<option value="{{ key }}"{% if key == chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<div class="lab-buttons"><button type="button" class="lab-button is-quiet" data-action="restore" hidden>{% icon "undo" 15 %} Back to my code</button><button type="button" class="lab-button is-quiet" data-action="reset" title="Start again from the starter code">{% icon "rotate-ccw" 15 %}<span data-reset-label class="visually-hidden">Reset</span></button><button type="button" class="lab-button" data-action="dry">{% icon "activity" 15 %} Dry run</button><button type="button" class="lab-button" data-action="run">{% icon "play" 15 %} Run</button><button type="button" class="lab-button is-primary" data-action="submit">{% icon "send" 15 %} Submit</button></div></div>
+<div class="lab-editor" data-editor></div>
+<p class="lab-status" data-status role="status"></p></div>
+
+<div class="card lab-console problem-console"><div class="lab-tabs" role="tablist"><button type="button" role="tab" data-tab="cases" aria-selected="true">{% icon "check" 14 %} Testcase</button><button type="button" role="tab" data-tab="result" aria-selected="false">{% icon "terminal" 14 %} Test result</button><button type="button" role="tab" data-tab="dry" aria-selected="false">{% icon "activity" 14 %} Dry run</button></div>
+<div data-panel="cases"><div class="case-tabs" data-case-tabs></div><div class="case-fields" data-case-fields></div>
+<p class="muted small case-note">Each input is JSON. Change one to try your own case: Run works out the expected answer with the reference solution.</p></div>
+<div data-panel="result" hidden><div data-result><p class="muted">Run your code to see how it does on the test cases.</p></div></div>
+<div data-panel="dry" hidden>{% include "practice/_dry.html" with hint="Dry run calls your function with the selected test case, then steps through it one line at a time." %}</div></div>
+<p class="muted small problem-keys"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> submits. Your code is saved in this browser as you type. Python is real Python (Pyodide; the first load is about 10 MB).</p>
+</section></div>
+<form hidden data-csrf>{% csrf_token %}</form>
+{{ data|json_script:"problem-data" }}
+</div>{% endblock %}
+{% block scripts %}<script src="https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js"></script><script src="{% static 'landing/js/js-runner.js' %}"></script><script src="{% static 'landing/js/code-editor.js' %}"></script><script src="{% static 'landing/js/lab-core.js' %}"></script><script src="{% static 'landing/js/problem.js' %}"></script>{% endblock %}

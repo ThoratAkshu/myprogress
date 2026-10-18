@@ -2,39 +2,26 @@
 {% block title %}{{ item.title }}{% endblock %}
 {% block content %}<div class="lab" data-lab>
 <header class="lab-head"><a class="back-link" href="{% url 'practice:lab' %}?language={{ item.language }}">{% icon "chevron-left" 16 %} Code lab</a>
-<div class="lab-title"><p class="pq-meta"><span class="pq-lang lang-{{ item.language }}">{{ language_label }}</span><span>{{ item.level|title }}</span><span>{{ item.topic }}</span><span>{% if mode == "challenge" %}Challenge{% else %}Walkthrough{% endif %}</span></p><h1>{{ item.title }}</h1></div>
-{% if mode == "challenge" %}<span class="lab-solved" data-solved{% if not solved %} hidden{% endif %}>{% if solved.helped %}Solved with help{% else %}Solved{% endif %}</span>{% endif %}</header>
+<div class="lab-title"><p class="pq-meta"><span class="pq-lang lang-{{ item.language }}">{{ language_label }}</span><span>{{ item.level|title }}</span><span>{{ item.topic }}</span><span>Walkthrough</span></p><h1>{{ item.title }}</h1></div></header>
 
 <div class="lab-grid">
-<aside class="card lab-brief"><h2>{% if mode == "challenge" %}The task{% else %}What to watch{% endif %}</h2><p>{{ item.prompt }}</p>
-{% if mode == "challenge" %}<h3>Examples</h3><ul class="lab-examples">{% for test in item.tests|slice:":2" %}<li><code>{{ test.call }}</code><span>→</span><code>{{ test.expected }}</code></li>{% endfor %}</ul>
-<p class="muted small">Run tests checks {{ item.tests|length }} cases, including empty and edge ones.</p>{% endif %}
-<h3>Buttons</h3><ul class="lab-howto"><li><b>Run</b> shows what the code prints.</li>{% if mode == "challenge" %}<li><b>Run tests</b> checks your function, and marks the challenge solved when every test passes.</li>{% endif %}
-<li><b>Dry run</b> steps through it one line at a time{% if mode == "challenge" %}, calling it with the first example{% endif %}.</li>{% if mode == "challenge" %}<li><b>Show me how</b> types in a worked solution and dry-runs it.</li>{% else %}<li><b>Watch again</b> types it in and plays the dry run from the start.</li>{% endif %}</ul>
-<p class="muted small">Your code runs in this browser only{% if item.language == "python" %}, with real Python (Pyodide; the first load is about 10 MB){% endif %}. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> {% if mode == "challenge" %}runs the tests{% else %}runs it{% endif %}.</p>
-{% if next_item %}<a class="button soft lab-next" href="{% if mode == "challenge" %}{% url 'practice:challenge' next_item.key %}{% else %}{% url 'practice:walkthrough' next_item.key %}{% endif %}">Next: {{ next_item.title }} {% icon "chevron-right" 14 %}</a>{% endif %}
+<aside class="card lab-brief"><h2>What to watch</h2><p>{{ item.prompt }}</p>
+<h3>Buttons</h3><ul class="lab-howto"><li><b>Run</b> shows what the code prints.</li><li><b>Dry run</b> steps through it one line at a time.</li><li><b>Watch again</b> types it in and plays the dry run from the start.</li></ul>
+<p class="muted small">Change the code and run it again: it's yours to play with. It runs in this browser only{% if item.language == "python" %}, with real Python (Pyodide; the first load is about 10 MB){% endif %}. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs it.</p>
+{% if next_item %}<a class="button soft lab-next" href="{% url 'practice:walkthrough' next_item.key %}">Next: {{ next_item.title }} {% icon "chevron-right" 14 %}</a>{% endif %}
+<a class="lab-to-problems" href="{% url 'practice:problems' %}">{% icon "target" 15 %} Ready to write your own? Try the problems</a>
 </aside>
 
 <section class="lab-work">
-<div class="lab-editor-card"><div class="lab-toolbar"><span class="lab-file"><i></i><i></i><i></i>{% if item.language == "python" %}solution.py{% else %}solution.js{% endif %}</span>
-<div class="lab-buttons"><button type="button" class="lab-button" data-action="run">{% icon "play" 15 %} Run</button>{% if mode == "challenge" %}<button type="button" class="lab-button is-primary" data-action="test">{% icon "check-circle" 15 %} Run tests</button>{% endif %}
-<button type="button" class="lab-button" data-action="dry">{% icon "activity" 15 %} Dry run</button>{% if mode == "challenge" %}<button type="button" class="lab-button" data-action="show">{% icon "zap" 15 %} Show me how</button><button type="button" class="lab-button is-quiet" data-action="reset" title="Start again from the starter code">{% icon "rotate-ccw" 15 %}<span class="visually-hidden">Reset</span></button>{% else %}<button type="button" class="lab-button" data-action="replay">{% icon "rotate-ccw" 15 %} Watch again</button>{% endif %}</div></div>
+<div class="lab-editor-card"><div class="lab-toolbar"><span class="lab-file"><i></i><i></i><i></i>{% if item.language == "python" %}walkthrough.py{% else %}walkthrough.js{% endif %}</span>
+<div class="lab-buttons"><button type="button" class="lab-button" data-action="run">{% icon "play" 15 %} Run</button><button type="button" class="lab-button" data-action="dry">{% icon "activity" 15 %} Dry run</button><button type="button" class="lab-button" data-action="replay">{% icon "rotate-ccw" 15 %} Watch again</button></div></div>
 <div class="lab-editor" data-editor></div>
 <p class="lab-status" data-status role="status"></p></div>
 
-<div class="card lab-console"><div class="lab-tabs" role="tablist"><button type="button" role="tab" data-tab="output" aria-selected="true">Output</button>{% if mode == "challenge" %}<button type="button" role="tab" data-tab="tests" aria-selected="false">Tests</button>{% endif %}<button type="button" role="tab" data-tab="dry" aria-selected="false">Dry run</button></div>
+<div class="card lab-console"><div class="lab-tabs" role="tablist"><button type="button" role="tab" data-tab="output" aria-selected="true">Output</button><button type="button" role="tab" data-tab="dry" aria-selected="false">Dry run</button></div>
 <div data-panel="output"><pre class="lab-output" data-output><span class="lab-quiet">Run your code to see what it prints.</span></pre></div>
-{% if mode == "challenge" %}<div data-panel="tests" hidden><p class="lab-tests-summary" data-tests-summary>Run the tests to check your function.</p><ol class="lab-tests" data-tests></ol></div>{% endif %}
-<div data-panel="dry" hidden>
-<div class="dry-controls"><button type="button" data-dry-first title="First step" aria-label="First step">⏮</button><button type="button" data-dry-back title="Back" aria-label="Back">◀</button><button type="button" class="is-play" data-dry-play>Play</button><button type="button" data-dry-next title="Next step" aria-label="Next step">▶</button>
-<input type="range" min="0" max="0" value="0" data-dry-range aria-label="Step"><span class="dry-count" data-dry-count></span>
-<select data-dry-speed aria-label="Speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><button type="button" class="dry-close" data-dry-close>Stop dry run</button></div>
-<p class="dry-say" data-dry-say>Press Dry run to step through the code.</p>
-<div class="dry-grid"><section><h4>Variables</h4><table class="dry-vars"><tbody data-dry-vars></tbody></table></section>
-<section><h4>Call stack</h4><ol class="dry-stack" data-dry-stack></ol><h4>Output so far</h4><pre class="dry-out" data-dry-out></pre></section></div>
-</div></div>
+<div data-panel="dry" hidden>{% include "practice/_dry.html" with hint="Press Dry run to step through the code." %}</div></div>
 </section></div>
-<form hidden data-lab-csrf>{% csrf_token %}</form>
 {{ data|json_script:"lab-data" }}
 </div>{% endblock %}
-{% block scripts %}{% if item.language == "javascript" %}<script src="https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js"></script><script src="{% static 'landing/js/js-runner.js' %}"></script>{% endif %}<script src="{% static 'landing/js/code-editor.js' %}"></script><script src="{% static 'landing/js/code-lab.js' %}"></script>{% endblock %}
+{% block scripts %}{% if item.language == "javascript" %}<script src="https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js"></script><script src="{% static 'landing/js/js-runner.js' %}"></script>{% endif %}<script src="{% static 'landing/js/code-editor.js' %}"></script><script src="{% static 'landing/js/lab-core.js' %}"></script><script src="{% static 'landing/js/code-lab.js' %}"></script>{% endblock %}

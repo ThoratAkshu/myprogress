@@ -168,7 +168,7 @@ def palette(user):
     """The developer UI's command palette (Ctrl+K): every place and action, by name."""
     from django.urls import reverse
     from apps.accounts.models import Profile
-    from . import lab
+    from . import lab, problems
     handle = Profile.objects.filter(user=user).values_list("handle", flat=True).first()
 
     def go(label, url, hint):
@@ -178,7 +178,8 @@ def palette(user):
         go("Home", reverse("landing:dashboard"), "home.py"),
         go("Projects", projects, "projects/"),
         go("New project", f"{projects}#new-project", "project --new"),
-        go("Practice", reverse("practice:home"), "practice.sh"),
+        go("Problems", reverse("practice:problems"), "problems/"),
+        go("Practice questions", reverse("practice:home"), "practice.sh"),
         go("Start a quick quiz", f'{reverse("practice:quiz")}?new=1', "quiz --new"),
         go("Code lab", reverse("practice:lab"), "lab/"),
         go("Rankings", reverse("landing:workspace_section", args=["rankings"]), "rankings.json"),
@@ -192,6 +193,7 @@ def palette(user):
         go("Security", reverse("landing:security"), "security.lock"),
         go("Languages and level", reverse("practice:setup"), "settings.json"),
     ]
+    items += [go(f"{item['number']}. {item['title']}", reverse("practice:problem", args=[item["slug"]]), item["difficulty"]) for item in problems.PROBLEMS]
     items += [go(f"Watch: {item['title']} ({'Python' if item['language'] == 'python' else 'JavaScript'})", reverse("practice:walkthrough", args=[item["key"]]), "watch")
               for item in lab.WALKTHROUGHS]
     items += [{"label": "Switch to the classic look", "post": reverse("practice:ui"), "fields": {"ide": "0"}, "hint": "ui --classic"},

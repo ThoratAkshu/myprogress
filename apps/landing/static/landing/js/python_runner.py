@@ -1,12 +1,14 @@
 """Runs practice code: in the browser under Pyodide (python-worker.js loads this file), and in the server's tests.
 
 run() executes the code with print captured. With trace on, it records every line about to run, the variables in
-scope, the call stack and the output so far: the steps of the dry run. Challenge tests are evaluated afterwards. A step
+scope, the call stack and the output so far: the steps of the dry run. Problem tests then call a function with JSON
+arguments and compare its answer as JSON (exactly, in any order, or within 1e-5). A step
 limit stops loops that never end. Only a person's own code runs, in their own browser."""
-import ast
+import copy
 import io
 import json
 import sys
+import time
 
 FILENAME = "<practice>"
 
@@ -60,6 +62,30 @@ def error_line(error):
     return line
 
 
+def as_json(value):
+    """A result as JSON (what both languages' answers are compared as), or None if it can't be."""
+    try:
+        return json.loads(json.dumps(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def same(got, expected, compare):
+    if got is None and expected is not None:
+        return False
+    if isinstance(expected, bool) != isinstance(got, bool):
+        return False
+    if compare == "float":
+        return isinstance(got, (int, float)) and abs(got - expected) < 1e-5
+    if compare == "sorted":
+        return isinstance(got, list) and sorted(map(json.dumps, got)) == sorted(map(json.dumps, expected))
+    if compare == "nested":
+        def key(groups):
+            return sorted(json.dumps(sorted(map(json.dumps, group))) for group in groups)
+        return isinstance(got, list) and all(isinstance(group, list) for group in got) and key(got) == key(expected)
+    return got == expected
+
+
 def run(code, trace=False, limit=200000, tests="[]"):
     output = io.StringIO()
     steps = []
@@ -84,14 +110,28 @@ def run(code, trace=False, limit=200000, tests="[]"):
         compiled = compile(code, FILENAME, "exec")
         sys.settrace(tracer)
         exec(compiled, scope)
-        for test in json.loads(tests):
+        for test in json.loads(tests):  # {fn, args, expected (left out for your own cases), compare}
+            printed = io.StringIO()
+            sys.stdout = printed
+            started = time.perf_counter()
+            result = {"passed": None}
             try:
-                got = eval(test["call"], scope)
-                results.append({"call": test["call"], "expected": test["expected"], "got": show(got), "passed": got == ast.literal_eval(test["expected"])})
+                function = scope.get(test["fn"])
+                if not callable(function):
+                    raise NameError(f"There's no function called {test['fn']}. Keep the name the starter code gave it.")
+                got = function(*copy.deepcopy(test["args"]))
+                shown = as_json(got)
+                result["got"] = json.dumps(shown) if shown is not None or got is None else show(got)
+                if "expected" in test:
+                    result["passed"] = same(shown, test["expected"], test.get("compare", "exact"))
             except StepLimit:
                 raise
             except Exception as failure:
-                results.append({"call": test["call"], "expected": test["expected"], "got": f"{type(failure).__name__}: {failure}", "passed": False})
+                result.update(error=f"{type(failure).__name__}: {failure}", line=error_line(failure), passed=False if "expected" in test else None)
+            finally:
+                sys.stdout = output
+            result.update(stdout=printed.getvalue()[:4000], ms=round((time.perf_counter() - started) * 1000, 2))
+            results.append(result)
     except StepLimit:
         error = {"line": None, "message": f"Stopped after {limit:,} steps. Is there a loop that never ends?"}
     except SyntaxError as failure:

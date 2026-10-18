@@ -75,5 +75,6 @@ body.app.ide .ide-palette-input input{flex:1;padding:0;border:0;outline:0;backgr
 .ide-card p{margin:0;font-size:13.5px;line-height:1.5}
 .ide-card form{margin:0}
 
+body.app.ide .problems-ring{background:conic-gradient(var(--right) calc(var(--done) * 1%),var(--ide-line-2) 0)}  /* the ring's empty track */
 @media (max-width:760px){.ide-status{display:none}body.app.ide{padding-bottom:0}}
 @media (prefers-reduced-motion:reduce){.ide-palette-box{animation:none}}
