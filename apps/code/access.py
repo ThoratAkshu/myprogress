@@ -6,7 +6,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from apps.accounts.access import user_role
 from apps.accounts.models import Profile
-from apps.core.git_service import list_branches, repository_role, user_can_access, user_can_administer, user_can_maintain
+from apps.core.git_service import list_branches, repository_role, user_can_access, user_can_administer, user_can_change_visibility, user_can_maintain
 from apps.core.models import Issue, Repository
 class RepositoryDenied(Exception):
     def __init__(self, response):
@@ -34,6 +34,7 @@ def repository_context(request, repository, active_tab, branches=None):
         "can_write": user_can_access(request.user, repository, write=True),
         "can_maintain": user_can_maintain(request.user, repository),
         "can_admin": user_can_administer(request.user, repository),
+        "can_change_visibility": user_can_change_visibility(request.user, repository),
         "my_role": repository_role(request.user, repository),
         "active_tab": active_tab,
         "clone_url": request.build_absolute_uri(reverse("landing:git_root", kwargs={"owner_id": repository.owner_id, "slug": repository.slug})),

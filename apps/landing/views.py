@@ -41,7 +41,7 @@ from apps.common.templatetags.ui import avatar_tone, initials
 from apps.accounts import identity
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
-from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer
+from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer, user_can_change_visibility
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
 from urllib.parse import urlencode
 import logging
@@ -342,8 +342,9 @@ def update_project_view(request, project_id):
     visibility = request.POST.get("visibility")
     public = visibility == "public" if visibility in {"public", "private"} else request.POST.get("is_public") == "on"
     repository = getattr(project, "repository", None)
-    if repository and public != project.is_public and not user_can_administer(request.user, repository):
-        messages.error(request, "Only the repository's admins can change who can see its code, so the visibility stayed the same.")
+    if repository and public != project.is_public and not user_can_change_visibility(request.user, repository):
+        messages.error(request, f"Only {repository.company.name}'s owners change who can see its repositories, so the visibility stayed the same." if user_can_administer(request.user, repository)
+                       else "Only the repository's admins can change who can see its code, so the visibility stayed the same.")
         public = project.is_public
     project.is_public = public
     if repository and repository.visibility != ("public" if public else "private"):
@@ -434,7 +435,7 @@ def repository_view(request, repository_id):
                 visibility = request.POST.get("visibility")
                 default_branch = request.POST.get("default_branch")
                 branch_names = {branch["name"] for branch in list_branches(repository)}
-                if visibility in {"private", "public"} and can_admin:  # maintainers change the branch, admins who can see it
+                if visibility in {"private", "public"} and context["can_change_visibility"]:  # maintainers change the branch; admins, if their company lets them, who can see it
                     repository.visibility = visibility
                     Project.objects.filter(pk=repository.project_id).update(is_public=visibility == "public")  # the project shows the same
                 if default_branch in branch_names:

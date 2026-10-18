@@ -58,18 +58,27 @@ def company_detail_view(request, slug):
     if (tab in {"people", "teams"} and not member) or (tab == "settings" and not (member and member.role == "owner")):
         tab = "repositories"
     context = {"section": "code", "company": company, "member": member, "tab": tab, "is_owner": bool(member and member.role == "owner"),
-               "member_count": company.members.count(), "repositories": services.visible_repositories(company, request.user)}
+               "member_count": company.members.count() if member else None, "repositories": services.visible_repositories(company, request.user)}
+    if member:
+        context["can_create"] = not services.creation_problem(company, member, "private")
+        context["can_create_public"] = not services.creation_problem(company, member, "public")
     if tab == "people":
-        context["people"] = company.members.select_related("user__profile").annotate(team_count=Count("user__team_memberships", filter=Q(user__team_memberships__team__company=company)))
+        people = list(company.members.select_related("user__profile").annotate(team_count=Count("user__team_memberships", filter=Q(user__team_memberships__team__company=company))))
+        for person in people:  # members who joined before the company took only its domains
+            person.off_domain = services.only_from_domains(company) and not services.on_domains(person.user.email, company.email_domains)
+        context["people"] = people
         context["owner_count"] = company.members.filter(role="owner").count()
         if context["is_owner"]:
             context["invitations"] = services.open_invitations(company)
+            context["outside"] = services.outside_collaborators(company)
     elif tab == "teams":
         context["teams"] = company.teams.annotate(member_count=Count("memberships", distinct=True), repository_count=Count("repositories", distinct=True))
         context["team_form"] = TeamForm()
     elif tab == "settings":
         context["form"] = CompanyForm(instance=company)
         context["base_roles"] = [(key, label, services.BASE_ROLE_HELP[key]) for key, label in Company.BASE_ROLES]
+        context["creation_choices"] = [(key, label, services.CREATION_HELP[key]) for key, label in Company.REPOSITORY_CREATION]
+        context["my_domain"] = services.domain_of(request.user.email)
     return render(request, "companies/detail.html", context)
 
 
@@ -82,8 +91,13 @@ def repository_create_view(request, slug):
     if not title:
         messages.error(request, "Give the repository a name.")
         return redirect(_url(company))
+    visibility = "public" if request.POST.get("visibility") == "public" else "private"
+    refused = services.creation_problem(company, member, visibility)
+    if refused:
+        messages.error(request, refused)
+        return redirect(_url(company))
     try:
-        repository = services.create_repository(company, request.user, title, request.POST.get("summary", "")[:500], "public" if request.POST.get("visibility") == "public" else "private")
+        repository = services.create_repository(company, request.user, title, request.POST.get("summary", "")[:500], visibility)
     except Exception:
         messages.error(request, "Repository storage couldn't be set up. Try again.")
         return redirect(_url(company))
@@ -140,6 +154,12 @@ def people_view(request, slug):
             services.let_go(target, request.user)
             notify(target.user, request.user, "collaborator", f"{name(request.user)} removed you from {company.name}", reverse("companies:list"))
             messages.success(request, f"{name(target.user)} is no longer in {company.name}. Their projects there passed to you.")
+    elif action == "remove_outside":
+        person = User.objects.filter(pk=item).exclude(company_memberships__company=company).first()
+        if person:
+            services.remove_outside(company, person)
+            notify(person, request.user, "collaborator", f"{name(request.user)} removed your access to {company.name}'s repositories", reverse("landing:workspace_section", args=["projects"]))
+            messages.success(request, f"{name(person)} no longer has access to {company.name}'s repositories.")
     elif action == "cancel":
         services.open_invitations(company).filter(pk=item).delete()
         messages.success(request, "Invitation cancelled. Its link no longer works.")
@@ -161,6 +181,10 @@ def people_view(request, slug):
             return redirect(back)
         if user and getattr(getattr(user, "profile", None), "role", "developer") != "developer":
             messages.error(request, "Companies are for student and professional accounts; that account is a recruiter or an organization.")
+            return redirect(back)
+        refused = services.invite_problem(company, user, email)
+        if refused:
+            messages.error(request, refused)
             return redirect(back)
         invitation = services.open_invitations(company).filter(Q(user=user) if user else Q(user__isnull=True, email__iexact=email)).first()
         if invitation:
@@ -249,6 +273,20 @@ def settings_view(request, slug):
         services.delete_company(company)
         messages.success(request, f"Deleted {company.name}. Its repositories went back to the members who made them.")
         return redirect("companies:list")
+    if request.POST.get("action") == "security":
+        try:
+            company.email_domains = services.clean_domains(company, request.user, request.POST.get("email_domains", ""))
+        except ValueError as error:
+            messages.error(request, str(error))
+            return redirect(_url(company, "settings") + "#security")
+        company.members_from_domains = request.POST.get("members_from_domains") == "on" and bool(company.email_domains)
+        if request.POST.get("repository_creation") in dict(Company.REPOSITORY_CREATION):
+            company.repository_creation = request.POST["repository_creation"]
+        company.members_change_visibility = request.POST.get("members_change_visibility") == "on"
+        company.members_invite_outside = request.POST.get("members_invite_outside") == "on"
+        company.save(update_fields=["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside"])
+        messages.success(request, "Security settings saved." + (" Turn on “only people from these domains” to use them for joining." if company.email_domains and not company.members_from_domains else ""))
+        return redirect(_url(company, "settings") + "#security")
     form = CompanyForm(request.POST, instance=company)
     if form.is_valid():
         company = form.save(commit=False)
@@ -267,6 +305,8 @@ def invitation_view(request, token):
     if request.user.is_authenticated and services.membership(invitation.company, request.user):
         return redirect(_url(invitation.company))
     issue, needs_confirmation = problem(invitation, request.user) if request.user.is_authenticated else ("", False)
+    if request.user.is_authenticated and not issue:
+        issue, needs_confirmation = services.join_problem(invitation.company, request.user)
     usable = invitation.is_open and not invitation.is_expired
     if request.method == "POST" and request.user.is_authenticated and usable and not issue:
         if request.POST.get("action") == "decline":

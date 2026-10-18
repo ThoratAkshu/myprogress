@@ -1,10 +1,11 @@
 """Companies own repositories together, like organizations on GitHub."""
 from django.core import mail
 from django.urls import reverse
+from django.utils import timezone
 from apps.accounts.models import Profile
 from apps.code.tests import RepositoryTestCase, make_user
 from apps.core.git_service import initialize_repository, repository_role, user_can_access, user_can_maintain
-from apps.core.models import Project, Repository, RepositoryCollaborator
+from apps.core.models import Project, Repository, RepositoryCollaborator, RepositoryInvitation
 from apps.notifications.models import Notification
 from .models import Company, CompanyInvitation, CompanyMember, Team, TeamMember, TeamRepository
 
@@ -175,3 +176,98 @@ class CompanyTests(CompanyTestCase):
         self.assertNotContains(self.client.get(f"{self.detail}?tab=people"), "Mo Member")
         self.assertEqual(self.client.post(reverse("companies:repository_create", args=[self.company.slug]), {"title": "Sneaky"}).status_code, 404)
         self.assertFalse(Repository.objects.filter(company=self.company).exists())
+
+
+class CompanySecurityTests(CompanyTestCase):
+    """Owners keep a company to its own people: email domains, what members create and publish, and outside access."""
+    def security(self, **fields):
+        self.client.force_login(self.owner)
+        data = {"action": "security", "email_domains": "", "repository_creation": "all", "members_change_visibility": "on", "members_invite_outside": "on", **fields}
+        return self.client.post(reverse("companies:settings", args=[self.company.slug]), {key: value for key, value in data.items() if value is not None}, follow=True)
+
+    def confirm(self, user):
+        Profile.objects.filter(user=user).update(email_verified_at=timezone.now())
+
+    def test_only_people_from_the_companys_domains_join(self):
+        self.assertContains(self.security(email_domains="gmail.com"), "Anyone can have an address at gmail.com")
+        self.assertContains(self.security(email_domains="example.com"), "you need a confirmed email on it; yours is owner@example.com")
+        self.confirm(self.owner)
+        self.assertContains(self.security(email_domains="other.org"), "To add other.org")
+        self.security(email_domains="Example.com", members_from_domains="on")
+        self.company.refresh_from_db()
+        self.assertEqual((self.company.email_domains, self.company.members_from_domains), (["example.com"], True))
+        self.client.logout()
+        public = self.client.get(self.detail)
+        self.assertContains(public, 'title="An owner confirmed an email on this domain"')
+        self.assertNotContains(public, "1 member")  # the member count is for members
+        # Invitations only go to addresses on the domain.
+        outsider = make_user("pat@other.org", "Pat", "Outsider")
+        self.client.force_login(self.owner)
+        people = reverse("companies:people", args=[self.company.slug])
+        self.assertContains(self.client.post(people, {"action": "invite", "invitee": "pat@other.org"}, follow=True), "Only people with a @example.com email can join Acme Labs")
+        self.assertContains(self.client.post(people, {"action": "invite", "invitee": "@pat-outsider"}, follow=True), "pat@other.org isn")
+        self.assertFalse(CompanyInvitation.objects.exists())
+        self.client.post(people, {"action": "invite", "invitee": "@team-mate"})
+        link = reverse("companies:invitation", args=[CompanyInvitation.objects.get().token])
+        # Accepting takes a confirmed email there.
+        self.client.force_login(self.teammate)
+        self.assertContains(self.client.get(link), "Confirm your email first")
+        self.client.post(link, {"action": "accept"})
+        self.assertFalse(CompanyMember.objects.filter(user=self.teammate).exists())
+        self.confirm(self.teammate)
+        self.client.post(link, {"action": "accept"})
+        self.assertTrue(CompanyMember.objects.filter(user=self.teammate).exists())
+        # People who joined before the rule are marked, not removed.
+        self.join(outsider)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(f"{self.detail}?tab=people"), "Not on @example.com", count=1)
+
+    def test_owners_decide_what_members_create_and_publish(self):
+        self.join(self.teammate)
+        self.security(repository_creation="private", members_change_visibility=None)
+        self.client.force_login(self.teammate)
+        self.assertContains(self.client.get(self.detail), "Only Acme Labs's owners make public repositories")
+        response = self.client.post(reverse("companies:repository_create", args=[self.company.slug]), {"title": "Leak", "visibility": "public"}, follow=True)
+        self.assertContains(response, "only its owners make public ones")
+        made = self.new_repository("Tool", user=self.teammate)  # private is fine
+        # Its admin can't make it public; an owner can.
+        self.client.force_login(self.teammate)
+        repo_url = reverse("landing:repository", args=[made.pk])
+        self.assertContains(self.client.get(f"{repo_url}?tab=settings"), "Only Acme Labs's owners change this repository's visibility")
+        self.client.post(repo_url, {"action": "settings", "visibility": "public", "default_branch": "main"})
+        response = self.client.post(reverse("landing:update_project", args=[made.project.pk]), {"summary": "", "visibility": "public"}, follow=True)
+        self.assertContains(response, "Only Acme Labs&#x27;s owners change who can see its repositories")
+        made.refresh_from_db()
+        self.assertEqual(made.visibility, "private")
+        self.client.force_login(self.owner)
+        self.client.post(repo_url, {"action": "settings", "visibility": "public", "default_branch": "main"})
+        made.refresh_from_db()
+        self.assertEqual(made.visibility, "public")
+        # Owners only: members neither create repositories nor move theirs in.
+        self.security(repository_creation="none")
+        self.client.force_login(self.teammate)
+        self.assertContains(self.client.get(self.detail), "Only Acme Labs's owners create repositories here")
+        own = Repository.objects.create(project=Project.objects.create(owner=self.teammate, title="Side project", is_public=False), owner=self.teammate, slug="side-project")
+        initialize_repository(own)
+        self.assertContains(self.client.post(reverse("code:transfer", args=[own.pk]), {"company": self.company.slug}, follow=True), "Only Acme Labs&#x27;s owners create repositories")
+        own.refresh_from_db()
+        self.assertIsNone(own.company)
+
+    def test_owners_see_and_remove_outside_collaborators(self):
+        self.join(self.teammate)
+        made = self.new_repository("Tool", user=self.teammate)
+        outsider = make_user("pat@other.org", "Pat", "Outsider")
+        self.security(members_invite_outside=None)
+        self.client.force_login(self.teammate)
+        access = reverse("code:collaborators", args=[made.pk])
+        self.assertContains(self.client.post(access, {"action": "invite", "invitee": "@pat-outsider", "role": "write"}, follow=True), "Only Acme Labs&#x27;s owners give access to people outside the company")
+        self.assertFalse(RepositoryInvitation.objects.exists())
+        self.client.force_login(self.owner)
+        self.client.post(access, {"action": "invite", "invitee": "@pat-outsider", "role": "write"})
+        self.assertTrue(RepositoryInvitation.objects.filter(user=outsider).exists())
+        RepositoryCollaborator.objects.create(repository=made, user=outsider, role="write")  # as if they had accepted
+        self.assertContains(self.client.get(f"{self.detail}?tab=people"), "tool (Write)")
+        self.client.post(reverse("companies:people", args=[self.company.slug]), {"action": "remove_outside", "id": outsider.pk})
+        self.assertFalse(RepositoryCollaborator.objects.filter(user=outsider).exists())
+        self.assertFalse(RepositoryInvitation.objects.filter(user=outsider).exists())
+        self.assertContains(self.client.get(f"{self.detail}?tab=people"), "Nobody outside Acme Labs has access")

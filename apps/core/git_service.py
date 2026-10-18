@@ -129,6 +129,12 @@ def user_can_maintain(user, repository):
 def user_can_administer(user, repository):
     """Everything but deleting the project: visibility, and inviting, changing and removing collaborators."""
     return _at_least(user, repository, "admin")
+def user_can_change_visibility(user, repository):
+    """Admins make a repository public or private, unless its company keeps that to its owners."""
+    role = repository_role(user, repository)
+    if role == "owner":
+        return True
+    return ROLE_LEVELS.get(role, 0) >= ROLE_LEVELS["admin"] and not (repository.company_id and not repository.company.members_change_visibility)
 LANGUAGE_FILENAMES = {"Dockerfile": "Dockerfile", "Makefile": "Makefile", "CMakeLists.txt": "CMake"}
 LANGUAGE_EXTENSIONS = {
     ".py": "Python", ".ipynb": "Jupyter Notebook", ".js": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript", ".jsx": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript",

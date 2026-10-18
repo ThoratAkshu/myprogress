@@ -13,6 +13,14 @@ class Company(models.Model):
     description = models.CharField(max_length=240, blank=True)
     website = models.URLField(blank=True)
     base_role = models.CharField(max_length=10, choices=BASE_ROLES, default="read", help_text="What every member can do in every repository of the company")
+    # Security, set by owners. Domains are added by an owner with a confirmed email on them, so a company can't claim
+    # someone else's; with members_from_domains on, only people with a confirmed email there can join.
+    REPOSITORY_CREATION = [("all", "Public and private"), ("private", "Private only"), ("none", "Owners only")]
+    email_domains = models.JSONField(default=list, blank=True)
+    members_from_domains = models.BooleanField(default=False, help_text="Only people with a confirmed email on the company's domains can join")
+    repository_creation = models.CharField(max_length=10, choices=REPOSITORY_CREATION, default="all", help_text="What members (not owners) can create")
+    members_change_visibility = models.BooleanField(default=True, help_text="Repository admins who are members can make repositories public or private")
+    members_invite_outside = models.BooleanField(default=True, help_text="Repository admins who are members can invite people from outside the company")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:

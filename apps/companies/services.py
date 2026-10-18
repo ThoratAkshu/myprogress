@@ -1,19 +1,25 @@
 """What companies do: create one, add repositories to it, bring people in and let them go."""
 import logging
+import re
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+from apps.accounts.identity import DISPOSABLE_EMAIL_DOMAINS, PERSONAL_EMAIL_DOMAINS, domain_of
+from apps.accounts.models import Profile
 from apps.code.invitations import name
 from apps.core.git_service import initialize_repository, user_can_access
-from apps.core.models import Project, Repository
+from apps.core.models import Project, Repository, RepositoryCollaborator, RepositoryInvitation
 from apps.notifications.services import notify
 from .models import Company, CompanyInvitation, CompanyMember, Team, TeamMember
 
 logger = logging.getLogger(__name__)
 RESERVED = {"new", "invitations"}
+CREATION_HELP = {"all": "Members create private and public repositories",
+                 "private": "Members create private repositories; only owners make public ones",
+                 "none": "Only owners create repositories, and move repositories into the company"}
 BASE_ROLE_HELP = {"none": "Members only reach the repositories their teams or invitations give them",
                   "read": "Every member can view and clone every repository, even private ones",
                   "write": "Every member can also push, branch and merge pull requests in every repository"}
@@ -145,6 +151,100 @@ def decline(invitation, user):
     CompanyInvitation.objects.filter(pk=invitation.pk).update(declined_at=timezone.now())
     if invitation.invited_by_id:
         notify(invitation.invited_by, user, "collaborator", f"{name(user)} declined your invitation to {invitation.company.name}", f'{reverse("companies:detail", args=[invitation.company.slug])}?tab=people')
+
+
+DOMAIN = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def on_domains(email, domains):
+    """An address at acme.com or a part of it (eu.acme.com) is on acme.com."""
+    domain = domain_of(email)
+    return any(domain == allowed or domain.endswith(f".{allowed}") for allowed in domains)
+
+
+def has_confirmed_email(user):
+    return bool(user.email) and Profile.objects.filter(user=user, email_verified_at__isnull=False).exists()
+
+
+def clean_domains(company, owner, text):
+    """The email domains an owner saves. Ones already on the company stay; adding one takes the saving owner's
+    confirmed email on it, so nobody can claim another company's domain. Raises ValueError with what's wrong."""
+    wanted = list(dict.fromkeys(part.strip().lower().removeprefix("@") for part in re.split(r"[,\s]+", text) if part.strip()))
+    if len(wanted) > 5:
+        raise ValueError("Add up to 5 domains.")
+    for domain in wanted:
+        if not DOMAIN.match(domain):
+            raise ValueError(f"{domain} isn't a domain. Write it like acme.com.")
+        if domain in PERSONAL_EMAIL_DOMAINS or domain in DISPOSABLE_EMAIL_DOMAINS:
+            raise ValueError(f"Anyone can have an address at {domain}, so it can't stand for {company.name}.")
+        if domain not in company.email_domains and not (has_confirmed_email(owner) and on_domains(owner.email, [domain])):
+            raise ValueError(f"To add {domain}, you need a confirmed email on it; yours is {owner.email}. An owner with an @{domain} email can add it.")
+    return wanted
+
+
+def domains_label(company):
+    return " or ".join(f"@{domain}" for domain in company.email_domains)
+
+
+def only_from_domains(company):
+    return company.members_from_domains and bool(company.email_domains)
+
+
+def invite_problem(company, user, email):
+    """Why this person can't be invited ("" if they can): companies that only take people from their domains."""
+    address = user.email if user else email
+    if only_from_domains(company) and not on_domains(address, company.email_domains):
+        return f"Only people with a {domains_label(company)} email can join {company.name}, and {address} isn't one."
+    return ""
+
+
+def join_problem(company, user):
+    """Why this account can't join ("" if it can), and whether confirming its email would fix it."""
+    if not only_from_domains(company):
+        return "", False
+    if not on_domains(user.email, company.email_domains):
+        return f"Only people with a confirmed {domains_label(company)} email can join {company.name}. Your account's email is {user.email}.", False
+    if not has_confirmed_email(user):
+        return f"Confirm your email first: open the link we sent to {user.email}, then open this invitation again.", True
+    return "", False
+
+
+def creation_problem(company, member, visibility):
+    """Why this member can't create this repository ("" if they can)."""
+    if member.role == "owner" or company.repository_creation == "all":
+        return ""
+    if company.repository_creation == "none":
+        return f"Only {company.name}'s owners create repositories. Ask one of them."
+    if visibility == "public":
+        return f"Members create private repositories in {company.name}; only its owners make public ones."
+    return ""
+
+
+def outside_problem(repository, actor, user):
+    """Why this admin can't give access to someone outside the repository's company ("" if they can)."""
+    company = repository.company
+    if not company or company.members_invite_outside or (user and company.members.filter(user=user).exists()):
+        return ""
+    if company.members.filter(user=actor, role="owner").exists():
+        return ""
+    return f"Only {company.name}'s owners give access to people outside the company. Invite a member, or ask an owner."
+
+
+def outside_collaborators(company):
+    """People outside the company with access to its repositories, each with what they reach."""
+    rows = (RepositoryCollaborator.objects.filter(repository__company=company).exclude(user__in=company.members.values("user"))
+            .select_related("user__profile", "repository").order_by("user__first_name", "user_id", "repository__slug"))
+    people = {}
+    for row in rows:
+        people.setdefault(row.user_id, {"user": row.user, "access": []})["access"].append(row)
+    return list(people.values())
+
+
+def remove_outside(company, user):
+    """Take an outside collaborator off every repository of the company, and cancel their waiting invitations."""
+    with transaction.atomic():
+        RepositoryCollaborator.objects.filter(repository__company=company, user=user).delete()
+        RepositoryInvitation.objects.filter(repository__company=company, user=user, accepted_at__isnull=True, declined_at__isnull=True).delete()
 
 
 def team_slug(company, text):

@@ -260,6 +260,10 @@ def _invite(request, repository, invitee, role):
         return messages.error(request, "That's the owner: they already have full access.")
     if user and repository.collaborators.filter(user=user).exists():
         return messages.error(request, f"{_name(user)} already has access. Change their role below.")
+    from apps.companies.services import outside_problem
+    refused = outside_problem(repository, request.user, user)
+    if refused:
+        return messages.error(request, refused)
     waiting = invitations.open_invitations(repository).filter(Q(user=user) if user else Q(user__isnull=True, email__iexact=email)).first()
     if waiting:
         waiting.role, waiting.token, waiting.expires_at, waiting.invited_by = role, invitation_token(), invitation_expiry(), request.user
@@ -281,6 +285,10 @@ def transfer_view(request, repository_id):
     company = Company.objects.filter(slug=request.POST.get("company", ""), members__user=request.user).first()
     if company is None:
         messages.error(request, "Pick one of your companies.")
+        return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
+    refused = companies.creation_problem(company, company.members.get(user=request.user), repository.visibility)
+    if refused:
+        messages.error(request, refused)
         return redirect(f'{reverse("landing:repository", args=[repository.pk])}?tab=settings')
     try:
         companies.transfer(repository, company)

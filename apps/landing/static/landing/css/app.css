@@ -1716,3 +1716,15 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 .occupation-switch input:focus-visible+span{outline:2px solid var(--violet);outline-offset:2px}
 @media (max-width:640px){.channel-pair{grid-template-columns:minmax(0,1fr)}}
 .app-banner .app-banner-action{padding:4px 12px;border:1px solid #d4a72c;border-radius:99px;background:#fff;color:inherit;font-size:13px;font-weight:700;text-decoration:none}
+/* Company security */
+.company-form .company-check{display:flex;align-items:flex-start;gap:10px;font-weight:400;cursor:pointer}
+.company-form .company-check input[type=checkbox]{flex:none;width:16px;height:16px;margin:2px 0 0;padding:0}
+.company-check span{display:grid;gap:2px}
+.company-check b{font-size:14px}
+.company-check small{color:var(--muted);font-size:12px;font-weight:400}
+.company-choice label.is-disabled{opacity:.6;cursor:not-allowed}
+.company-policy-note{display:flex;align-items:center;gap:8px;margin:0;padding:14px 16px;color:var(--muted);font-size:14px}
+.company-policy-line{display:flex;align-items:center;gap:6px;margin:12px 0 0}
+.company-warn{color:#b45309;font-weight:700}
+.company-domain{color:#047857;font-weight:600}
+.company-form label>small{font-size:12px;font-weight:400;line-height:1.45}
