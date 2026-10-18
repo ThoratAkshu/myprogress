@@ -1,7 +1,7 @@
 {% extends "landing/app_base.html" %}{% load ui %}
 {% block title %}Companies{% endblock %}
 {% block content %}<div class="company-page">
-<header class="page-title"><div><span class="kicker">Repositories</span><h1>Companies</h1><p>Host repositories together, like an organization on GitHub: owners run the company, every member reaches its repositories, and teams get more on the ones they work on.</p></div></header>
+<header class="page-title"><div><span class="kicker">Repositories</span><h1>Companies</h1><p>Host repositories together, like an organization on GitHub: owners run the company, and teams and invitations decide who reaches each repository.</p></div></header>
 {% if invitations %}<a class="card repo-invite-banner" href="{% url 'repository_invitations:list' %}">{% icon "user-plus" 18 %}<span><b>{% with count=invitations|length %}{{ count }} invitation{{ count|pluralize }} to join a company{% endwith %}</b><small>{% for invitation in invitations|slice:":2" %}{{ invitation.company.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</small></span><span class="button primary">Review</span></a>{% endif %}
 <div class="company-grid">
 {% for company in companies %}<a class="card company-card" href="{% url 'companies:detail' company.slug %}"><span class="company-logo">{{ company.initials }}</span><span class="company-card-text"><b>{{ company.name }}</b><small>{% if company.my_role == "owner" %}Owner{% else %}Member{% endif %} · {{ company.member_count }} member{{ company.member_count|pluralize }} · {{ company.repository_count }} repositor{{ company.repository_count|pluralize:"y,ies" }}</small>{% if company.description %}<small>{{ company.description }}</small>{% endif %}</span>{% icon "chevron-right" 18 %}</a>
@@ -10,6 +10,6 @@
 <label>{{ form.name.label }}{{ form.name }}{% for error in form.name.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
 <label>{{ form.description.label }}{{ form.description }}</label>
 <label>{{ form.website.label }}{{ form.website }}{% for error in form.website.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
-<button class="button primary">Create company</button><small class="muted">You'll be its owner. Repositories you add to it belong to the company, not to you.</small></form>
+<button class="button primary">Create company</button><small class="muted">You'll be its owner. Repositories you add to it belong to the company, not to you. Members start with no access to them; you give it through teams.</small></form>
 </div>
 </div>{% endblock %}

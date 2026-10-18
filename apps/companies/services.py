@@ -253,6 +253,27 @@ def remove_outside(company, user):
         RepositoryInvitation.objects.filter(repository__company=company, user=user, accepted_at__isnull=True, declined_at__isnull=True).delete()
 
 
+def security_checklist(company, user):
+    """Secure your company: the steps that keep it to its own people, each with whether it's done and where to do it."""
+    settings_url = f'{reverse("companies:detail", args=[company.slug])}?tab=settings'
+    my_domain = domain_of(user.email)
+    personal = my_domain in PERSONAL_EMAIL_DOMAINS or not my_domain
+    you_two_step = uses_two_step(user)
+    return [
+        {"done": bool(company.email_domains), "title": "Add your company's email domain", "url": f"{settings_url}#security",
+         "help": (f"Your email is on {my_domain}, which anyone can use, so an owner with a work email adds it." if personal
+                  else f"Like {my_domain}. You need a confirmed email on it, and it shows on the company page.")},
+        {"done": company.members_from_domains, "title": "Only let people from your domain join", "url": f"{settings_url}#security",
+         "help": "Invitations then go only to addresses on it, and joining takes a confirmed email there."},
+        {"done": company.base_role == "none", "title": "Give members no access by default", "url": settings_url,
+         "help": "Teams and invitations then decide who reaches each repository."},
+        {"done": you_two_step, "title": "Turn on two-step sign-in for your account", "url": reverse("landing:security"),
+         "help": "After your password, a code from an app on your phone."},
+        {"done": company.require_two_factor, "title": f"Require two-step sign-in in {company.name}", "url": f"{settings_url}#security",
+         "help": "Nobody reaches its repositories without it." + ("" if you_two_step else " Turn it on for yourself first.")},
+    ]
+
+
 SECURITY_FIELDS = ["email_domains", "members_from_domains", "repository_creation", "members_change_visibility", "members_invite_outside", "require_two_factor"]
 
 

@@ -43,7 +43,7 @@ def company_list_view(request):
     if request.method == "POST" and form.is_valid():
         company = services.create_company(request.user, form.cleaned_data["name"], form.cleaned_data["description"], form.cleaned_data["website"])
         record(request, "company.create", f"created {company.name}", company=company)
-        messages.success(request, f"{company.name} is ready, and you're its owner. Add a repository, then invite your team.")
+        messages.success(request, f"{company.name} is ready, and you're its owner. Secure it with the checklist below, then add repositories and invite your team.")
         return redirect(_url(company))
     companies = services.companies_for(request.user).annotate(member_count=Count("members", distinct=True), repository_count=Count("repositories", distinct=True))
     roles = dict(CompanyMember.objects.filter(user=request.user).values_list("company_id", "role"))
@@ -62,6 +62,11 @@ def company_detail_view(request, slug):
         tab = "repositories"
     context = {"section": "code", "company": company, "member": member, "tab": tab, "is_owner": bool(member and member.role == "owner"),
                "member_count": company.members.count() if member else None, "repositories": services.visible_repositories(company, request.user)}
+    if member and member.role == "owner" and tab == "repositories" and not member.hide_security_checklist:
+        steps = services.security_checklist(company, request.user)
+        done = sum(step["done"] for step in steps)
+        if done < len(steps):  # gone once everything's done
+            context["checklist"] = {"steps": steps, "done": done, "total": len(steps), "percent": round(100 * done / len(steps))}
     if member:
         context["needs_two_step"] = company.require_two_factor and not services.uses_two_step(request.user)
         context["can_create"] = not services.creation_problem(company, member, "private") and not context["needs_two_step"]
@@ -87,6 +92,7 @@ def company_detail_view(request, slug):
         context["my_domain"] = services.domain_of(request.user.email)
         context["i_use_two_step"] = services.uses_two_step(request.user)
         context["without_two_step"] = company.members.exclude(user__two_factor__enabled_at__isnull=False).count()
+        context["checklist_hidden"] = member.hide_security_checklist
     elif tab == "log":
         context["log"] = Paginator(company_log(company), 50).get_page(request.GET.get("page"))
     return render(request, "companies/detail.html", context)
@@ -304,6 +310,10 @@ def settings_view(request, slug):
         services.delete_company(company)
         messages.success(request, f"Deleted {company.name}. Its repositories went back to the members who made them.")
         return redirect("companies:list")
+    if request.POST.get("action") == "checklist":
+        hide = request.POST.get("hide") == "1"
+        CompanyMember.objects.filter(pk=member.pk).update(hide_security_checklist=hide)
+        return redirect(_url(company, "settings") + "#security" if not hide else _url(company))
     if request.POST.get("action") == "security":
         before = {field: getattr(company, field) for field in services.SECURITY_FIELDS}
         try:

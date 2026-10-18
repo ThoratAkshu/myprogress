@@ -12,7 +12,8 @@ class Company(models.Model):
     slug = models.SlugField(max_length=60, unique=True)
     description = models.CharField(max_length=240, blank=True)
     website = models.URLField(blank=True)
-    base_role = models.CharField(max_length=10, choices=BASE_ROLES, default="read", help_text="What every member can do in every repository of the company")
+    # New companies give members nothing by default: teams and invitations decide who reaches each repository.
+    base_role = models.CharField(max_length=10, choices=BASE_ROLES, default="none", help_text="What every member can do in every repository of the company")
     # Security, set by owners. Domains are added by an owner with a confirmed email on them, so a company can't claim
     # someone else's; with members_from_domains on, only people with a confirmed email there can join.
     REPOSITORY_CREATION = [("all", "Public and private"), ("private", "Private only"), ("none", "Owners only")]
@@ -41,6 +42,7 @@ class CompanyMember(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="company_memberships")
     role = models.CharField(max_length=10, choices=ROLES, default="member")
     joined_at = models.DateTimeField(auto_now_add=True)
+    hide_security_checklist = models.BooleanField(default=False, help_text="An owner hid the Secure your company checklist")
     class Meta:
         ordering = ["role", "joined_at"]
         constraints = [models.UniqueConstraint(fields=["company", "user"], name="company_member_once")]

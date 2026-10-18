@@ -1,5 +1,6 @@
 """Companies own repositories together, like organizations on GitHub."""
 from django.core import mail
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from apps.accounts.models import Profile
@@ -7,12 +8,15 @@ from apps.code.tests import RepositoryTestCase, make_user
 from apps.core.git_service import initialize_repository, repository_role, user_can_access, user_can_maintain
 from apps.core.models import Project, Repository, RepositoryCollaborator, RepositoryInvitation
 from apps.notifications.models import Notification
+from apps.accounts.test_two_factor import turn_on
 from .models import Company, CompanyInvitation, CompanyMember, Team, TeamMember, TeamRepository
 
 
 class CompanyTestCase(RepositoryTestCase):
     def setUp(self):
         super().setUp()
+        cache.clear()  # creating companies is rate limited per account, and test accounts reuse ids
+        self.addCleanup(cache.clear)
         self.teammate = make_user("mate@example.com", "Team", "Mate")
         self.client.force_login(self.owner)
         self.client.post(reverse("companies:list"), {"name": "Acme Labs", "description": "Tools for small shops", "website": ""})
@@ -51,7 +55,10 @@ class CompanyTests(CompanyTestCase):
     def test_members_reach_repositories_through_the_base_permission_teams_and_what_they_made(self):
         repository = self.new_repository("Billing API")
         self.join(self.teammate)
-        self.assertEqual(repository_role(self.teammate, repository), "read")  # the default base permission
+        self.assertIsNone(repository_role(self.teammate, repository))  # new companies give members no access by default
+        Company.objects.filter(pk=self.company.pk).update(base_role="read")
+        repository.refresh_from_db()
+        self.assertEqual(repository_role(self.teammate, repository), "read")
         self.assertFalse(user_can_access(self.teammate, repository, write=True))
         Company.objects.filter(pk=self.company.pk).update(base_role="none")
         repository.refresh_from_db()
@@ -274,3 +281,28 @@ class CompanySecurityTests(CompanyTestCase):
         self.assertFalse(RepositoryCollaborator.objects.filter(user=outsider).exists())
         self.assertFalse(RepositoryInvitation.objects.filter(user=outsider).exists())
         self.assertContains(self.client.get(f"{self.detail}?tab=people"), "Nobody outside Acme Labs has access")
+
+    def test_new_companies_start_with_no_access_and_owners_get_a_checklist(self):
+        self.assertEqual(self.company.base_role, "none")
+        page = self.client.get(self.detail)
+        self.assertContains(page, "Secure Acme Labs")
+        self.assertContains(page, "1 of 5 done")  # members already start with no access
+        self.assertContains(page, "Like example.com. You need a confirmed email on it")
+        self.join(self.teammate)
+        self.client.force_login(self.teammate)
+        self.assertNotContains(self.client.get(self.detail), "Secure Acme Labs")  # owners only
+        # Steps tick as they're done.
+        self.confirm(self.owner)
+        self.security(email_domains="example.com", members_from_domains="on")
+        self.assertContains(self.client.get(self.detail), "3 of 5 done")
+        # An owner can hide it, and bring it back from Settings.
+        settings_url = reverse("companies:settings", args=[self.company.slug])
+        self.client.post(settings_url, {"action": "checklist", "hide": "1"})
+        self.assertNotContains(self.client.get(self.detail), "Secure Acme Labs")
+        self.assertContains(self.client.get(f"{self.detail}?tab=settings"), "Show the security checklist again")
+        self.client.post(settings_url, {"action": "checklist", "hide": "0"})
+        self.assertContains(self.client.get(self.detail), "Secure Acme Labs")
+        # It goes away once everything is done.
+        turn_on(self.client, self.owner)
+        self.security(email_domains="example.com", members_from_domains="on", require_two_factor="on")
+        self.assertNotContains(self.client.get(self.detail), "Secure Acme Labs")

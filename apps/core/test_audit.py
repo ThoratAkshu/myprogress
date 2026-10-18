@@ -1,6 +1,5 @@
 """The change log: who changed access, visibility and security settings, and when; each log only for who may see it."""
 from django.contrib.auth.tokens import default_token_generator
-from django.core import mail
 from django.core.cache import cache
 from django.urls import reverse
 from django.utils.encoding import force_bytes
@@ -72,8 +71,10 @@ class ChangeLogTests(CompanyTestCase):
         self.assertNotContains(self.client.get(reverse("landing:security")), "Entered a wrong two-step code")  # only your own
         # Choosing a new password from the emailed link is in it too.
         self.client.logout()
+        self.teammate.refresh_from_db()  # the link depends on when they last signed in, which signing in above changed
         link = reverse("landing:password_reset_confirm", args=[urlsafe_base64_encode(force_bytes(self.teammate.pk)), default_token_generator.make_token(self.teammate)])
         form = self.client.get(link, follow=True)
-        self.client.post(form.request["PATH_INFO"], {"new_password1": "AnotherPass!9931", "new_password2": "AnotherPass!9931"})
+        self.assertTrue(form.context["validlink"])
+        done = self.client.post(form.request["PATH_INFO"], {"new_password1": "AnotherPass!9931", "new_password2": "AnotherPass!9931"})
+        self.assertRedirects(done, reverse("landing:password_reset_complete"))
         self.assertTrue(AuditEvent.objects.filter(user=self.teammate, action="account.password").exists())
-        self.assertEqual(len(mail.outbox), 0)

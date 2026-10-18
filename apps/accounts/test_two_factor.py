@@ -130,6 +130,7 @@ class CompanyTwoStepTests(RepositoryTestCase):
         self.client.force_login(self.owner)
         self.client.post(reverse("companies:list"), {"name": "Acme Labs"})
         self.company = Company.objects.get()
+        Company.objects.filter(pk=self.company.pk).update(base_role="read")  # every member can read, once they use two steps
         self.client.post(reverse("companies:repository_create", args=[self.company.slug]), {"title": "Billing API"})
         self.repo = self.company.repositories.get()
         self.member = make_user("mate@example.com", "Team", "Mate")

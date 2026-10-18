@@ -1781,3 +1781,24 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 @media (max-width:560px){.log-row,.log-row.is-personal{grid-template-columns:auto minmax(0,1fr)}.log-row time,.log-row small{grid-column:2}}
 .security-page .log-row p{font-size:14px}
 .security-page .log-row{padding:9px 0}
+/* Secure your company: the owners' checklist */
+.company-checklist{display:grid;gap:12px;padding:20px}
+.company-checklist header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.company-checklist h2{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-size:17px}
+.company-checklist header p{margin:0;font-size:13px}
+.checklist-count{flex:none;padding:4px 10px;border-radius:99px;background:var(--violet-soft);color:var(--violet);font-size:12px;font-weight:800}
+.checklist-bar{height:6px;border-radius:99px;background:#e2e8f0;overflow:hidden}
+.checklist-bar i{display:block;height:100%;border-radius:99px;background:var(--violet)}
+.company-checklist ol{display:grid;gap:4px;margin:0;padding:0;list-style:none}
+.company-checklist li{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.company-checklist li:first-child{border-top:0}
+.company-checklist li>span:last-child{display:grid;gap:2px}
+.company-checklist li b{font-size:14px}
+.company-checklist li small{color:var(--muted);font-size:12.5px}
+.company-checklist li.is-done b{color:var(--muted);font-weight:600}
+.checklist-tick{display:grid;place-items:center;flex:none;width:24px;height:24px;border:1px solid var(--line);border-radius:50%;font-size:12px;font-weight:800;color:var(--muted)}
+.company-checklist li.is-done .checklist-tick{border-color:#16a34a;background:#16a34a;color:#fff}
+.company-checklist form{margin:0}
+.checklist-show{margin:-6px 0 0}
+.company-checklist li b a{color:var(--violet);text-decoration:none}
+.company-checklist li b a:hover{text-decoration:underline}
