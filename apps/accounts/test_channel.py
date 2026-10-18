@@ -14,6 +14,8 @@ from apps.core.models import LearningPost
 from apps.organizations import services
 
 MEDIA = tempfile.mkdtemp()
+# Who they are; each account type reads what applies to it.
+IDENTITY = {"occupation": "student", "institution": "Pune University", "company_name": "Acme"}
 BODY = "Clear notes on how loops work, with examples and practice questions for every step. " * 4
 
 
@@ -44,7 +46,7 @@ class ChannelTests(TestCase):
 
     def save(self, user, **data):
         self.client.force_login(user)
-        fields = {"channel_name": "", "headline": "", "bio": "", "location": "", "brand_color": "ocean", **data}
+        fields = {"channel_name": "", "headline": "", "bio": "", "location": "", "brand_color": "ocean", **IDENTITY, **data}
         return self.client.post(reverse("landing:channel_settings"), fields)
 
     def test_every_account_type_can_customize_its_channel(self):

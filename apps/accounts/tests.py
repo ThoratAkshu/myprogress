@@ -14,14 +14,14 @@ class AuthenticationFlowTests(TestCase):
         response = self.client.get(reverse("landing:dashboard"))
         self.assertEqual(response.status_code, 302)
     def test_registration_creates_user_profile_and_session(self):
-        response = self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "ASHA@example.com", "password": "StrongPass!482", "role": "developer", "terms": "1"})
+        response = self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "ASHA@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
         self.assertRedirects(response, reverse("landing:dashboard"))
         user = User.objects.get(username="asha@example.com")
         self.assertEqual(user.profile.role, "developer")
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
     def test_duplicate_email_is_rejected(self):
         User.objects.create_user(username="asha@example.com", email="asha@example.com", password="StrongPass!482")
-        response = self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "ASHA@example.com", "password": "StrongPass!482", "role": "developer", "terms": "1"})
+        response = self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "ASHA@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(User.objects.filter(email__iexact="asha@example.com").count(), 1)
     def test_login_and_post_only_logout(self):

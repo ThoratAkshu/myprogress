@@ -2,9 +2,12 @@ from django import forms
 from django.contrib.auth import authenticate, password_validation
 from django.contrib.auth.models import User
 from urllib.parse import urlsplit
+from apps.organizations.models import Organization
+from . import identity
 from .images import channel_banner, channel_logo
 from .models import SOCIAL_LINKS, Profile
 class RegistrationForm(forms.Form):
+    """A new account, and who they are: what each account type has to tell us is in identity.check()."""
     ROLE_CHOICES = [("developer", "Student or professional"), ("recruiter", "Recruiter"), ("organization", "Organization")]
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
@@ -12,6 +15,31 @@ class RegistrationForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput)
     role = forms.ChoiceField(choices=ROLE_CHOICES)
     terms = forms.BooleanField()
+    organization_name = forms.CharField(max_length=120, required=False, label="Organization name")
+    organization_kind = forms.ChoiceField(choices=Organization.KINDS, required=False, label="Type")
+    organization_city = forms.CharField(max_length=80, required=False, label="City")
+    organization_about = forms.CharField(max_length=500, required=False, label="What you teach and who it's for", widget=forms.Textarea)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        identity.add_fields(self, "any")
+    def clean(self):
+        cleaned = super().clean()
+        role, email = cleaned.get("role"), cleaned.get("email")
+        if email and role:
+            problem = identity.email_problem(email, role)
+            if problem:
+                self.add_error("email", problem)
+        cleaned["identity"] = identity.check(self, role, email or "")
+        if role == "organization":
+            for name, message in [("organization_name", "Give your organization's name."), ("organization_kind", "Choose what kind of organization it is."),
+                                  ("organization_about", "Tell students what you teach and who it's for.")]:
+                if not " ".join((cleaned.get(name) or "").split()):
+                    self.add_error(name, message)
+        return cleaned
+    def organization_data(self):
+        """The institute an organization account starts with."""
+        clean = lambda name: " ".join(self.cleaned_data[name].split())
+        return {"name": clean("organization_name"), "kind": self.cleaned_data["organization_kind"], "city": clean("organization_city"), "about": self.cleaned_data["organization_about"].strip()}
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
         if User.objects.filter(username__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
@@ -50,6 +78,7 @@ class ProfileForm(forms.ModelForm):
         return handle
     def clean_skills(self):
         return ", ".join(dict.fromkeys(skill.strip() for skill in self.cleaned_data["skills"].split(",") if skill.strip()))
+IDENTITY_FIELDS = ["occupation", "institution", "graduation_year", "job_title", "company_name", "company_website"]
 class ChannelForm(forms.ModelForm):
     """The public channel every account brands: name, tagline, about, logo, banner, colour, and links."""
     remove_logo = forms.BooleanField(required=False)
@@ -70,6 +99,12 @@ class ChannelForm(forms.ModelForm):
         self.fields["channel_name"].widget.attrs.update({"maxlength": 80, "placeholder": self.instance.display_channel_name if self.instance.pk else ""})
         self.fields["headline"].widget.attrs["placeholder"] = "What your channel is about, in one line"
         self.fields["bio"].max_length = 2000
+        self.role = self.instance.role if self.instance.pk else "developer"
+        if self.role in {"developer", "recruiter"}:  # who they are; organizations describe their institute instead
+            identity.add_fields(self, self.role)
+            for name in IDENTITY_FIELDS:
+                if name in self.fields:
+                    self.initial.setdefault(name, getattr(self.instance, name))
         saved = self.instance.links if isinstance(self.instance.links, dict) else {}
         for kind, label, domains in SOCIAL_LINKS:
             example = f"https://{domains[0]}/…" if domains else "https://your-site.com"
@@ -92,7 +127,11 @@ class ChannelForm(forms.ModelForm):
             else:
                 links[kind] = url
         cleaned["links"] = links
+        if self.role in {"developer", "recruiter"}:
+            cleaned["identity"] = identity.check(self, self.role, self.instance.user.email)
         return cleaned
+    def identity_fields(self):
+        return [self[name] for name in IDENTITY_FIELDS if name in self.fields]
     def clean_avatar(self):
         upload = self.cleaned_data.get("avatar")
         return channel_logo(upload) if upload and upload is not getattr(self.instance, "avatar", None) and hasattr(upload, "content_type") else upload
@@ -102,6 +141,8 @@ class ChannelForm(forms.ModelForm):
     def save(self, commit=True):
         profile = super().save(commit=False)
         profile.links = self.cleaned_data["links"]
+        for name, value in self.cleaned_data.get("identity", {}).items():
+            setattr(profile, name, value)
         replaced = []
         for field, remove in [("avatar", "remove_logo"), ("banner", "remove_banner")]:
             previous = self.initial.get(field)

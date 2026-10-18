@@ -97,7 +97,7 @@ class EmailVerificationTests(TestCase):
     def setUp(self):
         cache.clear()
     def test_registration_sends_a_link_that_verifies_the_email(self):
-        self.client.post(reverse("landing:register"), {"first_name": "Hana", "last_name": "Iyer", "email": "hana@acme.io", "password": "StrongPass!482", "role": "recruiter", "terms": "1"})
+        self.client.post(reverse("landing:register"), {"first_name": "Hana", "last_name": "Iyer", "email": "hana@acme.io", "password": "StrongPass!482", "role": "recruiter", "company_name": "Acme", "terms": "1"})
         self.assertEqual(len(mail.outbox), 1)
         link = re.search(r"https?://\S+/account/verify/\S+/", mail.outbox[0].body).group(0)
         self.assertContains(self.client.get(reverse("recruiting:search")), "Confirm your email")

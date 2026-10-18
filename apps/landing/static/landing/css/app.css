@@ -1701,3 +1701,18 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 .visibility-choice b{display:inline-flex;align-items:center;gap:6px;font-size:14px}
 .visibility-choice small{color:var(--muted);font-size:12px;line-height:1.4}
 .pill.is-private{display:inline-flex;align-items:center;gap:4px}
+/* Who you are, in channel settings */
+.channel-identity{grid-column:1/-1}
+.channel-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.channel-pair[hidden]{display:none}
+.channel-section input[type=number]{width:100%;padding:10px 12px;border:1px solid #d5dce5;border-radius:8px;background:#fff;color:var(--ink);font:inherit;font-size:14px}
+.channel-section .optional{margin-left:4px;color:var(--muted);font-size:11px;font-weight:500}
+.occupation-switch{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;border:0}
+.occupation-switch legend{margin-bottom:6px;padding:0;font-size:12px;font-weight:700}
+.occupation-switch label{position:relative;cursor:pointer}
+.occupation-switch input{position:absolute;opacity:0;pointer-events:none}
+.occupation-switch span{display:inline-flex;align-items:center;height:38px;padding:0 16px;border:1px solid #d5dce5;border-radius:999px;background:#fff;font-size:13px;font-weight:600}
+.occupation-switch input:checked+span{border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
+.occupation-switch input:focus-visible+span{outline:2px solid var(--violet);outline-offset:2px}
+@media (max-width:640px){.channel-pair{grid-template-columns:minmax(0,1fr)}}
+.app-banner .app-banner-action{padding:4px 12px;border:1px solid #d4a72c;border-radius:99px;background:#fff;color:inherit;font-size:13px;font-weight:700;text-decoration:none}

@@ -128,3 +128,13 @@
   });
   drawLogo();
 })();
+
+// Who you are: show the student or the working professional questions.
+(() => {
+  const choice = document.querySelector("[data-occupation-switch]");
+  if (!choice) return;
+  choice.addEventListener("change", () => {
+    const chosen = choice.querySelector("input:checked")?.value || "";
+    document.querySelectorAll("[data-for-occupation]").forEach(group => { group.hidden = group.dataset.forOccupation !== chosen; });
+  });
+})();

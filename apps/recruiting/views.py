@@ -34,7 +34,7 @@ def _candidate(handle):
     return get_object_or_404(Profile.objects.select_related("user"), handle=handle, role="developer", recruiter_visible=True)
 @recruiter_required
 def talent_search_view(request):
-    filters = {key: request.GET.get(key, "").strip() for key in ["q", "language", "skill", "location", "min_score", "active", "sort"]}
+    filters = {key: request.GET.get(key, "").strip() for key in ["q", "language", "skill", "location", "stage", "min_score", "active", "sort"]}
     profiles = visible_developers()
     for term in filters["q"].split()[:5]:
         profiles = profiles.filter(Q(user__first_name__icontains=term) | Q(user__last_name__icontains=term) | Q(headline__icontains=term) | Q(skills__icontains=term) | Q(handle__icontains=term))
@@ -44,6 +44,8 @@ def talent_search_view(request):
         profiles = profiles.filter(skills__icontains=filters["skill"])
     if filters["location"]:
         profiles = profiles.filter(location__icontains=filters["location"])
+    if filters["stage"] in {"student", "professional"}:  # what they told us when they signed up
+        profiles = profiles.filter(occupation=filters["stage"])
     if filters["min_score"].isdigit():
         profiles = profiles.filter(score__gte=int(filters["min_score"]))
     if filters["active"]:
@@ -67,7 +69,7 @@ def talent_search_view(request):
         profile.contact_status = request_status.get(profile.user_id)
     query = request.GET.copy()
     query.pop("page", None)
-    context = {"score_options": [("", "Any"), ("25", "25+"), ("50", "50+"), ("75", "75+")], "verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
+    context = {"score_options": [("", "Any"), ("25", "25+"), ("50", "50+"), ("75", "75+")], "stage_options": [("", "Any"), ("student", "Students"), ("professional", "Professionals")], "verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
     return render(request, "recruiting/search.html", context)
 @recruiter_required
 def shortlists_view(request):

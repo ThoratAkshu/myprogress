@@ -28,7 +28,7 @@ from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trendi
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.earnings.models import EarningSettings
-from apps.organizations.services import student_summary
+from apps.organizations.services import create_organization, student_summary
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view
@@ -38,6 +38,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
+from apps.accounts import identity
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
 from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer
@@ -87,13 +88,15 @@ def register_view(request):
         return redirect("landing:dashboard")
     form = RegistrationForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
+        role, details = form.cleaned_data["role"], form.cleaned_data["identity"]
         with transaction.atomic():
             user = User.objects.create_user(username=form.cleaned_data["email"], email=form.cleaned_data["email"], password=form.cleaned_data["password"], first_name=form.cleaned_data["first_name"].strip(), last_name=form.cleaned_data["last_name"].strip())
-            Profile.objects.create(user=user, role=form.cleaned_data["role"])
+            Profile.objects.create(user=user, role=role, headline=identity.headline(role, details), **details)
+            organization = create_organization(user, form.organization_data()) if role == "organization" else None
         login(request, user)
         request.session.cycle_key()
         send_verification_email(request, user)
-        messages.success(request, f"Welcome! We sent a confirmation link to {user.email}.")
+        messages.success(request, f"Welcome! {f'{organization.name} is ready. ' if organization else ''}We sent a confirmation link to {user.email}.")
         next_url = request.POST.get("next", "")
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
             return redirect(next_url)  # back to an organization invite, for example
@@ -656,8 +659,8 @@ def resend_verification_view(request):
 @login_required(login_url="landing:home")
 @require_POST
 def dismiss_verification_banner_view(request):
-    """Hide the confirm-your-email banner until the next sign-in."""
-    request.session["verify_banner_hidden"] = True
+    """Hide a reminder banner (confirm your email, or say who you are) until the next sign-in."""
+    request.session["identity_banner_hidden" if request.POST.get("banner") == "identity" else "verify_banner_hidden"] = True
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return HttpResponse(status=204)
     return redirect(request.META.get("HTTP_REFERER") if url_has_allowed_host_and_scheme(request.META.get("HTTP_REFERER", ""), allowed_hosts={request.get_host()}, require_https=request.is_secure()) else "landing:dashboard")

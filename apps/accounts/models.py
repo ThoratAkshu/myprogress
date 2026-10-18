@@ -22,6 +22,7 @@ SOCIAL_LINKS = [
 ]
 class Profile(models.Model):
     ROLE_CHOICES = [("developer", "Student or professional"), ("recruiter", "Recruiter"), ("organization", "Organization")]
+    OCCUPATIONS = [("student", "Student"), ("professional", "Working professional")]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     handle = models.SlugField(max_length=40, unique=True, null=True, blank=True, help_text="Public portfolio address: /u/<handle>/")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="developer")
@@ -40,6 +41,14 @@ class Profile(models.Model):
     banner = models.ImageField(upload_to="channels/banners/", blank=True)
     brand_color = models.CharField(max_length=12, choices=[(key, label) for key, label, _ in BRAND_COLORS], default="ocean")
     links = models.JSONField(default=dict, blank=True, help_text="Social and website links by kind, all https")
+    # Who they are, asked at sign-up: students and professionals say which (and where they study or what they do),
+    # recruiters name the company they hire for. Organizations describe themselves on their institute instead.
+    occupation = models.CharField(max_length=20, choices=OCCUPATIONS, blank=True)
+    institution = models.CharField(max_length=120, blank=True, help_text="A student's college or school")
+    graduation_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    job_title = models.CharField(max_length=100, blank=True)
+    company_name = models.CharField(max_length=120, blank=True, help_text="Where a professional works, or the company a recruiter hires for")
+    company_website = models.URLField(blank=True, help_text="A recruiter's company site, on the same domain as their email")
     def __str__(self):
         return f"{self.user.get_full_name() or self.user.username} profile"
     def save(self, *args, **kwargs):
@@ -72,6 +81,12 @@ class Profile(models.Model):
     @property
     def email_domain(self):
         return self.user.email.rsplit("@", 1)[-1].lower() if "@" in self.user.email else ""
+    @property
+    def needs_identity(self):
+        """Whether they still have to say who they are (accounts made before sign-up asked)."""
+        if self.role == "developer":
+            return not (self.occupation == "student" and self.institution or self.occupation == "professional" and self.job_title)
+        return self.role == "recruiter" and not self.company_name
     @property
     def is_verified_recruiter(self):
         """A recruiter who confirmed an email on a company domain (not a free mailbox provider)."""

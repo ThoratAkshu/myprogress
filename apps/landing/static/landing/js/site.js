@@ -17,3 +17,23 @@ document.querySelectorAll(".show-password").forEach(button => button.addEventLis
   button.setAttribute("aria-pressed", String(show));
   button.setAttribute("aria-label", show ? "Hide password" : "Show password");
 }));
+
+// Sign-up: show the questions for the chosen account type (and for students or professionals). Hidden groups are
+// disabled too, so the browser neither checks nor sends them.
+const signup = document.querySelector("[data-signup]");
+if (signup) {
+  const show = (element, on) => {
+    element.hidden = !on;
+    if (element.tagName === "FIELDSET") element.disabled = !on;
+  };
+  const sync = () => {
+    const role = signup.querySelector("input[name=role]:checked")?.value || "developer";
+    const occupation = signup.querySelector("input[name=occupation]:checked")?.value || "";
+    signup.querySelectorAll("[data-for-role]").forEach(element => show(element, element.dataset.forRole === role));
+    signup.querySelectorAll("[data-for-occupation]").forEach(element => show(element, role === "developer" && element.dataset.forOccupation === occupation));
+  };
+  signup.addEventListener("change", event => {
+    if (event.target.name === "role" || event.target.name === "occupation") sync();
+  });
+  sync();
+}

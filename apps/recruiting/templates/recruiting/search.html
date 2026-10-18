@@ -6,6 +6,7 @@
 <label class="filter-field">Verified language<select name="language"><option value="">Any language</option>{% for language in languages %}<option{% if language == filters.language %} selected{% endif %}>{{ language }}</option>{% endfor %}</select></label>
 <label class="filter-field">Skill<input name="skill" value="{{ filters.skill }}" placeholder="e.g. React"></label>
 <label class="filter-field">Location<input name="location" value="{{ filters.location }}" placeholder="e.g. Pune or Remote"></label>
+<fieldset class="filter-field"><legend>Candidates</legend><div class="segmented">{% for value, label in stage_options %}<label><input type="radio" name="stage" value="{{ value }}"{% if filters.stage == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</div></fieldset>
 <fieldset class="filter-field"><legend>Minimum score</legend><div class="segmented">{% for value, label in score_options %}<label><input type="radio" name="min_score" value="{{ value }}"{% if filters.min_score == value %} checked{% endif %}><span>{{ label }}</span></label>{% endfor %}</div></fieldset>
 <label class="filter-check"><input type="checkbox" name="active" value="1"{% if filters.active %} checked{% endif %}>Pushed code in the last 30 days</label>
 <label class="filter-field">Sort by<select name="sort">{% for key, label in sorts.items %}<option value="{{ key }}"{% if key == sort %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
