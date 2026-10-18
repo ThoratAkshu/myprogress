@@ -39,6 +39,7 @@ from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
+from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
 from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
 from urllib.parse import urlencode
@@ -269,6 +270,7 @@ def workspace_section_view(request, section):
         context["project_skills"] = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0].lower()))
         context["repositories"] = request.user.repositories.select_related("project")
         context["shared_repositories"] = request.user.repository_memberships.select_related("repository__owner__profile")
+        context["repository_invitations"] = list(pending_for(request.user))
         for project in projects:
             project.milestones_done = sum(milestone.is_complete for milestone in project.milestones.all())
         context["new_git_token"] = request.session.pop("new_git_token", None)
@@ -392,12 +394,12 @@ def repository_view(request, repository_id):
     except RepositoryDenied as denied:
         return denied.response
     context = repository_context(request, repository, "code")
-    can_write, can_admin, branches = context["can_write"], context["can_admin"], context["branches"]
-    allowed_tabs = {"code", "branches", "commits", "contributors", "settings"} if can_admin else {"code", "branches", "commits", "contributors"}
+    can_write, can_maintain, can_admin, branches = context["can_write"], context["can_maintain"], context["can_admin"], context["branches"]
+    allowed_tabs = {"code", "branches", "commits", "contributors", "settings"} if can_maintain else {"code", "branches", "commits", "contributors"}
     active_tab = request.GET.get("tab", "code") if request.GET.get("tab", "code") in allowed_tabs else "code"
     if request.method == "POST":
         action = request.POST.get("action")
-        if (action in {"add_file", "create_branch"} and not can_write) or (action == "settings" and not can_admin):
+        if (action in {"add_file", "create_branch"} and not can_write) or (action == "settings" and not can_maintain):
             messages.error(request, "You do not have permission to change this repository.")
             return redirect("landing:repository", repository_id=repository.pk)
         try:
@@ -416,7 +418,7 @@ def repository_view(request, repository_id):
                 visibility = request.POST.get("visibility")
                 default_branch = request.POST.get("default_branch")
                 branch_names = {branch["name"] for branch in list_branches(repository)}
-                if visibility in {"private", "public"}:
+                if visibility in {"private", "public"} and can_admin:  # maintainers change the branch, admins who can see it
                     repository.visibility = visibility
                 if default_branch in branch_names:
                     repository.default_branch = default_branch
@@ -454,7 +456,9 @@ def repository_view(request, repository_id):
         commits = list_commits(repository, ref)
     if branches and active_tab == "contributors":
         contributors = list_contributors(repository, ref)
-    context.update({"active_tab": active_tab, "ref": ref, "path": path, "crumbs": breadcrumbs(path), "parent_path": "/".join(path.split("/")[:-1]) if path else None, "files": files, "readme": readme, "latest_commit": latest, "commits": commits, "contributors": contributors, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.is_authenticated and request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "collaborators": repository.collaborators.select_related("user__profile") if active_tab == "settings" else [], "role_choices": RepositoryCollaborator.ROLE_CHOICES})
+    context.update({"active_tab": active_tab, "ref": ref, "path": path, "crumbs": breadcrumbs(path), "parent_path": "/".join(path.split("/")[:-1]) if path else None, "files": files, "readme": readme, "latest_commit": latest, "commits": commits, "contributors": contributors, "new_git_token": request.session.pop("new_git_token", None), "has_write_token": request.user.is_authenticated and request.user.git_tokens.filter(scope="write", revoked_at__isnull=True).exists(), "collaborators": repository.collaborators.select_related("user__profile").order_by("user__first_name") if active_tab == "settings" else [], "role_choices": RepositoryCollaborator.ROLE_CHOICES,
+                    "invitations": open_invitations(repository) if active_tab == "settings" and can_admin else [], "role_help": ROLE_HELP,
+                    "my_abilities": abilities(context["my_role"]) if context["my_role"] not in {None, "owner"} else []})
     return render(request, "landing/repository.html", context)
 @login_required(login_url="landing:home")
 @require_POST
@@ -464,8 +468,8 @@ def issue_git_token_view(request):
     token, raw = GitAccessToken.issue(request.user, request.POST.get("name", "Local development")[:80], scope)
     request.session["new_git_token"] = raw
     messages.success(request, "MyProgress write key created. Copy it now; it will not be shown again.")
-    repository = Repository.objects.filter(pk=request.POST.get("repository_id"), owner=request.user).first()
-    if repository:
+    repository = Repository.objects.filter(pk=request.POST.get("repository_id") or 0).first()
+    if repository and user_can_access(request.user, repository):
         return redirect("landing:repository", repository_id=repository.pk)
     return redirect("landing:workspace_section", section="projects")
 @csrf_exempt

@@ -134,3 +134,19 @@ select.branch-select{padding:7px 10px;border:1px solid var(--line);border-radius
 .settings-view .collaborators form{max-width:none;padding-top:0;align-items:center}
 .settings-view .collaborators select{width:auto;margin-top:0;font-size:13px}
 .settings-view .collaborator-add{display:flex}
+/* Who has access: the owner, collaborators, invitations waiting, and what each role allows */
+.collaborators h4{margin:16px 0 0;color:var(--muted);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.collaborator-row .small-avatar{display:grid;place-items:center;flex:none;width:34px;height:34px;overflow:hidden;border-radius:50%;background:var(--violet-soft);color:var(--violet);font-size:12px;font-weight:800}
+.collaborator-row .small-avatar img{width:100%;height:100%;object-fit:cover}
+.collaborator-row.is-pending .small-avatar{background:#fef3c7;color:#b45309}
+.access-pill{padding:3px 10px;border-radius:99px;background:var(--canvas);color:var(--ink);font-size:12px;font-style:normal;font-weight:700}
+.access-pill.is-owner{background:var(--violet-soft);color:var(--violet)}
+.collaborators .button.danger{color:#b91c1c}
+.role-help{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin:16px 0 0;padding:0}
+.role-help div{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--canvas)}
+.role-help dt{color:var(--ink);font-size:13px;font-weight:800}
+.role-help dd{margin:2px 0 0;color:var(--muted);font-size:12px;line-height:1.45}
+.your-access p{margin:4px 0 10px;color:var(--muted);font-size:13px;line-height:1.5}
+.your-access h3{margin:2px 0 0}
+.your-access form{margin:0}
+.your-access-list{display:grid;gap:4px;margin:6px 0 12px;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.45}

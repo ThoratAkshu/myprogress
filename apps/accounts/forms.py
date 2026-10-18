@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 from .images import channel_banner, channel_logo
 from .models import SOCIAL_LINKS, Profile
 class RegistrationForm(forms.Form):
-    ROLE_CHOICES = [("developer", "Developer"), ("recruiter", "Recruiter"), ("organization", "Organization")]
+    ROLE_CHOICES = [("developer", "Student or professional"), ("recruiter", "Recruiter"), ("organization", "Organization")]
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
     email = forms.EmailField(max_length=254)

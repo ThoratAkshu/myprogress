@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from apps.accounts.models import Profile
 from apps.core.git_service import initialize_repository, list_branches, parse_diff, repository_path
-from apps.core.models import Issue, Project, Repository, RepositoryCollaborator
+from apps.core.models import Issue, Project, Repository, RepositoryCollaborator, RepositoryInvitation
 from apps.notifications.models import Notification
 GIT_ENV = {**os.environ, "GIT_AUTHOR_NAME": "Test Author", "GIT_AUTHOR_EMAIL": "author@example.com", "GIT_COMMITTER_NAME": "Test Author", "GIT_COMMITTER_EMAIL": "author@example.com"}
 def make_user(email, first_name, last_name):
@@ -133,35 +133,157 @@ class DiffParserTests(SimpleTestCase):
         self.assertEqual([(line["kind"], line["text"]) for line in file["lines"]], [("hunk", "@@ -1,2 +1,2 @@"), ("del", "-- old comment"), ("add", "++ new comment"), ("context", "select 1;")])
         self.assertEqual((file["additions"], file["deletions"]), (1, 1))
 class CollaboratorTests(RepositoryTestCase):
+    """Working on a repository together, as on GitHub: invitations people accept, and roles from Read to Admin."""
     def setUp(self):
         super().setUp()
         Repository.objects.filter(pk=self.repository.pk).update(visibility="private")
         self.teammate = make_user("mate@example.com", "Team", "Mate")
-        self.collaborators_url = reverse("code:collaborators", args=[self.repository.pk])
-    def test_owner_adds_updates_and_removes_collaborators(self):
-        self.client.force_login(self.owner)
-        self.client.post(self.collaborators_url, {"action": "add", "handle": "@Team-Mate", "role": "write"})
-        membership = RepositoryCollaborator.objects.get(repository=self.repository)
-        self.assertEqual((membership.user, membership.role), (self.teammate, "write"))
-        self.assertEqual(Notification.objects.get(recipient=self.teammate).text, "Olivia Owner gave you write access to olivia-owner/ledger")
-        self.client.post(self.collaborators_url, {"action": "add", "handle": "olivia-owner", "role": "read"})
-        self.client.post(self.collaborators_url, {"action": "add", "handle": "nobody", "role": "read"})
-        self.assertEqual(RepositoryCollaborator.objects.count(), 1)
+        self.access_url = reverse("code:collaborators", args=[self.repository.pk])
+
+    def invite(self, invitee, role="write", user=None):
+        self.client.force_login(user or self.owner)
+        return self.client.post(self.access_url, {"action": "invite", "invitee": invitee, "role": role}, follow=True)
+
+    def test_people_get_access_only_when_they_accept(self):
+        from django.core import mail
+        response = self.invite("@Team-Mate")
+        self.assertContains(response, "Invitation sent to @Team-Mate. They get Write access when they accept it.")
+        invitation = RepositoryInvitation.objects.get()
+        self.assertEqual((invitation.user, invitation.role), (self.teammate, "write"))
+        self.assertFalse(RepositoryCollaborator.objects.exists())  # nothing until they accept
+        link = reverse("repository_invitations:detail", args=[invitation.token])
+        self.assertEqual(Notification.objects.get(recipient=self.teammate).url, link)
+        self.assertIn(link, mail.outbox[0].body)
+        self.assertEqual(mail.outbox[0].to, ["mate@example.com"])
+        self.assertContains(self.client.get(f"{self.url}?tab=settings"), "Invitations waiting")
+        for invitee, error in [("olivia-owner", "That&#x27;s the owner"), ("nobody-here", "No MyProgress account has that handle")]:
+            self.assertContains(self.invite(invitee), error)
         self.client.force_login(self.teammate)
-        page = self.client.get(self.url)
-        self.assertContains(page, "data-add-file-toggle")
-        self.assertNotContains(page, "?tab=settings")
+        self.assertEqual(self.client.get(self.url).status_code, 302)  # still private to them
+        self.assertContains(self.client.get(reverse("landing:workspace_section", args=["projects"])), "1 invitation to collaborate")
+        page = self.client.get(link)
+        for text in ["olivia-owner/ledger", "Olivia Owner", "Write</b> access", "View and clone the code", "Push, create branches", "Accept invitation"]:
+            self.assertContains(page, text)
+        self.assertRedirects(self.client.post(link, {"action": "accept"}), self.url)
+        self.assertEqual(RepositoryCollaborator.objects.get(user=self.teammate).role, "write")
+        self.assertTrue(Notification.objects.filter(recipient=self.owner, text="Team Mate accepted your invitation to olivia-owner/ledger").exists())
+        repository_page = self.client.get(self.url)
+        for text in ["YOUR ACCESS", "Leave repository", "data-add-file-toggle"]:
+            self.assertContains(repository_page, text)
+        self.assertNotContains(repository_page, "?tab=settings")  # write access doesn't include settings
         self.assertContains(self.client.get(reverse("landing:workspace_section", args=["projects"])), "olivia-owner/ledger")
-        self.client.post(self.collaborators_url, {"action": "remove", "collaborator_id": membership.pk})
-        self.assertTrue(RepositoryCollaborator.objects.exists())
-        self.client.force_login(self.owner)
-        self.client.post(self.collaborators_url, {"action": "update", "collaborator_id": membership.pk, "role": "maintain"})
-        membership.refresh_from_db()
-        self.assertEqual(membership.role, "maintain")
-        self.client.post(self.collaborators_url, {"action": "remove", "collaborator_id": membership.pk})
+        self.assertRedirects(self.client.get(link), self.url)  # an accepted invitation just opens the repository
+        self.assertContains(self.invite("mate@example.com"), "Team Mate already has access")
+
+    def test_email_invitations_wait_for_that_confirmed_address(self):
+        from django.core import mail
+        from django.utils import timezone
+        from .invitations import mask
+        self.invite("New.Person@Example.com", role="read")
+        invitation = RepositoryInvitation.objects.get()
+        self.assertEqual((invitation.user, invitation.email), (None, "new.person@example.com"))
+        link = reverse("repository_invitations:detail", args=[invitation.token])
+        self.assertIn(link, mail.outbox[0].body)
+        self.client.logout()
+        page = self.client.get(link)
+        self.assertContains(page, f"Sign in with {mask(invitation.email)} to accept")
+        self.assertContains(page, f'{reverse("landing:register")}?next={link}')
+        self.client.force_login(self.teammate)  # a forwarded link is no use to anyone else
+        self.assertContains(self.client.get(link), f"This invitation was sent to {mask(invitation.email)}")
+        self.client.post(link, {"action": "accept"})
         self.assertFalse(RepositoryCollaborator.objects.exists())
+        newcomer = make_user("new.person@example.com", "New", "Person")
+        self.client.force_login(newcomer)
+        self.assertContains(self.client.get(link), "Confirm your email first")  # nobody can sign up with someone else's address and take it
+        self.client.post(link, {"action": "accept"})
+        self.assertFalse(RepositoryCollaborator.objects.exists())
+        Profile.objects.filter(user=newcomer).update(email_verified_at=timezone.now())
+        self.assertContains(self.client.get(reverse("repository_invitations:list")), "olivia-owner/ledger")
+        self.client.post(link, {"action": "accept"})
+        self.assertEqual(RepositoryCollaborator.objects.get(user=newcomer).role, "read")
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.user, newcomer)
+
+    def test_admins_manage_access_and_maintainers_only_the_settings(self):
+        admin, maintainer, reader = make_user("admin@example.com", "Ada", "Admin"), make_user("maint@example.com", "Max", "Maintainer"), make_user("reader@example.com", "Rae", "Reader")
+        for user, role in [(admin, "admin"), (maintainer, "maintain"), (reader, "read")]:
+            RepositoryCollaborator.objects.create(repository=self.repository, user=user, role=role)
+        self.assertContains(self.invite("@team-mate", role="maintain", user=admin), "Invitation sent")
+        self.client.post(self.access_url, {"action": "update", "id": RepositoryCollaborator.objects.get(user=reader).pk, "role": "write"})
+        self.assertEqual(RepositoryCollaborator.objects.get(user=reader).role, "write")
+        settings_page = self.client.get(f"{self.url}?tab=settings")
+        for text in ["Send invitation", 'name="visibility"', "Max Maintainer", "Invitations waiting"]:
+            self.assertContains(settings_page, text)
+        self.client.force_login(maintainer)
+        self.assertContains(self.client.get(self.url), "?tab=settings")  # maintainers have the Settings tab
+        settings_page = self.client.get(f"{self.url}?tab=settings")
+        self.assertContains(settings_page, "Only the owner and admins manage who has access.")
+        self.assertContains(settings_page, 'name="default_branch"')
+        self.assertNotContains(settings_page, "Send invitation")
+        self.assertNotContains(settings_page, 'name="visibility"')
+        self.client.post(self.url, {"action": "settings", "visibility": "public", "default_branch": "main"})
+        self.client.post(self.access_url, {"action": "invite", "invitee": "@reader", "role": "admin"})
+        self.repository.refresh_from_db()
+        self.assertEqual((self.repository.visibility, RepositoryInvitation.objects.count()), ("private", 1))  # neither changed
+        self.client.force_login(reader)
+        self.assertNotContains(self.client.get(self.url), "?tab=settings")
+        self.client.force_login(admin)
+        self.client.post(self.access_url, {"action": "remove", "id": RepositoryCollaborator.objects.get(user=reader).pk})
+        self.assertFalse(RepositoryCollaborator.objects.filter(user=reader).exists())
+        self.assertTrue(Notification.objects.filter(recipient=reader, text="Ada Admin removed your access to olivia-owner/ledger").exists())
+
+    def test_invitations_are_sent_again_cancelled_declined_or_run_out(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        self.invite("@team-mate")
+        invitation = RepositoryInvitation.objects.get()
+        old_link = reverse("repository_invitations:detail", args=[invitation.token])
+        self.client.post(self.access_url, {"action": "resend", "id": invitation.pk})
+        invitation.refresh_from_db()
+        self.assertEqual(self.client.get(old_link).status_code, 404)  # sending again replaces the link
+        self.client.post(self.access_url, {"action": "cancel", "id": invitation.pk})
+        self.assertFalse(RepositoryInvitation.objects.exists())
+        self.invite("@team-mate", role="read")
+        invitation = RepositoryInvitation.objects.get()
+        link = reverse("repository_invitations:detail", args=[invitation.token])
+        RepositoryInvitation.objects.filter(pk=invitation.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.assertContains(self.client.get(f"{self.url}?tab=settings"), "Expired: send it again")
         self.client.force_login(self.teammate)
+        self.assertContains(self.client.get(link), "This invitation has expired")
+        self.client.post(link, {"action": "accept"})
+        self.assertFalse(RepositoryCollaborator.objects.exists())
+        self.assertNotContains(self.client.get(reverse("repository_invitations:list")), "olivia-owner/ledger")
+        RepositoryInvitation.objects.filter(pk=invitation.pk).update(expires_at=timezone.now() + timedelta(days=1))
+        self.client.post(link, {"action": "decline"})
+        self.assertFalse(RepositoryCollaborator.objects.exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.owner, text="Team Mate declined your invitation to olivia-owner/ledger").exists())
+        self.client.post(link, {"action": "accept"})  # a declined invitation can't be accepted afterwards
+        self.assertFalse(RepositoryCollaborator.objects.exists())
+        self.client.force_login(self.owner)
+        self.assertNotContains(self.client.get(f"{self.url}?tab=settings"), "Invitations waiting")
+
+    def test_collaborators_can_leave(self):
+        RepositoryCollaborator.objects.create(repository=self.repository, user=self.teammate, role="write")
+        self.client.force_login(self.teammate)
+        self.assertRedirects(self.client.post(reverse("code:leave", args=[self.repository.pk])), reverse("landing:workspace_section", args=["projects"]))
+        self.assertFalse(RepositoryCollaborator.objects.exists())
+        self.assertTrue(Notification.objects.filter(recipient=self.owner, text="Team Mate left olivia-owner/ledger").exists())
         self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(reverse("code:leave", args=[self.repository.pk])).status_code, 404)
+
+    def test_maintainers_from_before_admin_existed_become_admins(self):
+        import importlib
+        from django.apps import apps
+        RepositoryCollaborator.objects.create(repository=self.repository, user=self.teammate, role="maintain")
+        importlib.import_module("apps.core.migrations.0016_repository_invitations").maintainers_become_admins(apps, None)
+        self.assertEqual(RepositoryCollaborator.objects.get().role, "admin")
+
+    def test_students_and_professionals_sign_up_for_the_same_kind_of_account(self):
+        self.client.logout()
+        page = self.client.get(reverse("landing:register"))
+        self.assertContains(page, "Student or professional")
+        self.assertContains(page, 'value="developer"')
+        self.assertEqual(dict(Profile.ROLE_CHOICES)["developer"], "Student or professional")
 class IssueTests(RepositoryTestCase):
     def test_signed_in_users_open_issues_on_public_repositories(self):
         create_url = reverse("code:issue_create", args=[self.repository.pk])

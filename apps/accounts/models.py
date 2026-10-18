@@ -21,7 +21,7 @@ SOCIAL_LINKS = [
     ("x", "X", ("x.com", "twitter.com")), ("instagram", "Instagram", ("instagram.com",)), ("facebook", "Facebook", ("facebook.com", "fb.com")),
 ]
 class Profile(models.Model):
-    ROLE_CHOICES = [("developer", "Developer"), ("recruiter", "Recruiter"), ("organization", "Organization")]
+    ROLE_CHOICES = [("developer", "Student or professional"), ("recruiter", "Recruiter"), ("organization", "Organization")]
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
     handle = models.SlugField(max_length=40, unique=True, null=True, blank=True, help_text="Public portfolio address: /u/<handle>/")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="developer")

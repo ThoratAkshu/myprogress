@@ -36,7 +36,8 @@ POLICY = {
     # Repositories: public ones are readable by anyone; private ones and every change are checked per repository.
     "landing:repository": PUBLIC,
     "code:blob": PUBLIC, "code:raw": PUBLIC, "code:commit": PUBLIC, "code:issues": PUBLIC, "code:issue": PUBLIC, "code:pulls": PUBLIC, "code:pull": PUBLIC,
-    "code:issue_create": PUBLIC, "code:issue_comment": PUBLIC, "code:issue_state": PUBLIC, "code:pull_create": PUBLIC, "code:pull_merge": PUBLIC, "code:collaborators": PUBLIC,
+    "code:issue_create": PUBLIC, "code:issue_comment": PUBLIC, "code:issue_state": PUBLIC, "code:pull_create": PUBLIC, "code:pull_merge": PUBLIC, "code:collaborators": PUBLIC, "code:leave": PUBLIC,
+    "repository_invitations:list": PUBLIC, "repository_invitations:detail": PUBLIC,  # the views check who the invitation is for
     # Every signed-in account.
     "landing:dashboard": ALL_ROLES,  # sends each account type to its own home
     "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:channel_settings": ALL_ROLES, "landing:follow": ALL_ROLES,

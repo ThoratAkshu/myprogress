@@ -11,7 +11,7 @@
 <p class="hero-lead">Host your code, record video walkthroughs and write articles, all in your browser. Your rank comes from real work, recruiters see skills measured from your code, and creators earn for teaching.</p>
 <div class="hero-actions"><a class="site-btn accent large" href="{% url 'landing:register' %}">Create your free account {% icon "chevron-right" 18 %}</a><a class="site-btn outline large" href="#tour">{% icon "play" 18 %}Watch the tour</a></div>
 <ul class="hero-pills" aria-label="What's included"><li>{% icon "git-branch" 14 %}Git hosting</li><li>{% icon "video" 14 %}Video studio</li><li>{% icon "file-text" 14 %}Article studio</li><li>{% icon "award" 14 %}Rankings</li><li>{% icon "dollar" 14 %}Creator earnings</li></ul>
-<p class="hero-proof">{% if live_stats %}{% icon "users" 16 %}<span><strong>{{ live_stats.developers }} developers</strong> are already building on MyProgress</span>{% else %}{% icon "check-circle" 16 %}<span><strong>Free for developers.</strong> Nothing to install.</span>{% endif %}</p></div>
+<p class="hero-proof">{% if live_stats %}{% icon "users" 16 %}<span><strong>{{ live_stats.developers }} developers</strong> are already building on MyProgress</span>{% else %}{% icon "check-circle" 16 %}<span><strong>Free for students and professionals.</strong> Nothing to install.</span>{% endif %}</p></div>
 <aside class="signin-card" id="signin"><h2>Sign in</h2><p class="card-sub">Welcome back. Continue building your developer story.</p>
 {% if messages %}<div class="site-messages" role="alert">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
 <form action="{% url 'landing:login' %}" method="post">{% csrf_token %}

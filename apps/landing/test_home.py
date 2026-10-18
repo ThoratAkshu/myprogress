@@ -15,7 +15,7 @@ class HomePageTests(TestCase):
         page = self.client.get(reverse("landing:home"))
         for claim in ["2,400+", "25k+", "140k", "8.4k", "92%", "94% match", "Only verified recruiters can contact you"]:
             self.assertNotContains(page, claim)
-        self.assertContains(page, "Free for developers.")
+        self.assertContains(page, "Free for students and professionals.")
         self.assertContains(page, "Sample data")
         self.assertNotContains(self.client.get(reverse("landing:register")), "Early developer community member")
     def test_earning_rules_on_the_page_follow_the_finance_settings(self):

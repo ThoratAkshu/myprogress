@@ -1593,3 +1593,27 @@ body.app .playlist-hero h1{margin:4px 0 0;color:#fff;font:800 24px/1.2 Manrope,"
 .cal-menu-reset{display:grid;gap:4px;margin:6px 0 0;padding:8px 8px 0;border-top:1px solid var(--line)}
 .cal-menu-reset small{color:var(--muted);font-size:12px;line-height:1.4}
 .cal-menu-reset .org-link-button{justify-self:start;color:#b91c1c}
+/* Invitations to collaborate on a repository */
+.repo-invite-page{display:grid;gap:14px;max-width:640px;margin:0 auto}
+.repo-invite{display:grid;gap:10px;padding:28px!important}
+.repo-invite h1{margin:0;font-size:26px;overflow-wrap:anywhere}
+.repo-invite-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:14px;background:var(--violet-soft);color:var(--violet)}
+.repo-invite-icon.small{flex:none;width:40px;height:40px;border-radius:10px}
+.repo-invite-from{display:flex;align-items:center;gap:10px;margin:4px 0 0;font-size:15px;line-height:1.5}
+.repo-invite-from .avatar{flex:none}
+.repo-invite-access{display:grid;gap:8px;margin:6px 0;padding:14px;border-radius:12px;background:var(--canvas);list-style:none}
+.repo-invite-access li{display:flex;align-items:flex-start;gap:8px;color:#334155;font-size:14px}
+.repo-invite-access svg{flex:none;margin-top:2px;color:var(--violet)}
+.repo-invite-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0}
+.repo-invite-note{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border-radius:10px;background:var(--canvas);font-size:14px}
+.repo-invite-note.is-problem{background:#fef2f2;color:#991b1b}
+.repo-invite-signin{display:grid;gap:8px;max-width:360px;margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.repo-invite-signin label{display:grid;gap:4px;font-size:13px;font-weight:700}
+.repo-invite-signin input{padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.repo-invite-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.repo-invite-row>div{display:grid;flex:1;gap:2px;min-width:220px}
+.repo-invite-row small{color:var(--muted);font-size:12.5px}
+.repo-invite-banner{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:14px;padding:12px 16px!important;border-left:4px solid var(--violet);color:var(--ink);text-decoration:none}
+.repo-invite-banner>span:nth-child(2){display:grid;flex:1;min-width:200px}
+.repo-invite-banner small{color:var(--muted)}
+.repo-invite-banner>svg{color:var(--violet)}

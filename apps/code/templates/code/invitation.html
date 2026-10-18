@@ -1,0 +1,20 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Invitation to {{ label }}{% endblock %}
+{% block content %}<div class="repo-invite-page">
+<section class="card repo-invite">
+<span class="repo-invite-icon">{% icon "repo" 26 %}</span>
+<span class="kicker">Invitation to collaborate</span>
+<h1>{{ label }}</h1>
+{% if repository.project.summary %}<p class="muted">{{ repository.project.summary }}</p>{% endif %}
+{% if invitation.invited_by %}<p class="repo-invite-from"><span class="avatar avatar-sm {{ invitation.invited_by|avatar_tone }}">{{ invitation.invited_by|face }}</span><span><b>{{ invitation.invited_by.get_full_name|default:invitation.invited_by.profile.handle }}</b> invited {% if invitation.user %}you{% else %}{{ masked_email }}{% endif %} to work on this repository with <b>{{ invitation.get_role_display }}</b> access.</span></p>{% endif %}
+<ul class="repo-invite-access">{% for ability in abilities %}<li>{% icon "check" 15 %}<span>{{ ability }}</span></li>{% endfor %}<li>{% icon "lock" 15 %}<span>{% if repository.visibility == 'private' %}Private: only the owner and the people they invite can see it{% else %}Public: anyone can see the code{% endif %}</span></li><li>{% icon "user" 15 %}<span>The owner can change or remove your access, and you can leave whenever you like</span></li></ul>
+{% if invitation.accepted_at %}<p class="repo-invite-note">{% icon "check-circle" 16 %}This invitation has already been accepted.</p>
+{% elif invitation.declined_at %}<p class="repo-invite-note">This invitation was declined. Ask the owner to send a new one.</p>
+{% elif invitation.is_expired %}<p class="repo-invite-note">{% icon "clock" 16 %}This invitation has expired. Ask the owner to send it again.</p>
+{% elif problem %}<p class="repo-invite-note is-problem">{% icon "lock" 16 %}{{ problem }}</p>{% if needs_confirmation %}<form method="post" action="{% url 'landing:resend_verification' %}">{% csrf_token %}<button class="button soft">Send the confirmation link again</button></form>{% endif %}
+{% elif user.is_authenticated %}<form method="post" class="repo-invite-actions">{% csrf_token %}<button class="button primary" name="action" value="accept">{% icon "check" 16 %}Accept invitation</button><button class="button soft" name="action" value="decline">Decline</button></form><small class="muted">The link works until {{ invitation.expires_at|date:"M j, g:i a" }}</small>
+{% else %}<p class="muted">{% if invitation.email %}Sign in with {{ masked_email }} to accept, or create a free account with that email.{% else %}Sign in to accept.{% endif %}</p>
+<div class="repo-invite-actions"><a class="button primary" href="{% url 'landing:register' %}?next={{ request.path|urlencode }}">Create a free account</a></div>
+<form class="org-signin repo-invite-signin" action="{% url 'landing:login' %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><p class="muted">Already on MyProgress?</p><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="button soft">Sign in and continue</button></form>{% endif %}
+</section>
+</div>{% endblock %}

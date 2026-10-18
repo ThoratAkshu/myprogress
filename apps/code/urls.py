@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import blob_view, collaborators_view, commit_view, issue_comment_view, issue_create_view, issue_detail_view, issue_list_view, issue_state_view, pull_create_view, pull_merge_view, raw_view
+from .views import blob_view, collaborators_view, leave_view, commit_view, issue_comment_view, issue_create_view, issue_detail_view, issue_list_view, issue_state_view, pull_create_view, pull_merge_view, raw_view
 app_name = "code"
 urlpatterns = [
     path("blob/", blob_view, name="blob"),
@@ -15,4 +15,5 @@ urlpatterns = [
     path("pulls/<int:number>/", issue_detail_view, name="pull"),
     path("pulls/<int:number>/merge/", pull_merge_view, name="pull_merge"),
     path("collaborators/", collaborators_view, name="collaborators"),
+    path("leave/", leave_view, name="leave"),
 ]

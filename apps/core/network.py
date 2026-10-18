@@ -5,7 +5,7 @@ from apps.accounts.models import Profile
 from .models import Repository
 RECRUITER_ROLES = {"recruiter", "organization"}
 NETWORK_VIEWS = {"discover": "Discover", "following": "Following", "followers": "Followers", "requests": "Recruiter requests"}
-NETWORK_ROLES = {"": "Everyone", "developer": "Developers", "recruiter": "Recruiters"}
+NETWORK_ROLES = {"": "Everyone", "developer": "Students and professionals", "recruiter": "Recruiters"}
 NETWORK_SORTS = {"relevant": "Most relevant", "score": "Highest progress score", "followers": "Most followers", "newest": "Newest members"}
 def _people(viewer):
     following_ids = list(viewer.following_relationships.values_list("following_id", flat=True))

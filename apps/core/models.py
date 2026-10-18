@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from datetime import timedelta
 import hashlib
 import secrets
 import uuid
@@ -167,13 +168,44 @@ class Repository(models.Model):
     def __str__(self):
         return f"{self.owner.username}/{self.slug}"
 class RepositoryCollaborator(models.Model):
-    ROLE_CHOICES = [("read", "Read"), ("write", "Write"), ("maintain", "Maintain")]
+    """Someone the owner gave access to, as on GitHub: read (view and clone), write (push, merge), maintain
+    (also the repository's settings) or admin (also visibility and who has access)."""
+    ROLE_CHOICES = [("read", "Read"), ("write", "Write"), ("maintain", "Maintain"), ("admin", "Admin")]
     repository = models.ForeignKey(Repository, on_delete=models.CASCADE, related_name="collaborators")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="repository_memberships")
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="read")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["repository", "user"], name="unique_repository_collaborator")]
+def invitation_token():
+    return secrets.token_urlsafe(24)  # 32 characters
+def invitation_expiry():
+    return timezone.now() + timedelta(days=7)
+class RepositoryInvitation(models.Model):
+    """An invitation to collaborate on a repository. As on GitHub, access starts only when the person accepts.
+    It's for a MyProgress account, or for an email address: then only an account with that confirmed address can
+    accept it, so a forwarded link is no use to anyone else."""
+    repository = models.ForeignKey(Repository, on_delete=models.CASCADE, related_name="invitations")
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="repository_invitations")
+    email = models.EmailField(blank=True)
+    role = models.CharField(max_length=10, choices=RepositoryCollaborator.ROLE_CHOICES, default="write")
+    token = models.CharField(max_length=64, unique=True, default=invitation_token)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=invitation_expiry)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    declined_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        ordering = ["-created_at"]
+    @property
+    def is_open(self):
+        return self.accepted_at is None and self.declined_at is None
+    @property
+    def is_expired(self):
+        return self.is_open and self.expires_at <= timezone.now()
+    @property
+    def invitee(self):
+        return self.user.profile.handle if self.user_id and hasattr(self.user, "profile") else self.email
 class GitAccessToken(models.Model):
     SCOPE_CHOICES = [("read", "Read repositories"), ("write", "Read and write repositories")]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="git_tokens")

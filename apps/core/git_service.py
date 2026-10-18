@@ -95,18 +95,26 @@ def commit_file(repository, relative_path, content, user, message=""):
         run_git("add", "--", relative_path, cwd=checkout)
         run_git("commit", "-m", (message.strip() or f"Add {relative_path}")[:200], cwd=checkout)
         run_git("push", "origin", repository.default_branch, cwd=checkout)
-def user_can_access(user, repository, write=False):
-    if user and user.is_authenticated:
-        if repository.owner_id == user.id:
-            return True
-        roles = ["write", "maintain"] if write else ["read", "write", "maintain"]
-        if repository.collaborators.filter(user=user, role__in=roles).exists():
-            return True
-    return not write and repository.visibility == "public"
-def user_can_administer(user, repository):
+ROLE_LEVELS = {"read": 1, "write": 2, "maintain": 3, "admin": 4}
+def repository_role(user, repository):
+    """"owner", a collaborator's role, or None."""
     if not user or not user.is_authenticated:
-        return False
-    return repository.owner_id == user.id or repository.collaborators.filter(user=user, role="maintain").exists()
+        return None
+    if repository.owner_id == user.id:
+        return "owner"
+    return repository.collaborators.filter(user=user).values_list("role", flat=True).first()
+def _at_least(user, repository, role):
+    found = repository_role(user, repository)
+    return found == "owner" or (found is not None and ROLE_LEVELS.get(found, 0) >= ROLE_LEVELS[role])
+def user_can_access(user, repository, write=False):
+    """Read: view and clone. Write: push, branch, and merge pull requests. Anyone may read a public repository."""
+    return _at_least(user, repository, "write" if write else "read") or (not write and repository.visibility == "public")
+def user_can_maintain(user, repository):
+    """The repository's settings, like its default branch, without its visibility or who has access."""
+    return _at_least(user, repository, "maintain")
+def user_can_administer(user, repository):
+    """Everything but deleting the project: visibility, and inviting, changing and removing collaborators."""
+    return _at_least(user, repository, "admin")
 LANGUAGE_FILENAMES = {"Dockerfile": "Dockerfile", "Makefile": "Makefile", "CMakeLists.txt": "CMake"}
 LANGUAGE_EXTENSIONS = {
     ".py": "Python", ".ipynb": "Jupyter Notebook", ".js": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript", ".jsx": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript",

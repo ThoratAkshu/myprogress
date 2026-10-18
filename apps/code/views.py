@@ -3,16 +3,21 @@ from functools import wraps
 from pathlib import PurePosixPath
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+from django.db.models import Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
-from apps.core.git_service import MAX_RAW_BYTES, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access
-from apps.core.models import Issue, IssueComment, RepositoryCollaborator
+from apps.core.git_service import MAX_RAW_BYTES, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access, user_can_administer
+from apps.core.models import Issue, IssueComment, RepositoryCollaborator, RepositoryInvitation, invitation_expiry, invitation_token
 from apps.core.services import record_activity
 from apps.notifications.services import notify
+from . import invitations
 from .access import RepositoryDenied, breadcrumbs, create_issue, load_repository, repository_context
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
 def repository_page(write=False):
@@ -200,32 +205,110 @@ def pull_merge_view(request, repository, number):
     return redirect(_issue_url(pull))
 @login_required(login_url="landing:home")
 @require_POST
+@rate_limit("repository-access", 60, 3600)
 def collaborators_view(request, repository_id):
     try:
         repository = load_repository(request, repository_id)
     except RepositoryDenied as denied:
         return denied.response
-    settings_url = f'{reverse("landing:repository", args=[repository.pk])}?tab=settings'
-    if not repository_context(request, repository, "settings")["can_admin"]:
-        messages.error(request, "Only the owner or a maintainer can manage collaborators.")
+    settings_url = f'{reverse("landing:repository", args=[repository.pk])}?tab=settings#collaborators'
+    if not user_can_administer(request.user, repository):
+        messages.error(request, "Only the owner and admins manage who has access.")
         return redirect("landing:repository", repository_id=repository.pk)
-    role = request.POST.get("role") if request.POST.get("role") in dict(RepositoryCollaborator.ROLE_CHOICES) else "read"
-    if request.POST.get("action") == "remove":
-        repository.collaborators.filter(pk=request.POST.get("collaborator_id")).delete()
-        messages.success(request, "Collaborator removed.")
-        return redirect(settings_url)
-    if request.POST.get("action") == "update":
-        repository.collaborators.filter(pk=request.POST.get("collaborator_id")).update(role=role)
-        messages.success(request, "Role updated.")
-        return redirect(settings_url)
-    profile = Profile.objects.select_related("user").filter(handle=request.POST.get("handle", "").strip().lstrip("@").lower()).first()
-    if not profile:
-        messages.error(request, "No MyProgress user has that handle.")
-    elif profile.user == repository.owner:
-        messages.error(request, "The owner already has full access.")
+    action = request.POST.get("action", "invite")
+    role = request.POST.get("role") if request.POST.get("role") in dict(RepositoryCollaborator.ROLE_CHOICES) else "write"
+    item = request.POST.get("id", "")
+    item = int(item) if item.isdigit() else 0
+    if action == "remove":
+        removed = repository.collaborators.filter(pk=item).select_related("user").first()
+        if removed:
+            removed.delete()
+            notify(removed.user, request.user, "collaborator", f"{_name(request.user)} removed your access to {_repo_label(repository)}", reverse("landing:workspace_section", args=["projects"]))
+            messages.success(request, f"{_name(removed.user)} no longer has access.")
+    elif action == "update":
+        repository.collaborators.filter(pk=item).update(role=role)
+        messages.success(request, f"Role changed to {dict(RepositoryCollaborator.ROLE_CHOICES)[role]}.")
+    elif action == "cancel":
+        invitations.open_invitations(repository).filter(pk=item).delete()
+        messages.success(request, "Invitation cancelled. Its link no longer works.")
+    elif action == "resend":
+        invitation = invitations.open_invitations(repository).filter(pk=item).first()
+        if invitation:
+            invitation.token, invitation.expires_at = invitation_token(), invitation_expiry()  # the old link stops working
+            invitation.save(update_fields=["token", "expires_at"])
+            invitations.send_email(request, invitation)
+            messages.success(request, f"Invitation sent again to {invitation.invitee}. It works for another 7 days.")
     else:
-        _, created = RepositoryCollaborator.objects.update_or_create(repository=repository, user=profile.user, defaults={"role": role})
-        if created:
-            notify(profile.user, request.user, "collaborator", f"{_name(request.user)} gave you {role} access to {_repo_label(repository)}", reverse("landing:repository", args=[repository.pk]))
-        messages.success(request, f"{_name(profile.user)} now has {role} access.")
+        _invite(request, repository, request.POST.get("invitee", "").strip(), role)
     return redirect(settings_url)
+def _invite(request, repository, invitee, role):
+    """Invite someone by @handle or email. An email that belongs to a MyProgress account invites that account."""
+    if "@" in invitee.strip("@") and "." in invitee.rsplit("@", 1)[-1]:
+        try:
+            validate_email(invitee)
+        except ValidationError:
+            return messages.error(request, "That email address doesn't look right.")
+        email = invitee.lower()
+        user = User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).first()
+    else:
+        email = ""
+        profile = Profile.objects.select_related("user").filter(handle=invitee.lstrip("@").lower()).first()
+        if not profile:
+            return messages.error(request, "No MyProgress account has that handle. Check it, or invite them by email.")
+        user = profile.user
+    if user == repository.owner:
+        return messages.error(request, "That's the owner: they already have full access.")
+    if user and repository.collaborators.filter(user=user).exists():
+        return messages.error(request, f"{_name(user)} already has access. Change their role below.")
+    waiting = invitations.open_invitations(repository).filter(Q(user=user) if user else Q(user__isnull=True, email__iexact=email)).first()
+    if waiting:
+        waiting.role, waiting.token, waiting.expires_at, waiting.invited_by = role, invitation_token(), invitation_expiry(), request.user
+        waiting.save(update_fields=["role", "token", "expires_at", "invited_by"])
+        invitation = waiting
+    else:
+        invitation = RepositoryInvitation.objects.create(repository=repository, invited_by=request.user, user=user, email="" if user else email, role=role)
+    if user:
+        notify(user, request.user, "collaborator", f"{_name(request.user)} invited you to collaborate on {_repo_label(repository)} ({invitation.get_role_display()} access)", reverse("repository_invitations:detail", args=[invitation.token]))
+    invitations.send_email(request, invitation)
+    messages.success(request, f"Invitation sent to {invitee}. They get {invitation.get_role_display()} access when they accept it.")
+@login_required(login_url="landing:home")
+@require_POST
+def leave_view(request, repository_id):
+    """A collaborator gives up their access to someone else's repository."""
+    membership = RepositoryCollaborator.objects.select_related("repository__owner").filter(repository_id=repository_id, user=request.user).first()
+    if membership is None:
+        raise Http404
+    membership.delete()
+    notify(membership.repository.owner, request.user, "collaborator", f"{_name(request.user)} left {_repo_label(membership.repository)}", f'{reverse("landing:repository", args=[repository_id])}?tab=settings#collaborators')
+    messages.success(request, f"You left {_repo_label(membership.repository)}.")
+    return redirect("landing:workspace_section", section="projects")
+def invitation_detail_view(request, token):
+    """An invitation to collaborate: what it offers, and Accept or Decline. Signed-out visitors are asked to sign in
+    or create an account with the invited email."""
+    invitation = get_object_or_404(RepositoryInvitation.objects.select_related("repository__owner__profile", "repository__project", "invited_by", "user__profile"), token=token)
+    if invitation.accepted_at and request.user.is_authenticated and invitation.user_id == request.user.pk:
+        return redirect("landing:repository", repository_id=invitation.repository_id)
+    issue, needs_confirmation = invitations.problem(invitation, request.user) if request.user.is_authenticated else ("", False)
+    usable = invitation.is_open and not invitation.is_expired
+    if request.method == "POST":
+        if not request.user.is_authenticated:
+            return redirect(f'{reverse("landing:home")}?next={request.path}')
+        if usable and not issue:
+            if request.POST.get("action") == "decline":
+                invitations.decline(invitation, request.user)
+                messages.success(request, f"You declined the invitation to {_repo_label(invitation.repository)}.")
+                return redirect("repository_invitations:list")
+            invitations.accept(invitation, request.user)
+            messages.success(request, f"You now have {invitation.get_role_display()} access to {_repo_label(invitation.repository)}.")
+            return redirect("landing:repository", repository_id=invitation.repository_id)
+    return render(request, "code/invitation.html", {
+        "invitation": invitation, "repository": invitation.repository, "label": _repo_label(invitation.repository), "usable": usable, "problem": issue,
+        "needs_confirmation": needs_confirmation, "abilities": invitations.abilities(invitation.role), "masked_email": invitations.mask(invitation.email) if invitation.email else "", "section": "code",
+    })
+@login_required(login_url="landing:home")
+def invitation_list_view(request):
+    """Invitations waiting for you, to accept or decline."""
+    waiting = list(invitations.pending_for(request.user))
+    for invitation in waiting:
+        invitation.abilities = invitations.abilities(invitation.role)
+    return render(request, "code/invitations.html", {"invitations": waiting, "section": "code"})
