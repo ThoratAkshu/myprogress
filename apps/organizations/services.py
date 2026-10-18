@@ -197,7 +197,10 @@ def student_summary(user):
         submitted = set(Submission.objects.filter(task__organization=organization, student=user).values_list("task_id", flat=True))
         open_tasks = sorted([task for task in given if task.id not in submitted], key=lambda task: (task.due_at is None, task.due_at or timezone.now()))
         latest = channel_posts_for(organization, member).first()
-        summary.append({"organization": organization, "member": member, "open_tasks": open_tasks[:3], "open_count": len(open_tasks), "latest": latest, "next_class": next_class(organization, member)})
+        upcoming = next_class(organization, member)
+        if upcoming:
+            upcoming.current = upcoming.state(timezone.now())
+        summary.append({"organization": organization, "member": member, "open_tasks": open_tasks[:3], "open_count": len(open_tasks), "latest": latest, "next_class": upcoming})
     return summary
 
 def classes_for(organization, member):

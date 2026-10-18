@@ -639,16 +639,21 @@ class LiveClassReminderTests(TestCase):
     def live(self, minutes, **fields):
         from .models import LiveClass
         return LiveClass.objects.create(organization=self.organization, created_by=self.owner, title=fields.pop("title", "Python loops"), starts_at=timezone.now() + timedelta(minutes=minutes), group=fields.pop("group", "Batch A"), **fields)
-    def test_the_dashboard_lists_upcoming_classes_and_opens_join_on_time(self):
+    def test_classes_live_under_classes_and_home_only_says_whats_next(self):
         later = self.live(180)
+        self.live(60 * 24 * 2, title="Python loops, part 2")
         self.client.force_login(self.student)
-        page = self.client.get(reverse("landing:dashboard"))
-        self.assertContains(page, "Live classes")
-        self.assertContains(page, "Python loops")
-        self.assertContains(page, reverse("organizations:class_calendar", args=[self.organization.slug, later.pk]))
-        self.assertContains(page, f'href="{reverse("organizations:join_class", args=[self.organization.slug, later.pk])}" target="_blank" rel="noopener" hidden')
+        home = self.client.get(reverse("landing:dashboard"))
+        self.assertNotContains(home, 'class="card live-classes"')  # the feed isn't a timetable
+        self.assertContains(home, "Next live class · ")
+        self.assertNotContains(home, "Python loops, part 2")
+        classes = self.client.get(reverse("organizations:classes", args=[self.organization.slug]))
+        for text in ["Turn on class alerts", "Starts in", "Python loops, part 2", reverse("organizations:class_calendar", args=[self.organization.slug, later.pk])]:
+            self.assertContains(classes, text)
+        self.assertContains(classes, f'href="{reverse("organizations:join_class", args=[self.organization.slug, later.pk])}" hidden')  # Join appears when the class opens
+        self.assertContains(classes, "Add to calendar", count=1)  # for the next class only
         self.client.force_login(self.other_batch)
-        self.assertNotContains(self.client.get(reverse("landing:dashboard")), "Python loops")  # another batch's class
+        self.assertNotContains(self.client.get(reverse("organizations:classes", args=[self.organization.slug])), "Python loops")  # another batch's class
     def test_the_alert_lists_classes_open_to_join_until_the_student_joins(self):
         url = reverse("organizations:live_now")
         self.live(180, title="Later today")

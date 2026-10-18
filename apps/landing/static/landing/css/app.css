@@ -1571,3 +1571,6 @@ body.app .playlist-hero h1{margin:4px 0 0;color:#fff;font:800 24px/1.2 Manrope,"
 .pl-save-menu input[name=new_title]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13.5px}
 .rec-field select{box-sizing:border-box;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px;font-weight:400}
 @media(max-width:900px){.playlist-page{grid-template-columns:minmax(0,1fr)}.playlist-hero{position:static}.playlist-row-thumb{width:112px}.playlist-row-tools{flex-direction:column}}
+.class-schedule{display:grid;gap:10px}
+.class-schedule .card-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.class-schedule-later{margin:6px 2px 0;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
