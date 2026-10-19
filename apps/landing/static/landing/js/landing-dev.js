@@ -53,16 +53,29 @@
   const stage = document.querySelector("[data-site-stage]");
   const overlay = document.querySelector("[data-dev-flip]");
   let flipping = false;
+  let wanted = null;  // a click while the page is turning: done as soon as the turn ends
   async function flip(on) {
-    if (flipping || on === isOn()) return;
+    if (flipping) { wanted = on; reflect(on); return; }
+    if (on === isOn()) return;
     flipping = true;
     reflect(on);  // the switch moves straight away
-    if (calm || !stage?.animate) {
-      setMode(on);
-      announce.textContent = on ? "Developer mode is on." : "Developer mode is off.";
+    try {
+      await turn(on);
+    } finally {
+      stage.style.transformOrigin = "";
+      overlay.hidden = true;
+      overlay.classList.remove("is-showing", "is-leaving");
       flipping = false;
-      return;
     }
+    announce.textContent = on ? "Developer mode is on." : "Developer mode is off.";
+    if (wanted !== null) {
+      const next = wanted;
+      wanted = null;
+      if (next !== isOn()) flip(next); else reflect();
+    }
+  }
+  async function turn(on) {
+    if (calm || !stage?.animate) { setMode(on); return; }
     const matri = overlay.querySelector("[data-matri]");
     overlay.classList.toggle("is-on", on);
     overlay.classList.toggle("is-off", !on);
@@ -86,13 +99,9 @@
     away.cancel();  // after the turn back has started, so the page never shows unturned in between
     overlay.classList.add("is-leaving");
     await back.finished;
-    overlay.hidden = true;
-    overlay.classList.remove("is-showing", "is-leaving");
-    stage.style.transformOrigin = "";
-    announce.textContent = on ? "Developer mode is on." : "Developer mode is off.";
-    flipping = false;
   }
-  switches.forEach(button => button.addEventListener("click", () => flip(!isOn())));
+  // Each click flips where the switch is heading (it moves at once), so two quick clicks land back where they started.
+  switches.forEach(button => button.addEventListener("click", () => flip(button.getAttribute("aria-checked") !== "true")));
   document.querySelectorAll("[data-dev-wake]").forEach(button => button.addEventListener("click", () => flip(true)));
   reflect();
   if (isOn()) practiceTouches();
@@ -166,7 +175,7 @@
       drops = drops.filter(item => now - item.born < item.fall + 3400);
       for (const item of drops) {
         const age = now - item.born;
-        const rgb = item.glyph ? "56,189,248" : "186,230,253";
+        const rgb = item.glyph ? "56,189,248" : "99,102,241";
         if (age < item.fall) {  // falling
           const t = age / item.fall;
           const y = item.y - 120 * (1 - t * t);

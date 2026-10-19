@@ -1,7 +1,8 @@
-// The home page's Matrioshka brain: shells of light nested around a thinking core, drawn in 3D on a canvas. Each shell
+// The home page's Matrioshka brain: shells of points nested around a thinking core, drawn in 3D on a canvas. Each shell
 // turns on its own tilted axis, signals travel between the core's neurons, and the view leans towards the pointer.
 // The hero shows it behind the headline; "Inside the brain" flies the camera through the shells as you scroll, one
-// dashboard feature per shell. In developer mode it takes the editor's colours. People who ask for less motion get a
+// dashboard feature per shell. In normal mode it's drawn in ink on a daylight sky; in developer mode it glows in the
+// editor's colours. People who ask for less motion get a
 // still picture, and the journey becomes a plain list (landing-dev.css).
 (() => {
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -9,8 +10,8 @@
   const TAU = Math.PI * 2;
   const GOLDEN = Math.PI * (3 - Math.sqrt(5));
   const PALETTES = {
-    normal: { shells: ["125,211,252", "167,139,250", "94,234,212", "244,114,182"], core: "216,180,254", link: "167,139,250", pulse: "255,255,255", glow: "139,92,246" },
-    dev: { shells: ["56,189,248", "34,197,94", "125,211,252", "134,239,172"], core: "125,211,252", link: "56,189,248", pulse: "190,242,100", glow: "14,165,233" },
+    normal: { shells: ["79,70,229", "14,165,233", "124,58,237", "219,39,119"], core: "99,102,241", link: "129,140,248", pulse: "14,165,233", glow: "167,139,250", ring: 1.7 },  // daylight
+    dev: { shells: ["56,189,248", "34,197,94", "125,211,252", "134,239,172"], core: "125,211,252", link: "56,189,248", pulse: "190,242,100", glow: "14,165,233", ring: 1 },  // the night editor
   };
   // Shells from the outside in: radius, points, tilt of the axis it turns on, and speed (negative turns the other way).
   const SHELLS = [[1, 520, 0.42, 0.05], [0.8, 380, -0.6, -0.08], [0.62, 270, 0.9, 0.11], [0.45, 190, -0.3, -0.15]];
@@ -90,11 +91,11 @@
 
     fit() {
       const ratio = Math.min(2, window.devicePixelRatio || 1);
-      const box = this.canvas.parentElement.getBoundingClientRect();
-      this.width = box.width;
-      this.height = box.height;
-      this.canvas.width = Math.round(box.width * ratio);
-      this.canvas.height = Math.round(box.height * ratio);
+      const host = this.canvas.parentElement;  // its layout size: a bounding box would shrink while the page turns in 3D
+      this.width = host.clientWidth;
+      this.height = host.clientHeight;
+      this.canvas.width = Math.round(this.width * ratio);
+      this.canvas.height = Math.round(this.height * ratio);
       this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
       if (!this.running) this.draw(performance.now());
     }
@@ -160,7 +161,7 @@
         const dim = this.focus === -1 ? 1 : focused ? 1.7 : 0.4;
         const rgb = palette.shells[index];
         c.lineWidth = focused ? 1.3 : 0.8;
-        c.strokeStyle = `rgba(${rgb},${(0.13 * dim).toFixed(3)})`;
+        c.strokeStyle = `rgba(${rgb},${(0.13 * dim * palette.ring).toFixed(3)})`;
         c.beginPath();
         for (const latitude of [0, 0.55]) {
           let drawing = false;
