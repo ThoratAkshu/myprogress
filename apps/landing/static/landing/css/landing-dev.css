@@ -141,7 +141,7 @@ html.js [data-reveal].is-in{opacity:1;transform:none}
 /* Ranked and paid: the live board and the earning rules, side by side */
 .proof-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
 .proof-card{display:grid;gap:12px;padding:28px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}
-.proof-card h2{margin:0;font:800 30px/1.15 var(--display)}
+.proof-card h2{margin:0;font:800 26px/1.2 var(--display)}
 .proof-card>p{margin:0;color:var(--muted)}
 .proof-card .live-board{margin-top:6px;box-shadow:none}
 .rule-drops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:6px 0 0;padding:0;list-style:none}
@@ -166,7 +166,7 @@ html.dev-on kbd{border-color:#2b3a55;background:#152038;color:#e6edf7}
 .dev-chip{font-family:"JetBrains Mono",ui-monospace,monospace;letter-spacing:0;text-transform:none}
 .dev-hero{position:relative}
 .dev-hero-matri{position:absolute;top:-6px;right:-4px;pointer-events:none;animation:matri-float 6s ease-in-out infinite}
-.dev-hero-matri .matri{--size:170px}
+.dev-hero-matri .matri{--size:140px}
 @keyframes matri-float{50%{transform:translateY(-10px) rotate(-3deg)}}
 @media (max-width:1180px){.dev-hero-matri .matri{--size:120px}}
 @media (max-width:900px){.dev-hero-matri{top:-10px;right:0}.dev-hero-matri .matri{--size:96px}}
@@ -197,8 +197,8 @@ html.js .path-card[data-reveal].is-in:hover,.path-card:hover{transform:translate
 .dev-section h2{font-family:var(--display)}
 .dev-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
 .dev-split.is-reverse>:first-child{order:2}
-.dev-split h2{margin:6px 0 12px;font:800 clamp(28px,3.4vw,40px)/1.15 var(--display)}
-.dev-split .section-lead{margin:0 0 22px;color:var(--muted);font-size:16.5px}
+.dev-split h2{margin:6px 0 12px;font:800 clamp(24px,2.6vw,32px)/1.18 var(--display)}
+.dev-split .section-lead{margin:0 0 22px;color:var(--muted);font-size:15.5px}
 /* the dry run */
 .dev-demo.lab{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;max-width:none;margin:0;padding:0;align-items:start}
 .dev-demo-static{margin:0;padding:14px 16px;color:#e2e8f0;font:14px/1.6 "JetBrains Mono",ui-monospace,monospace;white-space:pre;overflow:auto}
@@ -246,7 +246,7 @@ html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
 .dev-quiz-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:#94a3b8;font-size:13px}
 .dev-quiz-head .sample-tag{margin-left:auto}
 .dev-quiz-head .pq-lang{padding:2px 10px;border-radius:99px;font:600 12px "JetBrains Mono",ui-monospace,monospace}
-.dev-quiz-prompt{margin:0;color:#e6edf7;font:700 18px/1.3 var(--display)}
+.dev-quiz-prompt{margin:0;color:#e6edf7;font:700 17px/1.3 var(--display)}
 .dev-quiz-code{margin:0;padding:14px 16px;border:1px solid #1f2a40;border-radius:10px;background:#060b16;color:#e2e8f0;font:14px/1.6 "JetBrains Mono",ui-monospace,monospace;overflow:auto}
 .dev-quiz-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .dev-quiz-choices button{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid #2b3a55;border-radius:10px;background:#0f1729;color:#e6edf7;font:600 14px "JetBrains Mono",ui-monospace,monospace;cursor:pointer;text-align:left;transition:border-color .15s,transform .15s,background .15s}
@@ -306,7 +306,8 @@ html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
 .auth-main .dev-switch-track{background:color-mix(in srgb,var(--ink) 12%,transparent)}
 .auth-story-body{display:flex;flex-direction:column;gap:28px}
 .dev-story{position:relative}
-.dev-story h1{margin:0}
+.dev-story h1{max-width:calc(100% - 130px);margin:0}
+.dev-story-matri .matri{--size:120px}
 .dev-story .dev-chip{align-self:flex-start}
 .dev-story>p{margin:0}
 .dev-story-matri{position:absolute;top:-24px;right:0;animation:matri-float 6s ease-in-out infinite}
@@ -319,3 +320,120 @@ html.dev-on .site input[type=email],html.dev-on .site input[type=password],html.
 html.dev-on .account-type:hover{border-color:#38bdf8}
 html.dev-on .occupation-choice span{background:#0a0f1c}
 @media (max-width:900px){.auth-tools{position:static;display:flex;justify-content:flex-end;width:100%;margin-bottom:12px}.auth-main{align-content:start}.dev-story-matri .matri{--size:96px}}
+
+/* The home page at night: a deep sky instead of white sections, dark glass cards (no blur: re-blurring the moving
+   brain behind them every frame is what made the page slow), and the Matrioshka brain (brain.js) */
+body.site.site-landing{--ink:#e8eefb;--muted:#9fb0c9;--line:rgba(148,163,184,.16);--field:rgba(148,163,184,.3);--canvas:rgba(12,19,36,.6);--surface:rgba(13,21,40,.72);--violet:#7dd3fc;--violet-dark:#bae6fd;--violet-soft:rgba(125,211,252,.12);--site-hero:transparent;background:#050913;color:var(--ink)}
+body.site.site-landing::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(1100px 620px at 8% 4%,rgba(124,58,237,.13),transparent 62%),radial-gradient(900px 640px at 92% 46%,rgba(14,165,233,.10),transparent 60%),radial-gradient(800px 520px at 30% 96%,rgba(236,72,153,.07),transparent 60%),radial-gradient(rgba(226,232,240,.45) .8px,transparent 1.2px) 0 0/140px 140px,radial-gradient(rgba(226,232,240,.3) .6px,transparent 1px) 70px 90px/210px 210px}
+html.dev-on body.site-landing::before{display:none}
+.site-landing .section.alt{background:transparent}
+.site-landing .section{position:relative}
+.site-landing .stats{border-color:var(--line)}
+.site-landing .signin-card,.site-landing .proof-card,.site-landing .path-card,.site-landing .faq details,.site-landing .live-board{border-color:rgba(148,163,184,.18);background:rgba(11,18,35,.88);box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 24px 60px rgba(2,6,23,.45)}
+.site-landing .site input[type=email],.site-landing .site input[type=password],.site-landing input[type=email],.site-landing input[type=password],.site-landing input[type=text]{border-color:rgba(148,163,184,.28);background:rgba(5,9,19,.6);color:#e8eefb}
+.site-landing .site-btn.primary{background:#0284c7}
+.site-landing .site-btn.light{background:#e0f2fe;color:#0c4a6e}
+.site-landing .path-icon{background:rgba(125,211,252,.12)}
+.site-landing .path-icon.amber{background:rgba(251,191,36,.14);color:#fcd34d}.site-landing .path-icon.green{background:rgba(74,222,128,.14);color:#86efac}
+.site-landing .path-card:hover{box-shadow:0 0 0 1px rgba(125,211,252,.35),0 24px 60px rgba(14,165,233,.16)}
+.site-landing .rule-drops li{background:rgba(5,9,19,.45)}
+.site-landing .live-row:hover{background:rgba(125,211,252,.08)}
+.site-landing .cta{border:1px solid rgba(148,163,184,.18);background:radial-gradient(circle at 50% 0,rgba(124,58,237,.22),transparent 60%),rgba(13,21,40,.7)}
+.site-landing .site-footer{border-color:var(--line);background:rgba(5,9,19,.6)}
+.site-landing .kicker{color:#a5b4fc}
+.site-landing .section-head h2,.site-landing h2{color:#f1f5ff}
+
+/* The brain behind the hero headline */
+.brain-host{position:relative;overflow:hidden;isolation:isolate}
+.brain-canvas{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
+.brain-host>.site-wrap{position:relative;z-index:1}
+.site-landing .site-hero{min-height:calc(100vh - 64px);display:grid;align-items:center}
+.site-landing .hero-copy h1,.site-landing .hero-lead{text-shadow:0 2px 24px rgba(5,9,19,.85)}
+.hero-words span{display:inline-block;opacity:0;filter:blur(8px);transform:translateY(18px);animation:word-in .9s calc(.15s + var(--w) * 90ms) cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes word-in{to{opacity:1;filter:none;transform:none}}
+.hero-words em span{text-shadow:none;filter:drop-shadow(0 2px 18px rgba(5,9,19,.7));background:linear-gradient(100deg,#7dd3fc 0%,#7dd3fc 40%,#e0f2fe 50%,#c4b5fd 60%,#7dd3fc 70%,#7dd3fc 100%) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:word-in .9s calc(.15s + var(--w) * 90ms) cubic-bezier(.2,.7,.3,1) forwards,word-shine 9s 2s ease-in-out infinite}
+@keyframes word-shine{0%,70%{background-position:100% 0}100%{background-position:0 0}}
+
+/* Inside the brain: the camera flies through the shells as you scroll, one feature per shell */
+.journey{position:relative}
+html.js .journey{height:520vh}
+.journey-sticky{position:relative;overflow:hidden}
+.journey-sticky>.brain-canvas{-webkit-mask-image:linear-gradient(transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(transparent,#000 12%,#000 88%,transparent)}
+html.js .journey-sticky{position:sticky;top:0;height:100vh}
+.journey-inner{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,440px) 1fr auto;grid-template-rows:auto 1fr;gap:18px 32px;height:100%;padding-block:clamp(28px,7vh,72px)}
+.journey-head{grid-column:1/-1;max-width:620px}
+.journey-head h2{margin:6px 0 6px;font:800 clamp(26px,3vw,36px)/1.12 var(--display)}
+.journey-head h2 em{color:#7dd3fc;font-style:normal}
+.journey-head p{margin:0;color:var(--muted)}
+.journey-stages{position:relative;display:grid;align-self:center}
+.journey-stage{display:grid;gap:12px;padding:24px;border:1px solid rgba(148,163,184,.18);border-radius:20px;background:rgba(9,14,28,.9);box-shadow:0 30px 80px rgba(2,6,23,.55)}
+html.js .journey-stage{grid-area:1/1;align-self:start;opacity:0;transform:translateY(26px) scale(.97);transition:opacity .55s ease,transform .7s cubic-bezier(.2,.7,.3,1);pointer-events:none}
+html.js .journey-stage.is-active{opacity:1;transform:none;pointer-events:auto}
+.journey-step{color:#a5b4fc;font:700 12px/1.4 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.04em;text-transform:uppercase}
+.journey-stage h3{margin:0;color:#f1f5ff;font:800 22px/1.2 var(--display)}
+.journey-stage>p{margin:0;color:var(--muted);font-size:15px;line-height:1.6}
+.journey-mock{position:relative;display:grid;gap:10px;margin-top:4px;padding:16px;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(5,9,19,.55)}
+.journey-sample{position:absolute;top:-10px;right:12px;padding:1px 8px;border:1px solid rgba(165,180,252,.4);border-radius:99px;background:#0b1224;color:#a5b4fc;font:700 10.5px/1.6 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.04em;text-transform:uppercase}
+.mock-row{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);font-size:14px}
+.mock-row b{color:#f1f5ff}
+.mock-pill{padding:2px 10px;border-radius:99px;background:rgba(74,222,128,.14);color:#86efac;font:700 12px var(--text);font-style:normal}
+.mock-langs{display:flex;height:8px;overflow:hidden;border-radius:99px;background:rgba(148,163,184,.15)}
+.mock-langs i{width:var(--w);background:var(--c)}
+.mock-legend{display:flex;gap:14px;color:var(--muted);font-size:12.5px}
+.mock-days{display:grid;grid-template-columns:repeat(14,1fr);gap:3px}
+.mock-days i{aspect-ratio:1;border-radius:3px;background:rgba(148,163,184,.14)}
+.mock-days .l1{background:rgba(74,222,128,.35)}.mock-days .l2{background:rgba(74,222,128,.6)}.mock-days .l3{background:#22c55e}
+.mock-rec{display:inline-flex;align-items:center;gap:7px;color:#fca5a5;font:700 13px "JetBrains Mono",ui-monospace,monospace}
+.mock-rec i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:mock-rec 1.4s ease-in-out infinite}
+@keyframes mock-rec{50%{opacity:.25}}
+.mock-chip{padding:2px 10px;border:1px solid rgba(148,163,184,.3);border-radius:99px;font-size:12px}
+.mock-caption{margin:0;padding:10px 12px;border-radius:10px;background:rgba(2,6,23,.7);color:#f8fafc;font-size:14px;text-align:center}
+.mock-chapters{display:flex;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:12.5px}
+.mock-chapters b{color:#7dd3fc;font-family:"JetBrains Mono",ui-monospace,monospace}
+.mock-score{display:flex;align-items:baseline;gap:6px}
+.mock-score b{color:#f1f5ff;font:800 36px/1 var(--display)}
+.mock-score small{color:var(--muted)}
+.mock-score span{margin-left:auto;color:#86efac;font-size:13px;font-weight:700}
+.mock-bars{display:grid;gap:8px;color:var(--muted);font-size:13px}
+.mock-bars span{display:grid;gap:4px}
+.mock-bars i{display:block;width:var(--w);height:6px;border-radius:99px;background:linear-gradient(90deg,#818cf8,#7dd3fc)}
+.mock-toast{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:rgba(74,222,128,.12);color:#86efac;font-weight:700}
+.journey-matri{justify-items:center;padding-block:20px}
+.journey-matri .matri{--size:130px}
+.journey-dots{display:flex;flex-direction:column;align-items:flex-end;gap:10px;align-self:center;grid-column:3;position:relative}
+.journey-bar{position:absolute;top:6px;bottom:6px;right:-14px;width:2px;border-radius:2px;background:rgba(148,163,184,.2);overflow:hidden}
+.journey-bar i{display:block;height:100%;background:linear-gradient(#a5b4fc,#7dd3fc);transform:scaleY(0);transform-origin:top}
+.journey-dots button{padding:4px 10px;border:1px solid transparent;border-radius:99px;background:none;color:#64748b;font:600 13px var(--text);cursor:pointer;transition:color .2s,border-color .2s,background .2s}
+.journey-dots button[aria-current=true]{border-color:rgba(125,211,252,.4);background:rgba(125,211,252,.1);color:#e0f2fe}
+.journey-dots button:hover{color:#e0f2fe}
+@media (max-width:900px){
+  .journey-inner{grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;align-content:space-between}
+  .journey-stages{align-self:end}
+  .journey-dots{grid-column:1;flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:center}
+  .journey-bar{display:none}
+  .journey-stage{padding:18px}
+  .journey-stage h3{font-size:20px}
+  .site-landing .site-hero{min-height:0}
+}
+@media (prefers-reduced-motion:reduce){
+  html.js .journey{height:auto}
+  html.js .journey-sticky{position:relative;height:auto}
+  html.js .journey-stage{grid-area:auto;opacity:1;transform:none;pointer-events:auto;margin-bottom:16px}
+  .journey-dots{display:none}
+  .hero-words span,.hero-words em span{opacity:1;filter:none;transform:none;animation:none}
+}
+
+/* Sign-up pages at night: the story over the brain, and the form in dark glass */
+.site-auth .auth-story{position:relative;background:transparent;border-right:1px solid rgba(148,163,184,.12)}
+.site-auth .auth-story>.site-brand,.site-auth .auth-story-body{position:relative;z-index:1}
+.site-auth .auth-story h1,.site-auth .auth-story p,.site-auth .auth-story strong{text-shadow:0 2px 20px rgba(5,9,19,.85)}
+.site-auth .auth-main{background:transparent}
+.site-auth .auth-form-card{border-color:rgba(148,163,184,.18);background:rgba(11,18,35,.9);box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 24px 60px rgba(2,6,23,.5)}
+.site-auth input[type=number],.site-auth input[type=url],.site-auth select,.site-auth textarea{border-color:rgba(148,163,184,.28);background:rgba(5,9,19,.6);color:#e8eefb}
+.site-auth .account-type{border-color:rgba(148,163,184,.18);background:rgba(5,9,19,.35)}
+.site-auth a.account-type:hover{border-color:#7dd3fc;box-shadow:0 0 0 1px rgba(125,211,252,.4),0 16px 40px rgba(14,165,233,.14)}
+.site-auth .type-icon{background:rgba(125,211,252,.12);color:#7dd3fc}
+.site-auth .occupation-choice span{border-color:rgba(148,163,184,.28);background:rgba(5,9,19,.5);color:#e8eefb}
+.site-auth .signup-details,.site-auth .signup-chosen{border-color:rgba(148,163,184,.16);background:rgba(5,9,19,.4)}
+.site-auth .auth-note{background:rgba(13,21,40,.7)}
+@media (max-width:700px){.site-auth .auth-story{gap:18px;padding-block:28px}.site-auth .auth-points,.site-auth .auth-note{display:none}.site-auth .dev-story h1{max-width:none}.site-auth .dev-story-matri{display:none}}

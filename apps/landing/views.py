@@ -78,7 +78,7 @@ class LandingPageView(TemplateView):
         coins_from = max(rules.coins_per_conversion - rules.coins_per_video, 0)
         context.update({
             "rules": rules,
-            # Sample numbers for the earnings clip, worked out from the live rules so the clip always matches them.
+            # Sample numbers for the journey's earnings card, worked out from the live rules so they always match them.
             "tour": {"coins_from": coins_from, "ring_from": round(coins_from * 100 / max(rules.coins_per_conversion, 1)), "followers_from": max(rules.follower_goal - 3, 0), "balance_from": 260, "balance_to": 260 + rules.rupees_per_conversion},
             "top_developers": top,
             "live_stats": {"developers": developers, "repositories": Repository.objects.exclude(languages={}).count(), "posts": LearningPost.objects.filter(is_public=True).count()} if developers >= LIVE_STATS_MINIMUM else None,

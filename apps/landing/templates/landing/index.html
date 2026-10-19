@@ -1,16 +1,16 @@
 {% load static ui money practice_tags %}<!doctype html><html lang="en" class="no-js"><head><meta charset="utf-8"><script>(function(d){d.className=d.className.replace("no-js","js");try{if(localStorage.getItem("myprogress:landing-dev")==="on")d.classList.add("dev-on")}catch(e){}})(document.documentElement)</script><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="MyProgress is where developers host code, record video walkthroughs, write articles, get ranked on real work, and earn for teaching."><title>MyProgress · Your work is your resume</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{% static 'landing/css/site.css' %}"><link rel="stylesheet" href="{% static 'landing/css/themes.css' %}"><link rel="stylesheet" href="{% static 'landing/css/practice.css' %}"><link rel="stylesheet" href="{% static 'landing/css/landing-dev.css' %}"><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"></head>
-<body class="site theme-{{ ui_theme }}"><a class="skip-link" href="#main">Skip to content</a>
+<body class="site site-landing theme-{{ ui_theme }}"><a class="skip-link" href="#main">Skip to content</a>
 <header class="site-header"><div class="site-wrap site-header-inner"><a class="site-brand" href="{% url 'landing:home' %}" aria-label="MyProgress home"><span class="brand-mark"><i></i><i></i><i></i></span>MyProgress</a>
-<nav class="site-nav" id="site-nav" aria-label="Main"><a href="#paths" data-for-mode="normal">Who it's for</a><a href="#tour" data-for-mode="normal">Tour</a><a href="#proof" data-for-mode="normal">Rankings and earnings</a><a href="#faq" data-for-mode="normal">FAQ</a><a href="#dry-run" data-for-mode="dev">Dry run</a><a href="#dev-problems" data-for-mode="dev">Problems</a><a href="#dev-questions" data-for-mode="dev">Questions</a><a href="#dev-editor" data-for-mode="dev">Editor look</a><a href="#dev-faq" data-for-mode="dev">FAQ</a></nav>
+<nav class="site-nav" id="site-nav" aria-label="Main"><a href="#paths" data-for-mode="normal">Who it's for</a><a href="#journey" data-for-mode="normal">Inside</a><a href="#proof" data-for-mode="normal">Rankings and earnings</a><a href="#faq" data-for-mode="normal">FAQ</a><a href="#dry-run" data-for-mode="dev">Dry run</a><a href="#dev-problems" data-for-mode="dev">Problems</a><a href="#dev-questions" data-for-mode="dev">Questions</a><a href="#dev-editor" data-for-mode="dev">Editor look</a><a href="#dev-faq" data-for-mode="dev">FAQ</a></nav>
 <div class="site-actions"><button class="dev-switch" type="button" role="switch" aria-checked="false" data-dev-switch title="See MyProgress in developer mode"><span class="dev-switch-label">Developer mode</span><span class="dev-switch-track" aria-hidden="true"><span class="dev-switch-glyph">&lt;/&gt;</span><span class="dev-switch-knob"></span></span></button><a class="site-btn ghost" href="#signin">Sign in</a><a class="site-btn accent" href="{% url 'landing:register' %}">Join now</a></div>
 <button class="menu-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav">{% icon "menu" 22 %}</button></div></header>
 <div class="site-stage" data-site-stage>
 
-<section class="site-hero" data-water><canvas class="water" data-water-canvas aria-hidden="true"></canvas><div class="site-wrap hero-grid">
+<section class="site-hero brain-host"><canvas class="brain-canvas" data-brain="hero" aria-hidden="true"></canvas><div class="site-wrap hero-grid">
 <div class="hero-copy"><div data-for-mode="normal"><span class="hero-chip">{% icon "shield" 14 %}The proof-of-work network for developers</span>
-<h1>Build it. Teach it. <em>Get ranked and paid for it.</em></h1>
+<h1 class="hero-words"><span style="--w:0">Build</span> <span style="--w:1">it.</span> <span style="--w:2">Teach</span> <span style="--w:3">it.</span> <em><span style="--w:4">Get</span> <span style="--w:5">ranked</span> <span style="--w:6">and</span> <span style="--w:7">paid</span> <span style="--w:8">for</span> <span style="--w:9">it.</span></em></h1>
 <p class="hero-lead">Host your code, teach what you build, and let real work speak for you.</p>
-<div class="hero-actions"><a class="site-btn accent large" href="{% url 'landing:register' %}">Create your free account {% icon "chevron-right" 18 %}</a><a class="site-btn outline large" href="#tour">{% icon "play" 18 %}Watch the tour</a></div>
+<div class="hero-actions"><a class="site-btn accent large" href="{% url 'landing:register' %}">Create your free account {% icon "chevron-right" 18 %}</a><a class="site-btn outline large" href="#journey">{% icon "play" 18 %}Look inside</a></div>
 <p class="hero-proof">{% if live_stats %}{% icon "users" 16 %}<span><strong>{{ live_stats.developers }} developers</strong> are already building on MyProgress</span>{% else %}{% icon "check-circle" 16 %}<span><strong>Free for students and professionals.</strong> Nothing to install.</span>{% endif %}</p>
 <button class="matri-teaser" type="button" data-dev-wake>{% include "landing/partials/matri.html" with size="sm" state="asleep" %}<span class="matri-bubble">Here to code? <b>Wake me up</b> and see developer mode.</span></button></div>
 <div class="dev-hero" data-for-mode="dev"><div class="dev-hero-matri">{% include "landing/partials/matri.html" with size="md" state="awake" %}</div><span class="hero-chip dev-chip"><span class="dev-prompt">$</span> developer-mode --on</span>
@@ -42,120 +42,24 @@
 <a class="path-card" href="{% url 'landing:register_details' 'organization' %}" data-reveal style="--d:2"><span class="path-icon green">{% icon "users" 22 %}</span><b>Institutes and communities</b><ul><li>Live classes inside MyProgress, with recordings</li><li>Tasks, certificates and a class channel</li><li>Weekly progress emails for parents</li></ul><span class="path-go">Set up your institute {% icon "chevron-right" 16 %}</span></a>
 </div></div></section>
 
-<section class="section tour-section" id="tour" data-for-mode="normal"><div class="site-wrap">
-<header class="section-head" data-reveal><span class="kicker">Product tour</span><h2>See it in action.</h2><p>Each clip replays the real interface with sample data.</p></header>
-<div class="tour" data-tour>
-<div class="tour-tabs" role="tablist" aria-label="Features">
-<button class="tour-tab" role="tab" type="button" id="tab-code" aria-controls="scene-code" aria-selected="true"><span class="tour-tab-icon">{% icon "git-branch" 18 %}</span><span class="tour-tab-text"><b>Host code, prove your work</b><small>Push with Git. Languages and activity come from your commits.</small></span><span class="tour-progress"><i></i></span></button>
-<button class="tour-tab" role="tab" type="button" id="tab-video" aria-controls="scene-video" aria-selected="false" tabindex="-1"><span class="tour-tab-icon green">{% icon "video" 18 %}</span><span class="tour-tab-text"><b>Record videos in your browser</b><small>Screen and camera, layouts, live captions and chapters.</small></span><span class="tour-progress"><i></i></span></button>
-<button class="tour-tab" role="tab" type="button" id="tab-article" aria-controls="scene-article" aria-selected="false" tabindex="-1"><span class="tour-tab-icon violet">{% icon "file-text" 18 %}</span><span class="tour-tab-text"><b>Write articles faster</b><small>Voice typing, code from your repository, and AI help.</small></span><span class="tour-progress"><i></i></span></button>
-<button class="tour-tab" role="tab" type="button" id="tab-rank" aria-controls="scene-rank" aria-selected="false" tabindex="-1"><span class="tour-tab-icon amber">{% icon "award" 18 %}</span><span class="tour-tab-text"><b>Climb the rankings</b><small>A score out of 100, built only from real work.</small></span><span class="tour-progress"><i></i></span></button>
-<button class="tour-tab" role="tab" type="button" id="tab-earn" aria-controls="scene-earn" aria-selected="false" tabindex="-1"><span class="tour-tab-icon gold">{% icon "dollar" 18 %}</span><span class="tour-tab-text"><b>Earn for teaching</b><small>Coins for every post, paid out every month.</small></span><span class="tour-progress"><i></i></span></button>
+<section class="journey" id="journey" data-journey data-for-mode="normal" aria-label="Inside MyProgress">
+<div class="journey-sticky"><canvas class="brain-canvas" data-brain="journey" aria-hidden="true"></canvas>
+<div class="site-wrap journey-inner">
+<header class="journey-head"><span class="kicker">Inside MyProgress</span><h2>A brain built from <em>your work.</em></h2><p>Scroll to fly through it. Each shell is a part of your dashboard.</p></header>
+<div class="journey-stages">
+<article class="journey-stage is-active" data-stage><span class="journey-step">Shell 1 · Projects</span><h3>Your code, proven.</h3><p>Every project gets Git hosting. Push as usual, and your languages, commits and coding days are measured for you.</p>
+<div class="journey-mock"><span class="journey-sample">Sample data</span><div class="mock-row"><b>Ledger service</b><em class="mock-pill">Code verified</em></div><div class="mock-langs"><i style="--w:64%;--c:#00ADD8"></i><i style="--w:22%;--c:#89e051"></i><i style="--w:14%;--c:#94a3b8"></i></div><div class="mock-legend"><span>Go 64%</span><span>Shell 22%</span><span>Dockerfile 14%</span></div><div class="mock-days">{% for level in "0102010300120203010230102031" %}<i class="l{{ level }}"></i>{% endfor %}</div></div></article>
+<article class="journey-stage" data-stage><span class="journey-step">Shell 2 · Studio</span><h3>Teach from your browser.</h3><p>Record your screen and camera with captions and chapters, or write an article with code straight from your repositories.</p>
+<div class="journey-mock"><span class="journey-sample">Sample data</span><div class="mock-row"><span class="mock-rec"><i></i>REC 00:38</span><span class="mock-chip">Framed</span></div><p class="mock-caption">This is how the ledger keeps every balance in sync.</p><div class="mock-chapters"><span><b>0:00</b> Intro</span><span><b>0:12</b> The data model</span><span><b>0:31</b> Testing payments</span></div></div></article>
+<article class="journey-stage" data-stage><span class="journey-step">Shell 3 · Rankings</span><h3>A score you earn.</h3><p>Out of 100, from verified shipped work, coding consistency, teaching, followers and a complete profile. Signing in never adds a point.</p>
+<div class="journey-mock"><span class="journey-sample">Sample data</span><div class="mock-score"><b>77</b><small>/ 100</small><span>#9 this week</span></div><div class="mock-bars"><span>Shipped work<i style="--w:80%"></i></span><span>Consistency<i style="--w:76%"></i></span><span>Teaching<i style="--w:70%"></i></span></div></div></article>
+<article class="journey-stage" data-stage><span class="journey-step">Shell 4 · Earnings</span><h3>Paid for teaching.</h3><p>+{{ rules.coins_per_article }} coins for an article and +{{ rules.coins_per_video }} for a video. At {{ rules.follower_goal }} followers your earnings unlock, paid around the {{ rules.payout_day|ordinal }}.</p>
+<div class="journey-mock"><span class="journey-sample">Sample data</span><div class="mock-toast">{% icon "check-circle" 16 %}Published · +{{ rules.coins_per_video }} coins</div><div class="mock-row"><span>Balance</span><b>{{ tour.balance_to|inr }}</b></div><div class="mock-row"><span>Next payment</span><b>around the {{ rules.payout_day|ordinal }}</b></div></div></article>
+<article class="journey-stage" data-stage><span class="journey-step">The core · Developer mode</span><h3>And at the center, a thinking core.</h3><p>Problems with a line-by-line dry run of your own code, a question at every sign-in, and MyProgress as a code editor. Meet Matri.</p>
+<div class="journey-mock journey-matri">{% include "landing/partials/matri.html" with size="md" state="awake" %}<button class="site-btn accent" type="button" data-dev-wake>{% icon "terminal" 16 %} Wake developer mode</button></div></article>
 </div>
-
-<div class="tour-player">
-<div class="tour-window">
-<div class="tour-chrome"><span class="tour-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="tour-url" data-tour-url>myprogress / projects / ledger-service</span><span class="tour-sample">Sample data</span></div>
-<div class="tour-stage">
-
-<div class="tour-scene" id="scene-code" role="tabpanel" aria-labelledby="tab-code" data-url="myprogress / projects / ledger-service" data-steps="0,1500,1950,2400,2900,3300,3800,4300" data-length="9000" data-caption="You push code with Git. The project picks up its languages and commits, and its milestones show your progress.">
-<div class="sc-code">
-<div class="sc-term" aria-hidden="true">
-<p><span class="sc-prompt">~/ledger-service $</span> <span data-at="0" data-do="type" data-text="git push origin main"></span><span class="sc-caret"></span></p>
-<p class="sc-dim" data-at="1">Enumerating objects: 42, done.</p>
-<p class="sc-dim" data-at="2">Writing objects: 100% (42/42), 18.4 KiB</p>
-<p class="sc-ok" data-at="3">To myprogress …/ledger-service.git</p>
-<p class="sc-ok" data-at="3">&nbsp;&nbsp;3f9c2e1..8a71d04&nbsp; main → main</p>
-</div>
-<div class="sc-card">
-<div class="sc-row"><b>Ledger service</b><em class="sc-pill" data-at="4" data-do="swap" data-text="Code verified">Planning</em></div>
-<small class="sc-muted">A double-entry ledger API</small>
-<div class="sc-langbar"><i data-at="4" style="--w:64%;background:#00ADD8"></i><i data-at="4" style="--w:22%;background:#89e051"></i><i data-at="4" style="--w:14%;background:#384d54"></i></div>
-<div class="sc-legend"><span><i style="background:#00ADD8"></i>Go 64%</span><span><i style="background:#89e051"></i>Shell 22%</span><span><i style="background:#384d54"></i>Dockerfile 14%</span></div>
-<ul class="sc-milestones"><li data-at="5">Plan the solution</li><li data-at="6">Build the core</li><li data-at="7">Document the work</li><li>Publish a demo</li></ul>
-<div class="sc-stats"><span>Commits <b data-at="4" data-do="count" data-from="0" data-to="24">0</b></span><span>Coding days <b data-at="4" data-do="count" data-from="0" data-to="9">0</b></span><span>Score <b data-at="6" data-do="count" data-from="12" data-to="31">12</b></span></div>
-</div>
-<div class="sc-calendar" aria-hidden="true">{% for level in "0102010300120203010230102031" %}<i class="l{{ level }}"{% if forloop.counter > 22 %} data-at="7"{% endif %}></i>{% endfor %}</div>
-</div>
-</div>
-
-<div class="tour-scene" id="scene-video" role="tabpanel" aria-labelledby="tab-video" data-url="myprogress / learn / new video" data-steps="0,900,1700,2600,3800,5000,6000,7000" data-length="9500" data-caption="You record your screen with your camera in the corner, switch layouts, and captions and chapters are made as you talk. When you stop, it uploads and publishes." hidden>
-<div class="sc-rec">
-<div class="sc-rec-top"><span class="sc-rec-live"><i></i>REC <b data-at="0" data-do="count" data-from="0" data-to="38" data-ms="7600" data-format="clock">00:00</b></span><span class="sc-chips"><em class="on">Full</em><em data-at="3" data-do="activate">Framed</em><em>Side by side</em></span></div>
-<div class="sc-rec-body">
-<div class="sc-canvas" data-at="3">
-<div class="sc-screen"><p><i style="--w:38%" class="k"></i><i style="--w:26%"></i></p><p class="in"><i style="--w:22%" class="k"></i><i style="--w:44%"></i></p><p class="in"><i style="--w:30%"></i><i style="--w:18%" class="s"></i></p><p class="hl"><i style="--w:16%" class="k"></i><i style="--w:52%"></i></p><p class="in"><i style="--w:40%" class="s"></i></p><p><i style="--w:12%" class="k"></i></p></div>
-<span class="sc-cam" aria-hidden="true">{% icon "user" 30 %}</span>
-<p class="sc-captions"><span data-at="2" data-do="type" data-text="This is how the ledger keeps every balance in sync." data-speed="45"></span></p>
-</div>
-<aside class="sc-chapters"><small>Chapters</small><p data-at="1"><b>0:00</b>Intro</p><p data-at="4"><b>0:12</b>The data model</p><p data-at="5"><b>0:31</b>Testing payments</p></aside>
-</div>
-<div class="sc-upload" data-at="6"><span>Uploading</span><span class="sc-meter"><i></i></span></div>
-<div class="sc-toast" data-at="7">{% icon "check-circle" 16 %}Published · +{{ rules.coins_per_video }} coins</div>
-</div>
-</div>
-
-<div class="tour-scene" id="scene-article" role="tabpanel" aria-labelledby="tab-article" data-url="myprogress / learn / new article" data-steps="0,700,3400,4300,6300,6900,7900" data-length="9500" data-caption="You dictate with voice typing, drop in code straight from your repository, and let AI help tighten a sentence before you publish." hidden>
-<div class="sc-article">
-<div class="sc-toolbar" aria-hidden="true"><b>B</b><i>I</i><span>H2</span><span>{% icon "list" 14 %}</span><span>{% icon "code" 14 %}</span><span>{% icon "image" 14 %}</span><span class="sc-mic" data-at="0">{% icon "mic" 14 %}Listening</span><span class="sc-ai" data-at="4">{% icon "zap" 14 %}AI: make it clearer</span></div>
-<div class="sc-doc">
-<h4>Moving the ledger to PostgreSQL</h4>
-<p><span data-at="1" data-do="type" data-text="Today I moved the ledger service from SQLite to PostgreSQL." data-speed="38"></span></p>
-<div class="sc-snippet" data-at="2"><small>{% icon "git-branch" 12 %}From your repository · ledger/models.py</small><pre><code><span class="k">class</span> Entry(models.Model):
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    account = models.ForeignKey(Account, on_delete=models.PROTECT)</code></pre></div>
-<p><span class="sc-rewrite" data-at="3" data-do="type" data-text="the hard bit was two payments at once." data-speed="40"></span><span class="sc-rewrite-new" data-at="5" data-do="swap" data-text="The tricky part: locking each row, so two payments can never change one balance at the same time."></span></p>
-</div>
-<aside class="sc-outline"><small>Outline</small><p data-at="1">Why PostgreSQL</p><p data-at="2">The data model</p><p data-at="5">Locking rows</p></aside>
-<div class="sc-toast" data-at="6">{% icon "check-circle" 16 %}Published · +{{ rules.coins_per_article }} coins</div>
-</div>
-</div>
-
-<div class="tour-scene" id="scene-rank" role="tabpanel" aria-labelledby="tab-rank" data-url="myprogress / rankings" data-steps="0,500,1000,1500,2000,2500,3600,4600" data-length="8500" data-caption="Your score out of 100 comes from verified shipped work, coding consistency, teaching, community and a complete profile, and your rank moves with it." hidden>
-<div class="sc-rank">
-<div class="sc-standing">
-<small>Your global rank</small>
-<b class="sc-rank-num"><span data-at="0" data-do="count" data-from="48" data-to="9" data-ms="3200" data-format="rank">#48</span></b>
-<span class="sc-move" data-at="6">{% icon "trending-up" 14 %}Up 39 places this week</span>
-<div class="sc-score"><span data-at="0" data-do="count" data-from="31" data-to="77" data-ms="3200">31</span><small>/ 100 score</small></div>
-</div>
-<div class="sc-breakdown">
-<div class="sc-part"><span>Verified shipped work</span><b>28 / 35</b><i class="sc-bar"><i data-at="1" style="--w:80%"></i></i></div>
-<div class="sc-part"><span>Coding consistency</span><b>19 / 25</b><i class="sc-bar"><i data-at="2" style="--w:76%"></i></i></div>
-<div class="sc-part"><span>Teaching</span><b>14 / 20</b><i class="sc-bar"><i data-at="3" style="--w:70%"></i></i></div>
-<div class="sc-part"><span>Community</span><b>6 / 10</b><i class="sc-bar"><i data-at="4" style="--w:60%"></i></i></div>
-<div class="sc-part"><span>Profile completeness</span><b>10 / 10</b><i class="sc-bar"><i data-at="5" style="--w:100%"></i></i></div>
-</div>
-<div class="sc-badge" data-at="7">{% icon "zap" 16 %}Achievement unlocked · 7-day coding streak</div>
-</div>
-</div>
-
-<div class="tour-scene" id="scene-earn" role="tabpanel" aria-labelledby="tab-earn" data-url="myprogress / earnings" data-steps="0,800,2200,3200,4400,5600" data-length="9000" data-caption="Each post earns coins. At {{ rules.follower_goal }} followers your earnings unlock with a bonus, every {{ rules.coins_per_conversion }} coins become {{ rules.rupees_per_conversion|inr }}, and you're paid every month." hidden>
-<div class="sc-earn">
-<div class="sc-earn-hero">
-<div class="sc-balance"><small>Balance</small><b><span data-at="3" data-do="count" data-from="{{ tour.balance_from }}" data-to="{{ tour.balance_to }}" data-format="inr">{{ tour.balance_from|inr }}</span></b><span class="sc-muted-light">This month (estimated)</span></div>
-<div class="sc-ring" style="--from:{{ tour.ring_from }};--to:100"><svg viewBox="0 0 120 120" aria-hidden="true"><circle class="sc-ring-track" cx="60" cy="60" r="50"/><circle class="sc-ring-fill" data-at="1" cx="60" cy="60" r="50" pathLength="100"/></svg><div><b><span data-at="1" data-do="count" data-from="{{ tour.coins_from }}" data-to="{{ rules.coins_per_conversion }}">{{ tour.coins_from }}</span></b><small>of {{ rules.coins_per_conversion }} coins</small></div></div>
-<div class="sc-followers"><small>Followers</small><b><span data-at="2" data-do="count" data-from="{{ tour.followers_from }}" data-to="{{ rules.follower_goal }}">{{ tour.followers_from }}</span> / {{ rules.follower_goal }}</b><i class="sc-bar light"><i data-at="2" style="--w:100%"></i></i><span class="sc-unlocked" data-at="2">{% icon "unlock" 14 %}Earnings unlocked · {{ rules.follower_bonus|inr }} bonus</span></div>
-</div>
-<div class="sc-toast" data-at="3">{% icon "zap" 16 %}{{ rules.coins_per_conversion }} coins became {{ rules.rupees_per_conversion|inr }}</div>
-<div class="sc-pay" data-at="4"><span class="sc-pay-icon">{% icon "calendar" 18 %}</span><div><b>Next payment around the {{ rules.payout_day|ordinal }}</b><small>Paid to your UPI ID or bank once your balance is {{ rules.minimum_payout|inr }} or more</small></div><em data-at="5">Scheduled</em></div>
-</div>
-</div>
-
-</div>
-</div>
-<div class="tour-controls"><button class="tour-toggle" type="button" data-tour-toggle aria-label="Pause the tour">{% icon "pause" 16 %}{% icon "play" 16 %}</button><p class="tour-caption" data-tour-caption aria-live="polite">You push code with Git. The project picks up its languages and commits, and its milestones show your progress.</p></div>
-</div>
-</div>
-</div></section>
-
-<section class="section alt" id="how" data-for-mode="normal"><div class="site-wrap">
-<header class="section-head" data-reveal><span class="kicker">How it works</span><h2>Three steps. That's all.</h2></header>
-<ol class="flow" data-reveal><span class="flow-drop" aria-hidden="true"></span>
-<li><span class="flow-dot">{% icon "git-branch" 20 %}</span><b>Push your code</b><p>Every project gets Git hosting. Your languages are measured from it.</p></li>
-<li><span class="flow-dot">{% icon "video" 20 %}</span><b>Teach what you built</b><p>Record a walkthrough or write an article, right in your browser.</p></li>
-<li><span class="flow-dot">{% icon "award" 20 %}</span><b>Get ranked and paid</b><p>Your score counts real work, and posts earn coins paid out monthly.</p></li>
-</ol></div></section>
+<nav class="journey-dots" aria-label="Shells"><span class="journey-bar"><i data-journey-bar></i></span><button type="button" data-journey-dot aria-current="true">Projects</button><button type="button" data-journey-dot aria-current="false">Studio</button><button type="button" data-journey-dot aria-current="false">Rankings</button><button type="button" data-journey-dot aria-current="false">Earnings</button><button type="button" data-journey-dot aria-current="false">Core</button></nav>
+</div></div></section>
 
 <section class="section" id="proof" data-for-mode="normal"><div class="site-wrap proof-split">
 <div class="proof-card" data-reveal><span class="kicker">Rankings</span><h2>Ranked on real work.</h2><p>Your score counts pushed code and published work. Signing in or clicking never adds a point.</p>
@@ -238,8 +142,8 @@ console.log(sumEvens([3, 4, 7, 10]));</code></pre></div>
 
 <section class="section dev-section" data-for-mode="dev"><div class="site-wrap"><div class="cta dev-cta" data-reveal>{% include "landing/partials/matri.html" with size="md" state="awake" %}<h2>Ready to watch your code think?</h2><p>Create your free account, then turn on developer mode with the toggle under Me.</p><a class="site-btn light large" href="{% url 'landing:register_details' 'developer' %}">Create your free account</a></div></div></section>
 </main>
-<footer class="site-footer"><div class="site-wrap"><span>© 2026 MyProgress. Built for builders.</span><nav aria-label="Footer"><a href="#tour">Tour</a><a href="#faq">FAQ</a><a href="#signin">Sign in</a><a href="{% url 'landing:register' %}">Create account</a></nav></div></footer>
+<footer class="site-footer"><div class="site-wrap"><span>© 2026 MyProgress. Built for builders.</span><nav aria-label="Footer"><a href="#journey">Inside</a><a href="#faq">FAQ</a><a href="#signin">Sign in</a><a href="{% url 'landing:register' %}">Create account</a></nav></div></footer>
 </div>
 <div class="dev-flip" data-dev-flip hidden aria-hidden="true"><div class="dev-flip-core">{% include "landing/partials/matri.html" with size="lg" state="asleep" %}<p class="dev-flip-line is-on"><b>$</b> developer-mode --on</p><p class="dev-flip-line is-off"><b>$</b> developer-mode --off</p></div></div>
 <p class="visually-hidden" role="status" data-dev-announce></p>
-{{ dev_assets|json_script:"dev-assets" }}<script src="{% static 'landing/js/site.js' %}"></script><script src="{% static 'landing/js/landing-dev.js' %}"></script><script src="{% static 'landing/js/site-tour.js' %}" defer></script></body></html>
+{{ dev_assets|json_script:"dev-assets" }}<script src="{% static 'landing/js/site.js' %}"></script><script src="{% static 'landing/js/landing-dev.js' %}"></script><script src="{% static 'landing/js/brain.js' %}"></script></body></html>

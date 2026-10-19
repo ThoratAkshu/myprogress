@@ -41,11 +41,13 @@ class HomePageTests(TestCase):
 
     def test_the_normal_page_keeps_to_what_matters(self):
         page = self.client.get(reverse("landing:home"))
-        for section in ['id="paths"', 'id="tour"', 'id="how"', 'id="proof"', 'id="faq"', "data-water-canvas"]:
-            self.assertContains(page, section)
-        for gone in ['id="recruiters"', 'id="learning"', 'class="site-wrap facts"', "hero-pills\" aria-label=\"What's included"]:
+        for part in ['id="paths"', 'id="journey"', 'id="proof"', 'id="faq"', 'data-brain="hero"', 'data-brain="journey"', "brain.js"]:
+            self.assertContains(page, part)
+        self.assertEqual(page.content.decode().count("data-stage>") + page.content.decode().count('data-stage '), 5)  # five shells, five dashboard features
+        for gone in ['id="tour"', 'id="how"', 'id="recruiters"', 'id="learning"', 'class="site-wrap facts"', "site-tour.js"]:
             self.assertNotContains(page, gone)
         self.assertEqual(page.content.decode().count("<details><summary>"), 4 + 5)  # four questions, and developer mode's five
+
     def test_live_counts_only_show_once_they_mean_something(self):
         self.assertNotContains(self.client.get(reverse("landing:home")), "developers are already building")
         User.objects.bulk_create([User(username=f"dev{number}@example.com") for number in range(LIVE_STATS_MINIMUM)])
