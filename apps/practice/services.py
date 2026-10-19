@@ -152,7 +152,19 @@ def payload(question):
 
 
 SWITCHED = "practice_mode_switched"  # session: "on" or "off" until the next page shows the switch
+WANTS_ON = "practice_wants_on"  # session: signing in with the home page's developer mode toggle on
 SWITCH_LIMIT, SWITCH_WINDOW = 3, timedelta(minutes=15)  # developer mode can be switched 3 times in any 15 minutes
+
+
+def open_in_developer_mode(request, user):
+    """Signing in with the home page's toggle on: turn developer mode on (unless it's on, or was switched too often),
+    and let the next page show what's new. True if it was turned on."""
+    if not request.session.pop(WANTS_ON, False) or not can_practise(user) or is_on(user):
+        return False
+    if switch_mode(user, True) != "switched":
+        return False
+    request.session[SWITCHED] = "on"
+    return True
 
 
 def can_practise(user):

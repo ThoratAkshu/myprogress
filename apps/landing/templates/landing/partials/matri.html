@@ -1,0 +1,16 @@
+{% comment %}Matri, developer mode's creature: a Matrioshka brain, shells nested around a thinking core, with eyes that follow
+the pointer (landing-dev.js). Pass size ("sm", "md", "lg") and state ("asleep", "awake"); landing-dev.css animates it.
+Each shell sits in an outer group that unfolds, so it can unfold and spin at the same time.{% endcomment %}<span class="matri matri-{{ size|default:'md' }} is-{{ state|default:'awake' }}" data-matri aria-hidden="true"><svg viewBox="0 0 200 200" focusable="false">
+<g class="matri-unfold matri-unfold-3"><g class="matri-shell matri-shell-3"><circle cx="100" cy="100" r="92" class="matri-ring is-dashed"/><circle class="matri-sat" cx="100" cy="8" r="4.5"/><circle class="matri-sat is-green" cx="188" cy="128" r="3.5"/><circle class="matri-sat is-violet" cx="22" cy="146" r="3"/></g></g>
+<g class="matri-unfold matri-unfold-2"><g class="matri-shell matri-shell-2"><circle cx="100" cy="100" r="75" class="matri-ring is-dotted"/><circle class="matri-sat is-green" cx="25" cy="100" r="4"/><circle class="matri-sat" cx="153" cy="47" r="3"/></g></g>
+<g class="matri-unfold matri-unfold-1"><g class="matri-shell matri-shell-1"><circle cx="100" cy="100" r="58" class="matri-ring"/><path class="matri-arc" d="M54 78 A50 50 0 0 1 100 46"/></g></g>
+<g class="matri-body">
+<circle cx="100" cy="104" r="42" class="matri-brain"/>
+<path class="matri-fold" d="M70 92c5-9 13-9 17-2s12 8 16 0 13-8 17 1 11 7 13 2"/><path class="matri-fold" d="M66 106c4-6 9-6 12-1"/><path class="matri-fold" d="M122 103c4-5 9-5 12 0"/><path class="matri-fold" d="M80 78c4-6 10-6 14-1m10 0c4-5 10-5 14 1"/>
+<g transform="translate(86 112)"><g class="matri-eye"><ellipse rx="9.5" ry="10.5" class="matri-white"/><g data-pupil><circle r="5" class="matri-pupil"/><circle cx="-1.6" cy="-2.2" r="1.7" class="matri-glint"/></g></g><path class="matri-lid" d="M-9 0q9 6 18 0"/></g>
+<g transform="translate(114 112)"><g class="matri-eye"><ellipse rx="9.5" ry="10.5" class="matri-white"/><g data-pupil><circle r="5" class="matri-pupil"/><circle cx="-1.6" cy="-2.2" r="1.7" class="matri-glint"/></g></g><path class="matri-lid" d="M-9 0q9 6 18 0"/></g>
+<path class="matri-mouth" d="M93 131q7 6 14 0"/><ellipse class="matri-mouth-open" cx="100" cy="133" rx="5" ry="4"/><path class="matri-mouth-big" d="M89 129q11 12 22 0z"/><path class="matri-mouth-oops" d="M93 136q7-6 14 0"/>
+<circle class="matri-cheek" cx="74" cy="124" r="5"/><circle class="matri-cheek" cx="126" cy="124" r="5"/>
+</g>
+<g class="matri-zz"><text x="138" y="62">z</text><text x="152" y="44">z</text><text x="164" y="28">z</text></g>
+</svg></span>

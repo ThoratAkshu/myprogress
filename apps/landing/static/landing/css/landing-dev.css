@@ -1,0 +1,261 @@
+/* The home page's developer mode, for visitors: the toggle, Matri (a Matrioshka-brain creature: shells nested around a
+   thinking core), the flip between the two pages, and developer mode's own sections. Sections also rise into view as
+   you scroll. Without JavaScript the page stays in the normal mode, and people who ask for less motion get no motion. */
+.visually-hidden{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+html:not(.dev-on) [data-for-mode="dev"]{display:none!important}
+html.dev-on [data-for-mode="normal"]{display:none!important}
+html.no-js [data-dev-switch],html.no-js .matri-teaser{display:none!important}
+
+/* Rising into view */
+html.js [data-reveal]{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.3,1);transition-delay:calc(var(--d,0) * 120ms)}
+html.js [data-reveal].is-in{opacity:1;transform:none}
+
+/* The toggle in the header */
+.dev-switch{display:inline-flex;align-items:center;gap:9px;padding:4px 5px 4px 12px;border:1px solid color-mix(in srgb,var(--header-fg,#e2e8f0) 22%,transparent);border-radius:99px;background:transparent;color:var(--header-fg,#e2e8f0);font:600 13.5px var(--text);cursor:pointer;transition:border-color .2s,background .2s}
+.dev-switch:hover{border-color:#38bdf8}
+.dev-switch-track{position:relative;display:block;width:48px;height:24px;border-radius:99px;background:color-mix(in srgb,var(--header-fg,#e2e8f0) 14%,transparent);transition:background .3s,box-shadow .3s}
+.dev-switch-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .35s cubic-bezier(.3,1.5,.5,1)}
+.dev-switch-glyph{position:absolute;top:50%;left:24px;color:#7dd3fc;font:700 9.5px/1 "JetBrains Mono",ui-monospace,monospace;transform:translateY(-50%);transition:left .35s ease,color .3s}
+.dev-switch[aria-checked=true]{border-color:#38bdf8;background:rgba(56,189,248,.1)}
+.dev-switch[aria-checked=true] .dev-switch-track{background:#0284c7;box-shadow:0 0 14px rgba(56,189,248,.5)}
+.dev-switch[aria-checked=true] .dev-switch-knob{transform:translateX(24px)}
+.dev-switch[aria-checked=true] .dev-switch-glyph{left:6px;color:#fff}
+@media (max-width:640px){.dev-switch-label{display:none}.dev-switch{padding:4px}}
+.site-actions .site-btn{white-space:nowrap}
+
+/* Matri */
+.matri{--size:150px;position:relative;display:inline-block;flex:none;width:var(--size);height:var(--size);vertical-align:middle}
+.matri-sm{--size:84px}.matri-md{--size:150px}.matri-lg{--size:240px}
+.matri svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 16px rgba(56,189,248,.28))}
+.matri-ring{fill:none;stroke:rgba(56,189,248,.5);stroke-width:2}
+.matri-ring.is-dashed{stroke-dasharray:12 9}
+.matri-ring.is-dotted{stroke:rgba(34,197,94,.7);stroke-width:3.2;stroke-linecap:round;stroke-dasharray:1 8}
+.matri-shell-1 .matri-ring{stroke:rgba(167,139,250,.65);fill:rgba(56,189,248,.07)}
+.matri-arc{fill:none;stroke:#a78bfa;stroke-width:3.4;stroke-linecap:round}
+.matri-sat{fill:#38bdf8}.matri-sat.is-green{fill:#22c55e}.matri-sat.is-violet{fill:#a78bfa}
+.matri-unfold,.matri-shell,.matri-body{transform-box:view-box;transform-origin:100px 100px}
+.matri-shell-3{animation:matri-spin 28s linear infinite}
+.matri-shell-2{animation:matri-spin 19s linear infinite reverse}
+.matri-shell-1{animation:matri-spin 12s linear infinite}
+.matri-body{transform-origin:100px 110px;animation:matri-breathe 3.8s ease-in-out infinite}
+.matri-brain{fill:#ddd6fe;stroke:#8b5cf6;stroke-width:2.6}
+.matri-fold{fill:none;stroke:#8b5cf6;stroke-width:2.4;stroke-linecap:round;opacity:.7}
+.matri-white{fill:#fff;stroke:#1e1b4b;stroke-width:1.6}
+.matri-pupil{fill:#0f172a}.matri-glint{fill:#fff}
+[data-pupil]{transition:transform .18s ease-out}
+.matri-eye{transform-box:fill-box;transform-origin:center;animation:matri-blink 5.6s infinite}
+.matri-lid{fill:none;stroke:#1e1b4b;stroke-width:2.6;stroke-linecap:round;opacity:0}
+.matri-mouth{fill:none;stroke:#1e1b4b;stroke-width:2.6;stroke-linecap:round}
+.matri-mouth-open,.matri-mouth-big,.matri-mouth-oops{opacity:0}
+.matri-mouth-open,.matri-mouth-big{fill:#1e1b4b}
+.matri-mouth-oops{fill:none;stroke:#1e1b4b;stroke-width:2.6;stroke-linecap:round}
+.matri-mouth-open{transform-box:fill-box;transform-origin:center}
+.matri-cheek{fill:#f9a8d4;opacity:.5}
+.matri-zz{opacity:0;fill:#7dd3fc;font:700 18px "JetBrains Mono",ui-monospace,monospace}
+@keyframes matri-spin{to{transform:rotate(360deg)}}
+@keyframes matri-breathe{50%{transform:translateY(-2px) scale(1.025)}}
+@keyframes matri-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+/* asleep: eyes shut, shells still, a few z's */
+.matri.is-asleep .matri-eye{opacity:0;animation:none}
+.matri.is-asleep .matri-lid{opacity:1}
+.matri.is-asleep .matri-shell{animation-play-state:paused}
+.matri.is-asleep .matri-unfold{opacity:.55}
+.matri.is-asleep .matri-body{animation-duration:5.5s}
+.matri.is-asleep .matri-zz{opacity:1}
+.matri.is-asleep .matri-zz text{opacity:0;animation:matri-z 3s ease-in-out infinite}
+.matri.is-asleep .matri-zz text:nth-child(2){animation-delay:.6s}.matri.is-asleep .matri-zz text:nth-child(3){animation-delay:1.2s}
+@keyframes matri-z{30%{opacity:1}100%{opacity:0;transform:translate(6px,-10px)}}
+/* waking: the shells come apart like nested dolls, and Matri gasps */
+.matri.is-waking .matri-unfold{animation:matri-unfold .75s cubic-bezier(.2,1.5,.4,1) both}
+.matri.is-waking .matri-unfold-2{animation-delay:.12s}.matri.is-waking .matri-unfold-3{animation-delay:.24s}
+.matri.is-waking .matri-body{animation:matri-pop .6s cubic-bezier(.2,1.7,.4,1) both}
+.matri.is-waking .matri-mouth{opacity:0}.matri.is-waking .matri-mouth-open{opacity:1}
+.matri.is-waking svg{filter:drop-shadow(0 0 30px rgba(56,189,248,.6))}
+@keyframes matri-unfold{0%{opacity:0;transform:scale(.25)}70%{opacity:1;transform:scale(1.18)}100%{opacity:1;transform:scale(1)}}
+@keyframes matri-pop{0%{transform:scale(.8)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+/* dozing: the shells fold back in and the eyes close */
+.matri.is-dozing .matri-unfold{animation:matri-fold .6s ease-in forwards}
+.matri.is-dozing .matri-unfold-3{animation-delay:0s}.matri.is-dozing .matri-unfold-2{animation-delay:.08s}.matri.is-dozing .matri-unfold-1{animation-delay:.16s}
+.matri.is-dozing .matri-eye{animation:matri-shut .35s .25s ease-in forwards}
+.matri.is-dozing .matri-lid{opacity:1;transition:opacity .2s .55s}
+@keyframes matri-fold{to{opacity:.4;transform:scale(.42)}}
+@keyframes matri-shut{to{transform:scaleY(.06)}}
+/* talking, happy, oops */
+.matri.is-talking .matri-mouth{opacity:0}
+.matri.is-talking .matri-mouth-open{opacity:1;animation:matri-talk .2s ease-in-out infinite alternate}
+@keyframes matri-talk{to{transform:scaleY(.35)}}
+.matri.is-happy .matri-mouth{opacity:0}.matri.is-happy .matri-mouth-big{opacity:1}.matri.is-happy .matri-cheek{opacity:.9}
+.matri.is-happy .matri-body{animation:matri-hop .5s cubic-bezier(.2,1.6,.4,1) 2}
+.matri.is-oops .matri-mouth{opacity:0}.matri.is-oops .matri-mouth-oops{opacity:1}
+.matri.is-oops .matri-body{animation:matri-wobble .5s ease-in-out}
+@keyframes matri-hop{50%{transform:translateY(-10px)}}
+@keyframes matri-wobble{25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+
+/* Matri's speech bubbles */
+.matri-bubble{position:relative;display:inline-block;max-width:280px;margin:0;padding:10px 14px;border:1px solid rgba(56,189,248,.35);border-radius:14px;background:#0b1324;color:#e2e8f0;font:14px/1.5 var(--text);text-align:left;box-shadow:0 10px 30px rgba(2,6,23,.35)}
+.matri-bubble::before{content:"";position:absolute;top:22px;left:-7px;width:12px;height:12px;border-bottom:1px solid rgba(56,189,248,.35);border-left:1px solid rgba(56,189,248,.35);background:inherit;transform:rotate(45deg)}
+.matri-bubble b{color:#7dd3fc}
+
+/* In the normal hero: Matri asleep, waiting to be woken */
+.matri-teaser{display:flex;align-items:center;gap:14px;margin-top:26px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
+.matri-teaser .matri{transition:transform .3s cubic-bezier(.2,1.5,.4,1)}
+.matri-teaser:hover .matri,.matri-teaser:focus-visible .matri{transform:translateY(-4px) rotate(-6deg)}
+.matri-teaser:hover .matri-bubble{border-color:#38bdf8}
+
+/* The flip: Matri between the two pages */
+.dev-flip{position:fixed;inset:0;z-index:300;display:grid;place-items:center;background:radial-gradient(circle at 50% 44%,rgba(14,165,233,.18),transparent 55%),rgba(4,8,18,.94);opacity:0;transition:opacity .3s ease;pointer-events:none}
+.dev-flip[hidden]{display:none}
+.dev-flip.is-showing{opacity:1}
+.dev-flip.is-leaving{opacity:0;transition-duration:.55s}
+.dev-flip-core{display:grid;justify-items:center;gap:22px}
+.dev-flip-line{margin:0;padding:9px 16px;border:1px solid #1e293b;border-radius:10px;background:#0b1324;color:#cbd5e1;font:14px "JetBrains Mono",ui-monospace,monospace;animation:dev-line-in .4s .25s ease-out backwards}
+.dev-flip-line b{color:#22c55e}
+.dev-flip.is-on .dev-flip-line.is-off,.dev-flip.is-off .dev-flip-line.is-on{display:none}
+@keyframes dev-line-in{from{opacity:0;transform:translateY(8px)}}
+.site-stage{transform-origin:50% 50vh}
+
+/* Developer mode's colours: the editor's dark canvas */
+html.dev-on body.site{--ink:#e6edf7;--muted:#94a3b8;--line:#1f2a40;--field:#2b3a55;--canvas:#0f1729;--surface:#0a0f1c;--violet:#38bdf8;--violet-dark:#7dd3fc;--violet-soft:rgba(56,189,248,.12);background:#0a0f1c radial-gradient(rgba(56,189,248,.09) 1px,transparent 1.3px) 0 0/22px 22px fixed;color:var(--ink)}
+html.dev-on .signin-card{border-color:#1f2a40;background:#0f1729;box-shadow:0 0 0 1px rgba(56,189,248,.08),0 24px 60px rgba(2,6,23,.6)}
+html.dev-on .signin-card input{border-color:#2b3a55;background:#0a0f1c;color:#e6edf7}
+html.dev-on .site-btn.primary{background:#0284c7}
+html.dev-on .kicker,html.dev-on .section-head .kicker{font-family:"JetBrains Mono",ui-monospace,monospace;letter-spacing:.02em;text-transform:none}
+html.dev-on .kicker::before{content:"// ";opacity:.6}
+html.dev-on .faq details{border-color:#1f2a40;background:#0f1729}
+html.dev-on .stats{border-color:#1f2a40}
+html.dev-on kbd{border-color:#2b3a55;background:#152038;color:#e6edf7}
+.dev-chip{font-family:"JetBrains Mono",ui-monospace,monospace;letter-spacing:0;text-transform:none}
+.dev-prompt{color:#22c55e}
+.dev-hero h1 em{font-style:normal}
+.signin-card{position:relative}
+.matri-peek{position:absolute;top:-62px;right:18px;display:flex;flex-direction:row-reverse;align-items:flex-start;gap:6px;pointer-events:none}
+.matri-peek .matri{z-index:0}
+.matri-peek .matri-bubble{top:6px;max-width:210px;font-size:13px}
+.matri-peek .matri-bubble::before{right:-7px;left:auto;transform:rotate(225deg)}
+html.dev-on .signin-card h2{margin-top:18px}
+.signin-dev-note{display:flex;align-items:flex-start;gap:6px;margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.signin-dev-note svg{margin-top:3px;color:#38bdf8}
+.dev-numbers b{font-family:"JetBrains Mono",ui-monospace,monospace;color:#7dd3fc}
+.sample-tag{display:inline-block;padding:2px 9px;border:1px solid rgba(56,189,248,.35);border-radius:99px;color:#7dd3fc;font:700 11px/1.6 "JetBrains Mono",ui-monospace,monospace;letter-spacing:.04em;text-transform:uppercase}
+.sample-note{margin:18px 0 0;color:var(--muted);font-size:13.5px;text-align:center}
+
+/* Who it's for (normal mode) */
+.paths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.path-card{display:flex;flex-direction:column;gap:12px;padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink)!important;text-decoration:none!important;transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s,border-color .25s}
+html.js .path-card[data-reveal].is-in:hover,.path-card:hover{transform:translateY(-6px);border-color:var(--violet);box-shadow:0 22px 44px rgba(15,23,42,.12)}
+.path-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:var(--violet-soft);color:var(--violet);transition:transform .3s cubic-bezier(.2,1.6,.4,1)}
+.path-icon.amber{background:#fef3c7;color:#b45309}.path-icon.green{background:#dcfce7;color:#15803d}
+.path-card:hover .path-icon{transform:rotate(-8deg) scale(1.08)}
+.path-card b{font:800 19px/1.25 var(--display)}
+.path-card ul{display:grid;gap:8px;margin:0;padding:0;list-style:none;color:var(--muted);font-size:14.5px}
+.path-card li{display:flex;gap:8px}
+.path-card li::before{content:"";flex:none;width:6px;height:6px;margin-top:9px;border-radius:50%;background:var(--violet)}
+.path-go{display:inline-flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;color:var(--violet);font-weight:700}
+.path-card:hover .path-go svg{transform:translateX(4px)}
+.path-go svg{transition:transform .2s}
+
+/* Developer mode's sections */
+.dev-section h2{font-family:var(--display)}
+.dev-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
+.dev-split.is-reverse>:first-child{order:2}
+.dev-split h2{margin:6px 0 12px;font:800 clamp(28px,3.4vw,40px)/1.15 var(--display)}
+.dev-split .section-lead{margin:0 0 22px;color:var(--muted);font-size:16.5px}
+/* the dry run */
+.dev-demo.lab{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;max-width:none;margin:0;padding:0;align-items:start}
+.dev-demo-static{margin:0;padding:14px 16px;color:#e2e8f0;font:14px/1.6 "JetBrains Mono",ui-monospace,monospace;white-space:pre;overflow:auto}
+.dev-demo .ce-scroll{min-height:280px}
+.dev-demo .lab-editor{min-height:280px}
+.dev-demo-side{display:grid;gap:12px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--canvas)}
+.matri-narrator{display:flex;align-items:flex-start;gap:12px}
+.matri-narrator .matri{--size:110px}
+.matri-narrator .matri-bubble{flex:1;max-width:none;min-height:64px;margin:10px 0 0;font:13.5px/1.55 "JetBrains Mono",ui-monospace,monospace}
+.dev-demo .dry-controls button,.dev-demo .dry-controls select{border-color:#2b3a55;background:#152038;color:#e6edf7}
+.dev-demo .dry-controls .is-play{border-color:#0284c7;background:#0284c7;color:#fff}
+.dev-demo .dry-controls select{width:auto;padding:0 6px}
+.dev-demo .dry-controls input[type=range]{width:auto;padding:0;border:0;background:none}
+.dev-demo .dry-count{color:#94a3b8}
+.dev-demo .dry-vars th{color:#c4b5fd}
+.dev-demo .dry-vars th,.dev-demo .dry-vars td{border-color:#1f2a40}
+.dev-demo .dry-vars tr.is-changed td{background:rgba(250,204,21,.14)}
+.dev-demo .dry-vars tr.is-new th,.dev-demo .dry-vars tr.is-new td{background:rgba(34,197,94,.14)}
+.dev-demo .dry-stack li{background:#152038;color:#e6edf7}
+.dev-demo .dry-stack li.is-top{background:#0284c7;color:#fff}
+.dev-demo .dry-grid h4{color:#94a3b8}
+@keyframes dev-flash{from{background:rgba(250,204,21,.4)}}
+/* problems */
+.dev-difficulty{display:flex;gap:12px;margin:0 0 26px;padding:0;list-style:none}
+.dev-difficulty li{display:grid;gap:2px;min-width:92px;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--canvas)}
+.dev-difficulty b{font:800 28px/1 "JetBrains Mono",ui-monospace,monospace}
+.dev-difficulty span{color:var(--muted);font-size:13px}
+.dev-difficulty .is-easy b{color:#34d399}.dev-difficulty .is-medium b{color:#fbbf24}.dev-difficulty .is-hard b{color:#f87171}
+.dev-problem-list{border:1px solid var(--line);border-radius:16px;background:#0b1324;overflow:hidden;box-shadow:0 24px 60px rgba(2,6,23,.45)}
+.dev-problem-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid #1f2a40;color:#94a3b8;font:13px "JetBrains Mono",ui-monospace,monospace}
+.dev-problem{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid #1f2a40;transition:background .15s}
+.dev-problem:hover{background:#111b30}
+html.js .dev-problem-list.is-in .dev-problem{animation:dev-row-in .5s calc(.25s + var(--i) * 90ms) cubic-bezier(.2,.7,.3,1) backwards}
+@keyframes dev-row-in{from{opacity:0;transform:translateX(18px)}}
+.dev-problem-num{color:#64748b;font:13px "JetBrains Mono",ui-monospace,monospace}
+.dev-problem-name{display:grid;min-width:0}
+.dev-problem-name b{color:#e6edf7;font-size:15px}
+.dev-problem-name small{overflow:hidden;color:#94a3b8;font-size:12.5px;text-overflow:ellipsis;white-space:nowrap}
+.dev-problem-more{margin:0;padding:12px 16px;color:#94a3b8;font:13px "JetBrains Mono",ui-monospace,monospace}
+html.dev-on .diff-easy{background:rgba(16,185,129,.15);color:#6ee7b7}
+html.dev-on .diff-medium{background:rgba(245,158,11,.15);color:#fcd34d}
+html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
+/* the sample question */
+.dev-quiz{position:relative;display:grid;gap:14px;padding:22px;border:1px solid var(--line);border-radius:16px;background:#0b1324;box-shadow:0 24px 60px rgba(2,6,23,.45)}
+.dev-quiz-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:#94a3b8;font-size:13px}
+.dev-quiz-head .sample-tag{margin-left:auto}
+.dev-quiz-head .pq-lang{padding:2px 10px;border-radius:99px;font:600 12px "JetBrains Mono",ui-monospace,monospace}
+.dev-quiz-prompt{margin:0;color:#e6edf7;font:700 18px/1.3 var(--display)}
+.dev-quiz-code{margin:0;padding:14px 16px;border:1px solid #1f2a40;border-radius:10px;background:#060b16;color:#e2e8f0;font:14px/1.6 "JetBrains Mono",ui-monospace,monospace;overflow:auto}
+.dev-quiz-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dev-quiz-choices button{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid #2b3a55;border-radius:10px;background:#0f1729;color:#e6edf7;font:600 14px "JetBrains Mono",ui-monospace,monospace;cursor:pointer;text-align:left;transition:border-color .15s,transform .15s,background .15s}
+.dev-quiz-choices button:hover:not(:disabled){border-color:#38bdf8;transform:translateY(-2px)}
+.dev-quiz-choices button:disabled{cursor:default}
+.dev-quiz-letter{display:grid;place-items:center;flex:none;width:24px;height:24px;border-radius:6px;background:#152038;color:#7dd3fc;font-size:12px}
+.dev-quiz-choices .is-right{border-color:#22c55e;background:rgba(34,197,94,.12);animation:dev-right .5s cubic-bezier(.2,1.6,.4,1)}
+.dev-quiz-choices .is-wrong{border-color:#f87171;background:rgba(248,113,113,.12);animation:dev-wrong .4s ease-in-out}
+@keyframes dev-right{50%{transform:scale(1.04)}}
+@keyframes dev-wrong{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.dev-quiz-after{display:flex;align-items:center;gap:12px;animation:dev-line-in .4s ease-out}
+.dev-quiz-after[hidden]{display:none}
+.dev-quiz-after p{margin:0;color:#cbd5e1;font-size:14.5px;line-height:1.55}
+.dev-quiz-after b{color:#fff}
+.dev-langs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.dev-langs li{display:flex;align-items:baseline;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--canvas)}
+.dev-langs span{flex:1;font-weight:700}
+.dev-langs b{color:#7dd3fc;font:800 20px "JetBrains Mono",ui-monospace,monospace}
+.dev-langs small{color:var(--muted)}
+/* the editor look */
+.dev-ide{position:relative;max-width:940px;margin:0 auto;border:1px solid #1f2a40;border-radius:16px;background:#0b1324;overflow:hidden;box-shadow:0 30px 80px rgba(2,6,23,.55)}
+.dev-ide-tag{position:absolute;top:10px;right:12px;z-index:2}
+.dev-ide-top{display:flex;align-items:stretch;overflow:hidden;border-bottom:1px solid #1f2a40;background:#070b15}
+.dev-ide-dots{display:flex;align-items:center;gap:6px;padding:0 14px}
+.dev-ide-dots i{width:10px;height:10px;border-radius:50%;background:#ef4444}.dev-ide-dots i:nth-child(2){background:#f59e0b}.dev-ide-dots i:nth-child(3){background:#22c55e}
+.dev-ide-tab{padding:10px 16px;border-right:1px solid #1f2a40;color:#94a3b8;font:12.5px "JetBrains Mono",ui-monospace,monospace;white-space:nowrap}
+.dev-ide-tab.is-active{border-top:2px solid #38bdf8;background:#0b1324;color:#fff}
+.dev-ide-body{position:relative;min-height:300px;padding:18px 22px}
+.dev-ide-lines p{height:22px;margin:0;padding-left:calc(var(--x) * 24px)}
+.dev-ide-lines i{display:block;width:var(--w);height:9px;margin-top:6px;border-radius:5px;background:linear-gradient(90deg,#c4b5fd 0 18%,#334155 18% 30%,#7dd3fc 30% 62%,#334155 62% 70%,#86efac 70%)}
+.dev-ide-palette{position:absolute;top:34px;left:50%;width:min(460px,86%);border:1px solid #2b3a55;border-radius:12px;background:#0f1729;box-shadow:0 24px 60px rgba(0,0,0,.55);transform:translateX(-50%)}
+.dev-ide-input{display:flex;align-items:center;gap:8px;margin:0;padding:12px 14px;border-bottom:1px solid #1f2a40;color:#e6edf7;font:14px "JetBrains Mono",ui-monospace,monospace}
+.dev-ide-input>span:first-child{color:#22c55e;font-weight:700}
+.dev-ide-caret{width:8px;height:16px;background:#38bdf8;animation:dev-caret 1s steps(1) infinite}
+@keyframes dev-caret{50%{opacity:0}}
+.dev-ide-palette ul{margin:0;padding:6px;list-style:none}
+.dev-ide-palette li{display:flex;justify-content:space-between;padding:8px 10px;border-radius:8px;color:#94a3b8;font-size:14px}
+.dev-ide-palette li small{color:#64748b;font:12px "JetBrains Mono",ui-monospace,monospace}
+.dev-ide.is-found .dev-ide-palette li.is-hit{background:rgba(56,189,248,.14);color:#fff;transition:background .2s}
+.dev-ide-status{display:flex;flex-wrap:wrap;gap:4px 18px;padding:6px 14px;background:#0284c7;color:#e0f2fe;font:12px "JetBrains Mono",ui-monospace,monospace}
+.dev-ide-end{margin-left:auto}
+.dev-cta{position:relative;display:grid;justify-items:center;gap:6px;border:1px solid #1f2a40;background:radial-gradient(circle at 50% 0,rgba(56,189,248,.14),transparent 60%),#0b1324}
+.dev-cta .matri{--size:120px;margin-bottom:4px}
+
+@media (max-width:900px){.paths,.dev-split,.dev-demo.lab{grid-template-columns:minmax(0,1fr)}.dev-split.is-reverse>:first-child{order:0}.dev-split{gap:32px}.matri-peek{right:8px}}
+@media (max-width:560px){.dev-quiz-choices,.dev-langs{grid-template-columns:minmax(0,1fr)}.dev-difficulty{flex-wrap:wrap}.dev-ide-tab:nth-child(n+4){display:none}.matri-peek .matri-bubble{display:none}}
+@media (prefers-reduced-motion:reduce){
+  html.js [data-reveal]{opacity:1;transform:none;transition:none}
+  .matri *,.dev-flip *,.dev-problem,.dev-quiz *,.dev-ide *{animation:none!important;transition:none!important}
+  .dev-switch *,.path-card,.path-icon,.matri-teaser .matri{transition:none}
+}

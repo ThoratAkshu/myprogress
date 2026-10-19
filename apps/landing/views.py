@@ -6,6 +6,7 @@ from django.db import transaction
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -28,6 +29,7 @@ from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trendi
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.earnings.models import EarningSettings
+from apps.practice.services import WANTS_ON as PRACTICE_WANTS_ON
 from apps.organizations.services import create_organization, student_summary
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
@@ -81,8 +83,32 @@ class LandingPageView(TemplateView):
             "top_developers": top,
             "latest_posts": list(LearningPost.objects.filter(is_public=True).select_related("author__profile").order_by("-published_at")[:3]),
             "live_stats": {"developers": developers, "repositories": Repository.objects.exclude(languages={}).count(), "posts": LearningPost.objects.filter(is_public=True).count()} if developers >= LIVE_STATS_MINIMUM else None,
+            "dev": developer_mode_preview(),
+            "dev_assets": {"practice": static("landing/js/practice.js"), "acorn": "https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js",
+                           "runner": static("landing/js/js-runner.js"), "editor": static("landing/js/code-editor.js"), "lab": static("landing/js/lab-core.js")},
         })
         return context
+
+
+DEMO_PROBLEMS = ["two-sum", "valid-parentheses", "longest-substring-without-repeating-characters", "merge-intervals", "trapping-rain-water"]
+SAMPLE_QUESTION = "py-b-alias"  # a beginner Python question from the bank, answered right on the home page
+
+
+def developer_mode_preview():
+    """The home page's developer mode, from the real content: the problem set, the question bank and the code lab."""
+    from apps.practice import bank, lab, problems
+    from apps.practice import services as practice
+    from apps.practice.models import LANGUAGES, Question
+    counts = {row["language"]: row["total"] for row in Question.objects.filter(is_active=True).values("language").annotate(total=Count("id"))}
+    samples = [problems.BY_SLUG[slug] for slug in DEMO_PROBLEMS if slug in problems.BY_SLUG]
+    question = next((item for item in bank.QUESTIONS if item["key"] == SAMPLE_QUESTION), None) or next(item for item in bank.QUESTIONS if item["kind"] == "output")
+    return {
+        "problems": len(problems.PROBLEMS), "samples": samples, "more": len(problems.PROBLEMS) - len(samples),
+        "difficulties": [{"key": key, "label": label, "count": sum(1 for item in problems.PROBLEMS if item["difficulty"] == key)} for key, label in problems.DIFFICULTIES],
+        "questions": sum(counts.values()), "languages": [(name, counts.get(key, 0)) for key, name in LANGUAGES], "question": question,
+        "walkthroughs": len(lab.WALKTHROUGHS), "switch_limit": practice.SWITCH_LIMIT, "switch_window": int(practice.SWITCH_WINDOW.total_seconds() // 60),
+        "ide_lines": [(62, 0), (44, 1), (70, 1), (36, 2), (58, 2), (28, 1), (66, 0), (40, 1), (52, 1), (30, 0)],  # the preview's code, drawn as bars
+    }
 ACCOUNT_TYPES = [
     {"key": "developer", "label": "Student or professional", "icon": "code", "about": "Build your profile, host your projects with Git, and work on them with others."},
     {"key": "recruiter", "label": "Recruiter", "icon": "search", "about": "Find developers through verified proof of work."},
@@ -145,6 +171,10 @@ def login_view(request):
             record_hit(key, LOGIN_FAILURE_WINDOW)
     if form.is_valid():
         remember, next_url = form.cleaned_data["remember"], request.POST.get("next", "")
+        if request.POST.get("developer_mode") == "1":  # the home page's developer mode toggle was on
+            request.session[PRACTICE_WANTS_ON] = True
+        else:
+            request.session.pop(PRACTICE_WANTS_ON, None)  # not left over from an earlier, unfinished sign-in
         if two_factor.enabled(form.user):  # the password was right; now the code from their app
             begin_two_step(request, form.user, remember, next_url)
             return redirect("landing:two_step")
