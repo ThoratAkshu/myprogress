@@ -291,6 +291,14 @@ body.app .lab-title h1{margin:0;font-size:24px}
 @media (max-width:900px){.lab-grid,.dry-grid{grid-template-columns:minmax(0,1fr)}.lab-brief{position:static}}
 @media (prefers-reduced-motion:reduce){.lab *,.lab-index *,.problems-page *{animation:none!important;transition:none!important}}
 .lab-howto{display:grid;gap:6px;margin:0;padding:0;list-style:none;font-size:13.5px}
+
+/* The Questions tab's language and level, chosen right on its command line */
+.practice-choice{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:4px 0 0}
+.practice-choice select{height:32px;padding:0 30px 0 10px;border:1px solid #334155;border-radius:8px;background-color:#16223a;color:#e2e8f0;font:600 13.5px var(--mono);cursor:pointer;transition:border-color .15s}
+.practice-choice select:hover,.practice-choice select:focus{border-color:#7dd3fc;outline:0}
+.practice-choice-note{margin:0;color:var(--term-muted);font-size:13px}
+.practice-choice-note b{color:#e2e8f0}
+.lang-row.is-current .pq-lang{box-shadow:0 0 0 2px var(--surface,#fff),0 0 0 4px #38bdf8}
 .lab-to-problems{display:flex;align-items:center;gap:6px;color:var(--violet);font-size:13.5px;font-weight:600;text-decoration:none}
 .lab-to-problems:hover{text-decoration:underline}
 

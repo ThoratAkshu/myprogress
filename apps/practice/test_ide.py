@@ -1,8 +1,10 @@
 """The developer view: MyProgress as a code editor, its generated dark theme, and switching it on and off."""
 import json
+from datetime import timedelta
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from . import ide_theme, services
 from .tests import make_user
 
@@ -34,56 +36,102 @@ class SwitchTests(TestCase):
         self.user = make_user("dev@example.com", languages=["python", "javascript"])
         self.client.force_login(self.user)
 
-    def test_developer_mode_shows_the_editor_and_it_can_be_switched_off(self):
+    def fresh(self):
+        return services.profile(type(self.user).objects.get(pk=self.user.pk))
+
+    def switch(self, on, next_url="/dashboard/", **extra):
+        return self.client.post(reverse("practice:mode"), {"on": "1" if on else "0", "next": next_url}, **extra)
+
+    def test_developer_mode_is_the_editor_and_its_toggle_is_under_me(self):
         page = self.client.get(reverse("landing:dashboard"))
         self.assertContains(page, "dev-mode ide")
         self.assertContains(page, "ide-auto.css")
         self.assertContains(page, '<span class="nav-file" aria-hidden="true">home.py</span>')
         self.assertContains(page, "Python, JavaScript · Beginner")  # the status bar
-        self.assertContains(page, "Switch to the normal view")
-        self.assertContains(page, 'role="switch" aria-checked="true" aria-label="Developer view"')
-        self.assertNotContains(page, "view-arriving")
+        menu = page.content.decode().split('<details class="app-menu">')[1].split("</details>")[0]
+        self.assertIn('role="switch" aria-checked="true" aria-labelledby="mode-toggle-menu"', menu)  # under Me, the profile menu
+        self.assertIn('<b id="mode-toggle-menu">Developer mode</b>', menu)
+        self.assertIn("3 switches every 15 min", menu)
+        self.assertEqual(page.content.decode().count('role="switch"'), 1)  # the only switch: not in the header, the card or the palette
+        self.assertNotContains(page, "Developer view")
+        self.assertNotContains(page, "mode-arriving")
         commands = json.loads(page.content.decode().split('<script id="ide-commands" type="application/json">')[1].split("</script>")[0])
         labels = [command["label"] for command in commands]
         self.assertIn("New project", labels)
         self.assertIn("Watch: Binary search (Python)", labels)
+        self.assertNotIn("Languages and level", labels)
         self.assertEqual(commands[-1]["label"], "Sign out")
-        response = self.client.post(reverse("practice:ui"), {"ide": "0", "next": "/practice/"})
-        self.assertRedirects(response, "/practice/", fetch_redirect_response=False)
+        self.assertRedirects(self.switch(False, "/practice/"), "/practice/", fetch_redirect_response=False)
+        self.assertFalse(services.is_on(type(self.user).objects.get(pk=self.user.pk)))
         page = self.client.get(reverse("landing:dashboard"))
-        self.assertNotContains(page, "ide-auto.css")
-        self.assertNotContains(page, "dev-mode ide")
-        self.assertNotContains(page, "nav-file")  # the normal view's tabs are plain: Home, not home.py
-        self.assertNotContains(page, "ide-status")
-        self.assertContains(page, "Switch to the developer view")
-        self.assertContains(page, 'role="switch" aria-checked="false" aria-label="Developer view"')
-        self.assertRedirects(self.client.post(reverse("practice:ui"), {"ide": "1", "next": "https://evil.example/"}), reverse("landing:dashboard"), fetch_redirect_response=False)
-        self.assertTrue(services.profile(self.user.__class__.objects.get(pk=self.user.pk)).ide_ui)
+        for gone in ["ide-auto.css", "dev-mode", "nav-file", "ide-status", "data-dock", 'href="/practice/problems/"']:
+            self.assertNotContains(page, gone)  # the normal MyProgress: no editor look, no Practice tab
+        self.assertContains(page, 'role="switch" aria-checked="false" aria-labelledby="mode-toggle-menu"')
+        self.assertContains(page, "2 of 3 switches left")
+        self.assertContains(page, "Find the toggle under Me")
+        self.assertRedirects(self.client.get(reverse("practice:problems")), reverse("landing:dashboard"))  # practice waits for the toggle
+        self.assertRedirects(self.switch(True, "https://evil.example/"), reverse("landing:dashboard"), fetch_redirect_response=False)
+        practice = self.fresh()
+        self.assertEqual((practice.enabled, practice.languages), (True, ["python", "javascript"]))  # back as they left it
 
     def test_the_page_after_a_switch_turns_in_once(self):
-        self.client.post(reverse("practice:ui"), {"ide": "0", "next": "/dashboard/"})
+        self.switch(False)
         page = self.client.get(reverse("landing:dashboard"))
-        self.assertContains(page, "view-arriving view-to-off")
-        self.assertContains(page, "Normal view is on.")
-        self.assertNotContains(page, "data-view-intro")
+        self.assertContains(page, "mode-arriving mode-to-off")
+        self.assertContains(page, "Developer mode is off. Your answers are kept")
+        self.assertNotContains(page, "data-mode-intro")
         page = self.client.get(reverse("landing:dashboard"))
-        self.assertNotContains(page, "view-arriving")  # only the first page after switching
-        self.assertNotContains(page, "Normal view is on.")
-        self.client.post(reverse("practice:ui"), {"ide": "0", "next": "/dashboard/"})  # already off: nothing to show
-        self.assertNotContains(self.client.get(reverse("landing:dashboard")), "view-arriving")
-        self.client.post(reverse("practice:ui"), {"ide": "1", "next": "/practice/problems/"})
+        self.assertNotContains(page, "mode-arriving")  # only the first page after switching
+        self.switch(False)  # already off: nothing to show
+        self.assertNotContains(self.client.get(reverse("landing:dashboard")), "mode-arriving")
+        self.switch(True, "/practice/problems/")
         page = self.client.get(reverse("practice:problems"))
-        self.assertContains(page, "view-arriving view-to-on")
-        self.assertContains(page, "You're in the developer view")
+        self.assertContains(page, "mode-arriving mode-to-on")
+        self.assertContains(page, "in developer mode")
         self.assertContains(page, '<form method="dialog"')
-        self.assertContains(page, "view-switch.js")
-        self.assertNotContains(self.client.get(reverse("practice:problems")), "data-view-intro")
+        self.assertContains(page, "mode-switch.js")
+        self.assertNotContains(self.client.get(reverse("practice:problems")), "data-mode-intro")
 
-    def test_without_developer_mode_there_is_no_editor(self):
-        services.disable(self.user)
+    def test_developer_mode_switches_three_times_in_fifteen_minutes(self):
+        for on in [False, True, False]:
+            self.switch(on)
+        self.client.get(reverse("landing:dashboard"))  # the page that shows the third switch
+        response = self.switch(True, follow=True)
+        self.assertContains(response, "You can switch developer mode 3 times in 15 minutes. Try again in 15 min.")
+        self.assertFalse(self.fresh().enabled)  # still off
+        self.assertNotContains(response, "mode-arriving")
+        self.assertContains(response, "Switch again in 15 min")
+        self.assertContains(response, 'aria-describedby="mode-toggle-menu-note" disabled')
+        practice = self.fresh()
+        practice.switches = [(timezone.now() - timedelta(minutes=minutes)).isoformat() for minutes in (16, 10, 2)]
+        practice.save()
+        user = type(self.user).objects.get(pk=self.user.pk)
+        self.assertEqual(services.switch_allowance(user)["left"], 1)  # the oldest switch is past the window
+        self.switch(True)
+        user = type(self.user).objects.get(pk=self.user.pk)
+        self.assertTrue(services.is_on(user))
+        self.assertEqual(services.switch_allowance(user), {"left": 0, "limit": 3, "window": 15, "minutes": 5})  # the switch 10 minutes ago frees up first
+        self.assertEqual(services.switch_mode(user, True), "unchanged")  # asking for what's already on isn't a switch
+
+    def test_on_phones_the_toggle_is_on_your_own_profile(self):
+        handle = self.user.profile.handle
+        page = self.client.get(reverse("landing:public_profile", args=[handle]))
+        self.assertContains(page, 'id="developer-mode"')
+        self.assertContains(page, 'aria-labelledby="mode-toggle-profile"')
+        other = make_user("other@example.com")
+        self.assertNotContains(self.client.get(reverse("landing:public_profile", args=[other.profile.handle])), 'id="developer-mode"')
+
+    def test_someone_who_never_used_it_can_turn_it_on_and_others_cannot(self):
+        newcomer = make_user("new@example.com", practising=False)
+        self.client.force_login(newcomer)
         page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, 'role="switch" aria-checked="false"')
         self.assertNotContains(page, "ide-auto.css")
-        self.assertNotContains(page, "ide-status")
-        self.assertNotContains(page, "ide-switch")
-        self.assertNotContains(page, "view-switch.js")
-        self.assertContains(page, "Turn on developer mode")
+        self.switch(True)
+        practice = services.profile(type(newcomer).objects.get(pk=newcomer.pk))
+        self.assertEqual((practice.enabled, practice.languages, practice.level), (True, ["python"], "beginner"))
+        recruiter = make_user("hr@acme.io", role="recruiter", practising=False)
+        self.client.force_login(recruiter)
+        self.assertNotContains(self.client.get(reverse("landing:dashboard"), follow=True), "mode-toggle")
+        self.assertNotEqual(self.switch(True).status_code, 302)  # not theirs to switch (access policy)
+        self.assertFalse(services.is_on(recruiter))

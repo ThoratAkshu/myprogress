@@ -1,4 +1,4 @@
-"""Developer mode: the question bank, setting it up, the question at sign-in, quizzes, the Learn dock and progress."""
+"""Developer mode: the question bank, choosing a language and level, the question at sign-in, quizzes, the Learn dock and progress."""
 import contextlib
 import io
 from unittest import mock
@@ -68,34 +68,41 @@ class SetupTests(TestCase):
     def test_signing_up_with_developer_mode_starts_with_python(self):
         response = self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "asha@example.com", "password": PASSWORD, "role": "developer",
                                                                    "occupation": "student", "institution": "Pune University", "developer_mode": "on", "terms": "1"})
-        self.assertRedirects(response, f'{reverse("practice:setup")}?welcome=1', fetch_redirect_response=False)
+        self.assertRedirects(response, reverse("landing:dashboard"), fetch_redirect_response=False)
         practice = PracticeProfile.objects.get(user__email="asha@example.com")
         self.assertEqual((practice.enabled, practice.languages, practice.level), (True, ["python"], "beginner"))
-        page = self.client.get(f'{reverse("practice:setup")}?welcome=1')
-        self.assertContains(page, "Welcome to developer mode")
-        self.assertContains(page, 'name="languages" value="python" checked')
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, "mode-arriving mode-to-on")  # the dashboard turns into developer mode
+        self.assertContains(page, "in developer mode")
         self.client.logout()
         self.client.post(reverse("landing:register"), {"first_name": "Ravi", "last_name": "K", "email": "ravi@example.com", "password": PASSWORD, "role": "developer",
                                                        "occupation": "professional", "job_title": "Engineer", "terms": "1"})
         self.assertFalse(PracticeProfile.objects.filter(user__email="ravi@example.com").exists())  # the switch was off
 
-    def test_choosing_languages_and_level_and_turning_it_off(self):
-        user = make_user("dev@example.com", practising=False)
+    def test_choosing_the_language_and_level_on_the_questions_tab(self):
+        user = make_user("dev@example.com")
         self.client.force_login(user)
-        self.assertRedirects(self.client.get(reverse("practice:home")), reverse("practice:setup"))
-        self.assertContains(self.client.post(reverse("practice:setup"), {"level": "advanced"}, follow=True), "Pick at least one language")
-        self.assertRedirects(self.client.post(reverse("practice:setup"), {"languages": ["javascript", "cpp", "cobol"], "level": "intermediate"}), reverse("practice:quiz"), fetch_redirect_response=False)
-        practice = PracticeProfile.objects.get(user=user)
-        self.assertEqual((practice.languages, practice.level), (["javascript", "cpp"], "intermediate"))
         page = self.client.get(reverse("practice:home"))
-        self.assertContains(page, 'href="/practice/"')  # the Practice tab
-        self.assertContains(page, "dev-mode")
+        self.assertContains(page, '<select name="language" aria-label="Language">')
+        self.assertContains(page, '<option value="python" selected>Python (')
+        self.assertContains(page, '<option value="beginner" selected>Beginner</option>')
+        self.assertNotContains(page, "Languages and level")
+        self.assertRedirects(self.client.post(reverse("practice:choose"), {"language": "javascript", "level": "intermediate"}), "/practice/#practice-choice", fetch_redirect_response=False)
+        practice = PracticeProfile.objects.get(user=user)
+        self.assertEqual((practice.languages, practice.level), (["javascript"], "intermediate"))
+        self.client.post(reverse("practice:choose"), {"language": "cobol", "level": "guru"})  # not on the menus: nothing changes
+        practice.refresh_from_db()
+        self.assertEqual((practice.languages, practice.level), (["javascript"], "intermediate"))
+        page = self.client.get(reverse("practice:home"))
+        self.assertContains(page, '<option value="javascript" selected>JavaScript (')
+        self.assertContains(page, "lang-row is-current")
         self.assertContains(self.client.get(reverse("landing:dashboard"), follow=True), "data-dock")  # the Learn dock on other pages
-        self.client.post(reverse("practice:setup"), {"action": "off"})
-        self.assertFalse(services.is_on(User.objects.get(pk=user.pk)))
-        page = self.client.get(reverse("landing:dashboard"), follow=True)
-        self.assertNotContains(page, "data-dock")
-        self.assertNotContains(page, "dev-mode")
+        self.assertRedirects(self.client.get(reverse("practice:setup")), "/practice/#practice-choice", fetch_redirect_response=False)  # the old page
+        services.disable(user)
+        response = self.client.get(reverse("practice:home"), follow=True)
+        self.assertRedirects(response, reverse("landing:dashboard"))
+        self.assertContains(response, "Developer mode is off. Turn it on with the toggle under Me.")
+        self.assertRedirects(self.client.get(reverse("practice:setup")), reverse("landing:dashboard"), fetch_redirect_response=False)
 
     def test_only_students_and_professionals_have_it(self):
         recruiter = make_user("hr@acme.io", role="recruiter", practising=False)

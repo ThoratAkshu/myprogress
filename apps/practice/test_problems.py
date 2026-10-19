@@ -140,8 +140,8 @@ class PageTests(TestCase):
         self.assertNotEqual(self.submit().status_code, 200)
         dormant = make_user("later@example.com", practising=False)
         self.client.force_login(dormant)
-        self.assertRedirects(self.client.get(reverse("practice:problems")), reverse("practice:setup"))
-        self.assertRedirects(self.client.get(reverse("practice:problem", args=["two-sum"])), reverse("practice:setup"))
+        self.assertRedirects(self.client.get(reverse("practice:problems")), reverse("landing:dashboard"))
+        self.assertRedirects(self.client.get(reverse("practice:problem", args=["two-sum"])), reverse("landing:dashboard"))
         self.assertEqual(self.submit().status_code, 404)
         self.assertFalse(Submission.objects.exists())
 

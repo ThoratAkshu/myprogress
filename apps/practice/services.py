@@ -1,9 +1,10 @@
 """Developer mode's engine: who has it on, which question comes next (new ones first, then the ones you missed),
 answers, and progress."""
 from datetime import timedelta
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from .bank import QUESTIONS
 from .models import LANGUAGES, LEVELS, Attempt, PracticeProfile, Question
 
@@ -119,14 +120,14 @@ def progress(user):
     since = timezone.now() - timedelta(days=400)
     days = {timezone.localdate(moment) for moment in attempts.filter(created_at__gte=since).values_list("created_at", flat=True)}
     practice = profile(user)
-    languages = (practice.languages if practice else None) or DEFAULT_LANGUAGES
+    current = (practice.languages if practice else None) or DEFAULT_LANGUAGES
     names = dict(LANGUAGES)
     rows = []
-    for key in languages:
+    for key in [key for key, _ in LANGUAGES]:  # every language, the one you're on marked
         available = Question.objects.filter(is_active=True, language=key).count()
         done = attempts.filter(question__language=key).values("question").distinct().count()
         mine = attempts.filter(question__language=key).aggregate(answered=Count("id"), right=Count("id", filter=Q(correct=True)))
-        rows.append({"key": key, "name": names.get(key, key), "seen": done, "available": available, "percent": round(100 * done / available) if available else 0,
+        rows.append({"key": key, "name": names.get(key, key), "current": key == current[0], "seen": done, "available": available, "percent": round(100 * done / available) if available else 0,
                      "accuracy": round(100 * mine["right"] / mine["answered"]) if mine["answered"] else None})
     return {"answered": totals["answered"], "right": totals["right"], "accuracy": round(100 * totals["right"] / totals["answered"]) if totals["answered"] else None,
             "streak": streak(days), "today": attempts.filter(created_at__date=timezone.localdate()).count(), "languages": rows}
@@ -150,16 +151,69 @@ def payload(question):
             "topic": question.topic, "prompt": question.prompt, "code": question.code, "choices": question.choices, "lang": question.language, "type": question.kind}
 
 
-SWITCHED = "practice_view_switched"  # session: "on" or "off" until the next page shows the switch
+SWITCHED = "practice_mode_switched"  # session: "on" or "off" until the next page shows the switch
+SWITCH_LIMIT, SWITCH_WINDOW = 3, timedelta(minutes=15)  # developer mode can be switched 3 times in any 15 minutes
 
 
-def ide_on(user):
-    """The developer UI: MyProgress dressed as a code editor, for people in developer mode who keep it on."""
-    return is_on(user) and profile(user).ide_ui
+def can_practise(user):
+    """Developer mode is for students and professionals (on or off); they get its toggle under Me."""
+    from apps.accounts.access import user_role
+    return user.is_authenticated and user_role(user) == "developer"
+
+
+def _recent_switches(practice, now):
+    times = [parse_datetime(text) for text in (practice.switches if practice else None) or [] if isinstance(text, str)]
+    return sorted(moment for moment in times if moment and now - moment < SWITCH_WINDOW)
+
+
+def switch_allowance(user, now=None):
+    """How many more times developer mode can be switched right now, and if none, how many minutes until the next."""
+    now = now or timezone.now()
+    recent = _recent_switches(profile(user), now)
+    left = max(0, SWITCH_LIMIT - len(recent))
+    wait = recent[len(recent) - SWITCH_LIMIT] + SWITCH_WINDOW - now if not left else None
+    return {"left": left, "limit": SWITCH_LIMIT, "window": int(SWITCH_WINDOW.total_seconds() // 60),
+            "minutes": max(1, -(-int(wait.total_seconds()) // 60)) if wait else 0}
+
+
+def switch_mode(user, on):
+    """Turn developer mode on (keeping the language and level chosen before, or Python for beginners) or off (answers
+    and submissions are kept). Returns "switched", "unchanged", or "limited" when it was already switched SWITCH_LIMIT
+    times in the last SWITCH_WINDOW."""
+    with transaction.atomic():
+        practice, _ = PracticeProfile.objects.select_for_update().get_or_create(
+            user=user, defaults={"enabled": False, "languages": DEFAULT_LANGUAGES, "level": "beginner"})
+        if practice.enabled == on:
+            return "unchanged"
+        now = timezone.now()
+        recent = _recent_switches(practice, now)
+        if len(recent) >= SWITCH_LIMIT:
+            return "limited"
+        practice.enabled = on
+        practice.switches = [moment.isoformat() for moment in (recent + [now])[-SWITCH_LIMIT:]]
+        practice.save(update_fields=["enabled", "switches"])
+    if hasattr(user, "_practice_profile"):
+        del user._practice_profile
+    return "switched"
+
+
+def choose(user, language=None, level=None):
+    """The language and level questions come in, picked from the Questions tab like LeetCode's language menu."""
+    practice = profile(user)
+    fields = []
+    if language in dict(LANGUAGES):
+        practice.languages = [language]
+        fields.append("languages")
+    if level in dict(LEVELS):
+        practice.level = level
+        fields.append("level")
+    if fields:
+        practice.save(update_fields=fields)
+    return bool(fields)
 
 
 def status_bar(user):
-    """What the developer UI's status bar shows: languages, level, streak and today's answers."""
+    """What developer mode's status bar shows: language, level, streak and today's answers."""
     practice = profile(user)
     since = timezone.now() - timedelta(days=60)
     days = {timezone.localdate(moment) for moment in Attempt.objects.filter(user=user, created_at__gte=since).values_list("created_at", flat=True)}
@@ -168,7 +222,7 @@ def status_bar(user):
 
 
 def palette(user):
-    """The developer UI's command palette (Ctrl+K): every place and action, by name."""
+    """Developer mode's command palette (Ctrl+K): every place and action, by name."""
     from django.urls import reverse
     from apps.accounts.models import Profile
     from . import lab, problems
@@ -183,6 +237,7 @@ def palette(user):
         go("New project", f"{projects}#new-project", "project --new"),
         go("Problems", reverse("practice:problems"), "problems/"),
         go("Practice questions", reverse("practice:home"), "practice.sh"),
+        go("Choose your language and level", f'{reverse("practice:home")}#practice-choice', "settings.json"),
         go("Start a quick quiz", f'{reverse("practice:quiz")}?new=1', "quiz --new"),
         go("Code lab", reverse("practice:lab"), "lab/"),
         go("Rankings", reverse("landing:workspace_section", args=["rankings"]), "rankings.json"),
@@ -194,11 +249,9 @@ def palette(user):
         go("Your profile", reverse("landing:public_profile", args=[handle]), f"@{handle}") if handle else None,
         go("Customize your channel", reverse("landing:channel_settings"), "channel.css"),
         go("Security", reverse("landing:security"), "security.lock"),
-        go("Languages and level", reverse("practice:setup"), "settings.json"),
     ]
     items += [go(f"{item['number']}. {item['title']}", reverse("practice:problem", args=[item["slug"]]), item["difficulty"]) for item in problems.PROBLEMS]
     items += [go(f"Watch: {item['title']} ({'Python' if item['language'] == 'python' else 'JavaScript'})", reverse("practice:walkthrough", args=[item["key"]]), "watch")
               for item in lab.WALKTHROUGHS]
-    items += [{"label": "Switch to the normal view", "post": reverse("practice:ui"), "fields": {"ide": "0"}, "hint": "view --normal"},
-              {"label": "Sign out", "post": reverse("landing:logout"), "fields": {}, "hint": "exit"}]
+    items += [{"label": "Sign out", "post": reverse("landing:logout"), "fields": {}, "hint": "exit"}]
     return [item for item in items if item]

@@ -111,5 +111,5 @@ class LabPageTests(TestCase):
         self.assertContains(page, "lab-core.js")
         self.assertContains(self.client.get(reverse("practice:walkthrough", args=["js-bubble-sort"])), "acorn@8.12.1")
         services.disable(self.user)
-        self.assertRedirects(self.client.get(reverse("practice:lab")), reverse("practice:setup"))
-        self.assertRedirects(self.client.get(reverse("practice:walkthrough", args=["py-bubble-sort"])), reverse("practice:setup"))
+        self.assertRedirects(self.client.get(reverse("practice:lab")), reverse("landing:dashboard"))
+        self.assertRedirects(self.client.get(reverse("practice:walkthrough", args=["py-bubble-sort"])), reverse("landing:dashboard"))

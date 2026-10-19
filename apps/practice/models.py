@@ -7,12 +7,12 @@ LEVELS = [("beginner", "Beginner"), ("intermediate", "Intermediate"), ("advanced
 
 
 class PracticeProfile(models.Model):
-    """Someone's developer mode: on or off, the languages they practise and their level."""
+    """Someone's developer mode: on or off (on also dresses MyProgress as a code editor), their language and level."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="practice")
     enabled = models.BooleanField(default=True)
     languages = models.JSONField(default=list, help_text="Language keys, Python first by default")
     level = models.CharField(max_length=20, choices=LEVELS, default="beginner")
-    ide_ui = models.BooleanField(default=True, help_text="Show MyProgress as a code editor: the developer UI")
+    switches = models.JSONField(default=list, blank=True, help_text="When developer mode was last switched on or off (ISO times, the latest few)")
     started_at = models.DateTimeField(auto_now_add=True)
 
     @property

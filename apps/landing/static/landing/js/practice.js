@@ -77,6 +77,9 @@
     root.querySelectorAll("[data-count]").forEach(countUp);
   }
 
+  // Menus that save as soon as they change, like the language and level on the Questions tab.
+  document.querySelectorAll("form[data-autosubmit] select").forEach(select => select.addEventListener("change", () => select.form.requestSubmit()));
+
   window.MyProgressPractice = { highlight, tokens, enhance, calm };
   enhance();
 })();

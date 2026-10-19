@@ -5,6 +5,7 @@ app_name = "practice"
 urlpatterns = [
     path("", views.home_view, name="home"),
     path("setup/", views.setup_view, name="setup"),
+    path("choose/", views.choose_view, name="choose"),
     path("level/", views.level_view, name="level"),
     path("warm-up/", views.warmup_view, name="warmup"),
     path("quiz/", views.quiz_view, name="quiz"),
@@ -17,5 +18,5 @@ urlpatterns = [
     path("code/", views.lab_view, name="lab"),
     path("code/<slug:key>/", views.old_challenge_view, name="challenge"),
     path("watch/<slug:key>/", views.walkthrough_view, name="walkthrough"),
-    path("ui/", views.ui_view, name="ui"),
+    path("mode/", views.mode_view, name="mode"),
 ]

@@ -4,21 +4,22 @@
 {% include "practice/_tabs.html" with tab="questions" %}
 <section class="dev-terminal" aria-label="Your practice">
 <div class="dev-terminal-bar" aria-hidden="true"><i></i><i></i><i></i><span>practice — {{ user.get_short_name|default:user.username|lower }}</span></div>
-<p class="dev-terminal-line"><span class="dev-prompt">$</span> <span data-type>practice --lang {% for key in practice.languages %}{{ key }}{% if not forloop.last %},{% endif %}{% endfor %} --level {{ practice.level }}</span></p>
+<form method="post" action="{% url 'practice:choose' %}" class="dev-terminal-line practice-choice" id="practice-choice" data-autosubmit>{% csrf_token %}<span class="dev-prompt">$</span> practice --lang <select name="language" aria-label="Language">{% for key, name, count in language_choices %}<option value="{{ key }}"{% if key == language %} selected{% endif %}>{{ name }} ({{ count }})</option>{% endfor %}</select> --level <select name="level" aria-label="Level">{% for key, name in level_choices %}<option value="{{ key }}"{% if key == practice.level %} selected{% endif %}>{{ name }}</option>{% endfor %}</select><noscript><button class="button soft">Save</button></noscript></form>
+<p class="practice-choice-note">Quizzes, the sign-in question and <b>Practice</b> on every page come in this language and level. Problems have their own language menu in the editor.</p>
 <div class="dev-stats">
 <div><b data-count="{{ progress.answered }}">{{ progress.answered }}</b><small>answered</small></div>
 <div><b>{% if progress.accuracy is None %}–{% else %}<span data-count="{{ progress.accuracy }}">{{ progress.accuracy }}</span>%{% endif %}</b><small>right</small></div>
 <div><b data-count="{{ progress.streak }}">{{ progress.streak }}</b><small>day streak</small></div>
 <div><b data-count="{{ progress.today }}">{{ progress.today }}</b><small>today</small></div>
 </div>
-<div class="dev-terminal-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "zap" 16 %} Start a quick quiz</a><a class="button soft" href="{% url 'practice:problems' %}">{% icon "target" 16 %} Problems</a><a class="button soft" href="{% url 'practice:lab' %}">{% icon "terminal" 16 %} Code lab</a><a class="button soft" href="{% url 'practice:setup' %}">{% icon "sliders" 16 %} Languages and level</a></div>
+<div class="dev-terminal-actions"><a class="button primary" href="{% url 'practice:quiz' %}?new=1">{% icon "zap" 16 %} Start a quick quiz</a><a class="button soft" href="{% url 'practice:problems' %}">{% icon "target" 16 %} Problems</a><a class="button soft" href="{% url 'practice:lab' %}">{% icon "terminal" 16 %} Code lab</a></div>
 </section>
 
 {% if level_up %}<form method="post" action="{% url 'practice:level' %}" class="card level-up">{% csrf_token %}<input type="hidden" name="level" value="{{ level_up }}"><span>{% icon "trending-up" 20 %}</span><p><b>You got 8 of your last 10 {{ practice.get_level_display }} questions right.</b> Ready for {{ levels|item:level_up }} questions?</p><button class="button primary">Move up</button></form>{% endif %}
 
 <div class="practice-grid">
 <section class="card practice-langs"><h2>{% icon "code" 18 %} Your languages</h2>
-{% for row in progress.languages %}<div class="lang-row"><span class="pq-lang lang-{{ row.key }}">{{ row.name }}</span><div class="lang-bar" title="{{ row.seen }} of {{ row.available }} questions seen"><i style="--w:{{ row.percent }}%"></i></div><small>{{ row.seen }}/{{ row.available }} seen{% if row.accuracy is not None %} · {{ row.accuracy }}% right{% endif %}</small></div>{% endfor %}
+{% for row in progress.languages %}<div class="lang-row{% if row.current %} is-current{% endif %}"><span class="pq-lang lang-{{ row.key }}"{% if row.current %} title="The language your questions come in now"{% endif %}>{{ row.name }}</span><div class="lang-bar" title="{{ row.seen }} of {{ row.available }} questions seen"><i style="--w:{{ row.percent }}%"></i></div><small>{{ row.seen }}/{{ row.available }} seen{% if row.accuracy is not None %} · {{ row.accuracy }}% right{% endif %}</small></div>{% endfor %}
 <p class="muted small">New questions come first. Once you've seen them all, the ones you missed come back.</p></section>
 
 <section class="card practice-anywhere"><h2>{% icon "terminal" 18 %} Learn anywhere</h2>

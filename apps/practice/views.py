@@ -24,30 +24,27 @@ def _chosen(request):
     return int(value) if value.isdigit() else None
 
 
+def _off(request):
+    """A practice page with developer mode off: back home, with where the switch is."""
+    if services.can_practise(request.user):
+        messages.info(request, "Developer mode is off. Turn it on with the toggle under Me.")
+    return redirect("landing:dashboard")
+
+
 @login_required(login_url="landing:home")
 def setup_view(request):
-    """Turn developer mode on (or off) and choose languages and level. Also the welcome after signing up with it."""
-    practice = services.profile(request.user)
-    if request.method == "POST":
-        if request.POST.get("action") == "off":
-            services.disable(request.user)
-            messages.success(request, "Developer mode is off. Your answers are kept if you turn it on again.")
-            return redirect("practice:setup")
-        languages = [key for key in request.POST.getlist("languages") if key in dict(LANGUAGES)]
-        if not languages:
-            messages.error(request, "Pick at least one language to practise.")
-        else:
-            was_on = services.is_on(request.user)
-            services.enable(request.user, languages, request.POST.get("level"))
-            messages.success(request, "Saved. Your questions follow your new choices." if was_on else "Developer mode is on. Here's your first quiz; next time you sign in, a question will be waiting.")
-            return redirect("practice:home" if was_on else "practice:quiz")
-    chosen = (practice.languages if practice else None) or services.DEFAULT_LANGUAGES
-    counts = {row["language"]: row["total"] for row in Question.objects.filter(is_active=True).values("language").annotate(total=Count("id"))}
-    return render(request, "practice/setup.html", {
-        "section": "practice", "practice": practice, "is_on": services.is_on(request.user), "welcome": request.GET.get("welcome") == "1",
-        "languages": [{"key": key, "name": name, "note": services.LANGUAGE_NOTES[key], "count": counts.get(key, 0), "checked": key in chosen} for key, name in LANGUAGES],
-        "levels": [{"key": key, "name": name, "note": services.LEVEL_NOTES[key], "checked": key == (practice.level if practice else "beginner")} for key, name in LEVELS],
-    })
+    """The old Languages and level page: the language and level are chosen on the Questions tab now."""
+    return redirect(f'{reverse("practice:home")}#practice-choice' if services.is_on(request.user) else "landing:dashboard")
+
+
+@login_required(login_url="landing:home")
+@require_POST
+def choose_view(request):
+    """Pick the language and level questions come in, from the menus on the Questions tab (like LeetCode's)."""
+    if not services.is_on(request.user):
+        return _off(request)
+    services.choose(request.user, request.POST.get("language"), request.POST.get("level"))
+    return redirect(f'{reverse("practice:home")}#practice-choice')
 
 
 @login_required(login_url="landing:home")
@@ -55,11 +52,14 @@ def setup_view(request):
 def home_view(request):
     """The Practice tab: progress, a quick quiz, and what you answered lately."""
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     practice = services.profile(request.user)
     recent = Attempt.objects.filter(user=request.user).select_related("question")[:6]
+    counts = {row["language"]: row["total"] for row in Question.objects.filter(is_active=True).values("language").annotate(total=Count("id"))}
     return render(request, "practice/home.html", {"section": "practice", "practice": practice, "progress": services.progress(request.user),
-                                                  "level_up": services.level_up(request.user), "levels": dict(LEVELS), "recent": recent})
+                                                  "level_up": services.level_up(request.user), "levels": dict(LEVELS), "recent": recent,
+                                                  "language": (practice.languages or services.DEFAULT_LANGUAGES)[0],
+                                                  "language_choices": [(key, name, counts.get(key, 0)) for key, name in LANGUAGES], "level_choices": LEVELS})
 
 
 @login_required(login_url="landing:home")
@@ -104,7 +104,7 @@ def warmup_view(request):
 def quiz_view(request):
     """Five questions in a row, one at a time, with the explanation after each."""
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     state = request.session.get(QUIZ)
     if request.GET.get("new") == "1" or not state:
         ids = []
@@ -184,7 +184,7 @@ def _runner_urls():
 def lab_view(request):
     """Walkthroughs to watch, in a runnable language."""
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     chosen, mine, practice = _lab_language(request)
     walkthroughs = [dict(item, preview="\n".join(item["code"].splitlines()[:5])) for item in lab.WALKTHROUGHS if item["language"] == chosen]
     return render(request, "practice/lab.html", {
@@ -199,7 +199,7 @@ def lab_view(request):
 def walkthrough_view(request, key):
     item = lab.WALKTHROUGH_BY_KEY.get(key)
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     if not item:
         raise Http404
     same = [other for other in lab.WALKTHROUGHS if other["language"] == item["language"]]
@@ -246,7 +246,7 @@ def _as_json(value):
 def problems_view(request):
     """The problem set: filters, the problem of the day, what you've solved by difficulty, and acceptance rates."""
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     mine = Submission.objects.filter(user=request.user)
     solved = set(mine.filter(status="accepted").values_list("slug", flat=True))
     tried = set(mine.values_list("slug", flat=True))
@@ -287,7 +287,7 @@ def problem_view(request, slug):
     """A problem: its description, editorial and your submissions, beside an editor that runs the tests in the browser."""
     item = problems.BY_SLUG.get(slug)
     if not services.is_on(request.user):
-        return redirect("practice:setup")
+        return _off(request)
     if not item:
         raise Http404
     chosen, mine, practice = _lab_language(request)
@@ -353,16 +353,17 @@ def submit_api(request, slug):
 
 @login_required(login_url="landing:home")
 @require_POST
-def ui_view(request):
-    """Switch between the developer view (MyProgress as a code editor) and the normal view. The next page plays the
-    second half of the flip, and after switching on, shows what's new."""
-    practice = services.profile(request.user)
-    if practice and services.is_on(request.user):
-        wanted = request.POST.get("ide") == "1"
-        if practice.ide_ui != wanted:
-            practice.ide_ui = wanted
-            practice.save(update_fields=["ide_ui"])
+def mode_view(request):
+    """The toggle under Me: developer mode on or off, at most SWITCH_LIMIT times in SWITCH_WINDOW. The next page plays
+    the second half of the flip, and after switching on, shows what's new."""
+    if services.can_practise(request.user):
+        wanted = request.POST.get("on") == "1"
+        outcome = services.switch_mode(request.user, wanted)
+        if outcome == "switched":
             request.session[services.SWITCHED] = "on" if wanted else "off"
+        elif outcome == "limited":
+            allowance = services.switch_allowance(request.user)
+            messages.error(request, f"You can switch developer mode {allowance['limit']} times in {allowance['window']} minutes. Try again in {allowance['minutes']} min.")
     target = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         target = reverse("landing:dashboard")

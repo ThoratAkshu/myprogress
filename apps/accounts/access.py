@@ -44,10 +44,10 @@ POLICY = {
     "companies:list": DEVELOPERS, "companies:repository_create": DEVELOPERS, "companies:people": DEVELOPERS, "companies:team_create": DEVELOPERS,
     "companies:team": DEVELOPERS, "companies:settings": DEVELOPERS, "companies:detail": PUBLIC, "companies:invitation": PUBLIC, "code:transfer": DEVELOPERS,
     # Developer mode: coding practice for students and professionals, at sign-in, in the Learn dock and the Practice tab.
-    "practice:home": DEVELOPERS, "practice:setup": DEVELOPERS, "practice:level": DEVELOPERS, "practice:warmup": DEVELOPERS, "practice:quiz": DEVELOPERS,
+    "practice:home": DEVELOPERS, "practice:setup": DEVELOPERS, "practice:choose": DEVELOPERS, "practice:level": DEVELOPERS, "practice:warmup": DEVELOPERS, "practice:quiz": DEVELOPERS,
     "practice:next": DEVELOPERS, "practice:answer": DEVELOPERS,
     "practice:problems": DEVELOPERS, "practice:problem": DEVELOPERS, "practice:problem_tests": DEVELOPERS, "practice:submit": DEVELOPERS,
-    "practice:lab": DEVELOPERS, "practice:challenge": DEVELOPERS, "practice:walkthrough": DEVELOPERS, "practice:ui": DEVELOPERS,
+    "practice:lab": DEVELOPERS, "practice:challenge": DEVELOPERS, "practice:walkthrough": DEVELOPERS, "practice:mode": DEVELOPERS,
     # Every signed-in account.
     "landing:dashboard": ALL_ROLES,  # sends each account type to its own home
     "landing:account_identity": ALL_ROLES, "landing:update_profile": ALL_ROLES, "landing:channel_settings": ALL_ROLES, "landing:follow": ALL_ROLES,

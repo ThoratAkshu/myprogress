@@ -2130,6 +2130,10 @@ body.ide .dry-vars tr.is-new th,body.ide .dry-vars tr.is-new td{background:var(-
 body.ide .dry-stack li{background:var(--ide-panel)}
 body.ide .dry-stack li.is-top{background:var(--ide-accent-strong);color:#fff}
 body.ide .dry-out{background:var(--term-bg);color:var(--term-ink)}
+body.ide .practice-choice select{border:1px solid #334155;background-color:#16223a;color:#e2e8f0}
+body.ide .practice-choice select:hover,body.ide .practice-choice select:focus{border-color:#7dd3fc}
+body.ide .practice-choice-note{color:var(--term-muted)}
+body.ide .practice-choice-note b{color:#e2e8f0}
 body.ide .lab-to-problems{color:var(--violet)}
 body.ide .diff-easy{background:hsla(149,70%,60%,.13);color:hsl(163,90%,72%)}
 body.ide .diff-medium{background:hsla(48,70%,60%,.13);color:hsl(26,90%,72%)}

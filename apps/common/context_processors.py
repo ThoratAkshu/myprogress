@@ -20,10 +20,7 @@ def workspace_navigation(request):
     def dev_mode():
         return practice.is_on(user)
     @lru_cache(maxsize=None)
-    def ide():
-        return practice.ide_on(user)
-    @lru_cache(maxsize=None)
-    def view_switched():  # "on" or "off" on the first page after the developer view was switched, then gone
+    def mode_switched():  # "on" or "off" on the first page after developer mode was switched, then gone
         return request.session.pop(practice.SWITCHED, None) if hasattr(request, "session") else None
     @lru_cache(maxsize=None)
     def nav_profile():
@@ -42,8 +39,10 @@ def workspace_navigation(request):
         "nav_has_organizations": lambda: user.org_memberships.filter(status="active").exists(),
         "nav_can_finance": lambda: user.is_superuser or (user.is_staff and user.has_perm("earnings.access_finance")),
         "nav_dev_mode": dev_mode,
-        "nav_ide": ide,
-        "nav_view_switched": view_switched,
+        "nav_ide": dev_mode,  # developer mode also dresses MyProgress as a code editor
+        "nav_can_practise": lambda: practice.can_practise(user),
+        "nav_mode_switched": mode_switched,
+        "nav_mode_allowance": lambda: practice.switch_allowance(user),
         "nav_ide_status": lambda: practice.status_bar(user),
         "nav_ide_commands": lambda: practice.palette(user),
     }

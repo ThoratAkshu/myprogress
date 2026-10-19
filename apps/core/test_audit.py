@@ -40,7 +40,7 @@ class ChangeLogTests(CompanyTestCase):
         self.client.force_login(self.teammate)
         page = self.client.get(f"{self.detail}?tab=log")
         self.assertNotContains(page, "made acme-labs/billing-api public")
-        self.assertNotContains(page, "?tab=log")
+        self.assertNotContains(page, 'href="?tab=log"')  # no Log tab (the page's own address can still appear, as where a form returns to)
 
     def test_repository_admins_see_its_access_log(self):
         reader = self.teammate
