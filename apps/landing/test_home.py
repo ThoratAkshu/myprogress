@@ -27,20 +27,25 @@ class HomePageTests(TestCase):
         self.assertContains(page, "paid every month")
         self.assertContains(page, "around the 15th")
         self.assertContains(page, "Published · +12 coins")
-    def test_live_leaderboard_and_posts_are_real(self):
+    def test_the_live_leaderboard_is_real(self):
         page = self.client.get(reverse("landing:home"))
         self.assertContains(page, "The leaderboard is waiting for its first names.")
-        self.assertNotContains(page, "Fresh from the community")
         author = make_user("asha@example.com", "Asha", "Rao", headline="Django engineer", score=64)
         make_user("hidden@example.com", "Hid", "Den", score=90, recruiter_visible=False)
-        LearningPost.objects.create(author=author, title="How I built a ledger in Go", kind="article", body="Notes", is_public=True)
         LearningPost.objects.create(author=author, title="Private draft", kind="article", body="Notes", is_public=False)
         page = self.client.get(reverse("landing:home"))
         self.assertContains(page, "Asha Rao")
         self.assertContains(page, reverse("landing:public_profile", args=["asha"]))
         self.assertNotContains(page, "Hid Den")
-        self.assertContains(page, "How I built a ledger in Go")
         self.assertNotContains(page, "Private draft")
+
+    def test_the_normal_page_keeps_to_what_matters(self):
+        page = self.client.get(reverse("landing:home"))
+        for section in ['id="paths"', 'id="tour"', 'id="how"', 'id="proof"', 'id="faq"', "data-water-canvas"]:
+            self.assertContains(page, section)
+        for gone in ['id="recruiters"', 'id="learning"', 'class="site-wrap facts"', "hero-pills\" aria-label=\"What's included"]:
+            self.assertNotContains(page, gone)
+        self.assertEqual(page.content.decode().count("<details><summary>"), 4 + 5)  # four questions, and developer mode's five
     def test_live_counts_only_show_once_they_mean_something(self):
         self.assertNotContains(self.client.get(reverse("landing:home")), "developers are already building")
         User.objects.bulk_create([User(username=f"dev{number}@example.com") for number in range(LIVE_STATS_MINIMUM)])

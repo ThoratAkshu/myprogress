@@ -30,6 +30,17 @@ class HomeDeveloperModeTests(TestCase):
         self.assertContains(page, f"switch it {services.SWITCH_LIMIT} times in 15 minutes")
         self.assertNotContains(page, "Two Sum II")
 
+    def test_the_sign_up_pages_have_developer_mode_too(self):
+        for url in [reverse("landing:register"), reverse("landing:register_details", args=["developer"]), reverse("landing:register_details", args=["organization"])]:
+            page = self.client.get(url)
+            self.assertContains(page, 'data-dev-switch')
+            self.assertContains(page, 'class="auth-story-body dev-story" data-for-mode="dev"')
+            self.assertContains(page, f"{len(problems.PROBLEMS)} interview-style problems")
+            self.assertContains(page, "landing-dev.js")
+        self.assertContains(self.client.get(reverse("landing:register")), "Starts in developer mode")
+        self.assertContains(self.client.get(reverse("landing:register_details", args=["developer"])), "You'll start in developer mode.")
+        self.assertContains(self.client.get(reverse("landing:register_details", args=["organization"])), "Developer mode is for student and professional accounts.")
+
 
 class SignInWithDeveloperModeTests(TestCase):
     def setUp(self):

@@ -65,15 +65,27 @@ class SetupTests(TestCase):
         cache.clear()
         self.addCleanup(cache.clear)
 
-    def test_signing_up_leaves_developer_mode_to_the_toggle_under_me(self):
-        self.assertNotContains(self.client.get(reverse("landing:register_details", args=["developer"])), "developer_mode")
-        response = self.client.post(reverse("landing:register_details", args=["developer"]), {"first_name": "Asha", "last_name": "Rao", "email": "asha@example.com", "password": PASSWORD,
-                                                                                              "occupation": "student", "institution": "Pune University", "developer_mode": "on", "terms": "1"})
+    def test_sign_up_follows_the_pages_developer_mode_toggle(self):
+        form = self.client.get(reverse("landing:register_details", args=["developer"]))
+        self.assertContains(form, '<input type="hidden" name="developer_mode" value="" data-dev-field>')  # filled in by the page's toggle
+        self.assertNotContains(form, 'type="checkbox" name="developer_mode"')  # no separate switch in the form
+        details = {"first_name": "Asha", "last_name": "Rao", "password": PASSWORD, "occupation": "student", "institution": "Pune University", "terms": "1"}
+        response = self.client.post(reverse("landing:register_details", args=["developer"]), {**details, "email": "asha@example.com"})
         self.assertRedirects(response, reverse("landing:dashboard"), fetch_redirect_response=False)
-        self.assertFalse(PracticeProfile.objects.filter(user__email="asha@example.com").exists())  # not turned on by signing up
+        self.assertFalse(PracticeProfile.objects.filter(user__email="asha@example.com").exists())  # the toggle was off
         page = self.client.get(reverse("landing:dashboard"))
         self.assertContains(page, 'role="switch" aria-checked="false" aria-labelledby="mode-toggle-menu"')
         self.assertNotContains(page, "mode-arriving")
+        self.client.logout()
+        self.client.post(reverse("landing:register_details", args=["developer"]), {**details, "email": "ravi@example.com", "developer_mode": "1"})
+        practice = PracticeProfile.objects.get(user__email="ravi@example.com")
+        self.assertEqual((practice.enabled, practice.languages, practice.level), (True, ["python"], "beginner"))
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, "mode-arriving mode-to-on")  # the dashboard turns into developer mode and shows what's new
+        self.client.logout()
+        self.client.post(reverse("landing:register_details", args=["recruiter"]), {"first_name": "Hana", "last_name": "Iyer", "email": "hana@acme.io", "password": PASSWORD,
+                                                                                   "company_name": "Acme", "terms": "1", "developer_mode": "1"})
+        self.assertFalse(PracticeProfile.objects.filter(user__email="hana@acme.io").exists())  # developer mode is for students and professionals
 
     def test_choosing_the_language_and_level_on_the_questions_tab(self):
         user = make_user("dev@example.com")

@@ -22,6 +22,7 @@ html.js [data-reveal].is-in{opacity:1;transform:none}
 .dev-switch[aria-checked=true] .dev-switch-glyph{left:6px;color:#fff}
 @media (max-width:640px){.dev-switch-label{display:none}.dev-switch{padding:4px}}
 .site-actions .site-btn{white-space:nowrap}
+@media (max-width:420px){.site-actions{gap:6px}.site-actions .site-btn{padding-inline:12px}.dev-switch-track{width:42px}.dev-switch[aria-checked=true] .dev-switch-knob{transform:translateX(18px)}.dev-switch-glyph{left:21px}}
 
 /* Matri */
 .matri{--size:150px;position:relative;display:inline-block;flex:none;width:var(--size);height:var(--size);vertical-align:middle}
@@ -114,6 +115,44 @@ html.js [data-reveal].is-in{opacity:1;transform:none}
 @keyframes dev-line-in{from{opacity:0;transform:translateY(8px)}}
 .site-stage{transform-origin:50% 50vh}
 
+/* Water: drops fall and rings spread, behind the hero, the closing call and the sign-up story (landing-dev.js) */
+[data-water]{position:relative;overflow:hidden;isolation:isolate}
+.water{position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
+[data-water]>:not(.water){position:relative;z-index:1}
+.site-hero::after{content:"";position:absolute;inset:auto 0 0;height:38%;z-index:0;background:linear-gradient(180deg,transparent,rgba(56,189,248,.05));pointer-events:none}
+/* a soft ripple from where you click */
+.has-ripple{position:relative;overflow:hidden}
+.ripple-ink{position:absolute;border-radius:50%;background:currentColor;opacity:.18;pointer-events:none;transform:scale(0);animation:ripple-ink .9s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes ripple-ink{to{opacity:0;transform:scale(1)}}
+
+/* How it works: a drop travels from step to step, and each step ripples as it arrives */
+.flow{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin:0;padding:0;list-style:none;text-align:center}
+.flow::before{content:"";position:absolute;top:27px;left:16.66%;right:16.66%;height:2px;background:linear-gradient(90deg,transparent,var(--line) 12%,var(--line) 88%,transparent)}
+.flow li{display:grid;justify-items:center;gap:8px}
+.flow b{font:800 18px/1.3 var(--display)}
+.flow p{max-width:280px;margin:0;color:var(--muted);font-size:15px}
+.flow-dot{position:relative;z-index:1;display:grid;place-items:center;width:56px;height:56px;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--violet);box-shadow:0 8px 20px rgba(15,23,42,.06)}
+.flow-dot::after{content:"";position:absolute;inset:-1px;border:2px solid #38bdf8;border-radius:50%;opacity:0;animation:flow-ring 7.5s ease-out infinite}
+.flow li:nth-of-type(2) .flow-dot::after{animation-delay:3s}.flow li:nth-of-type(3) .flow-dot::after{animation-delay:6s}
+.flow-drop{position:absolute;top:21px;left:16.66%;z-index:2;width:10px;height:14px;margin-left:-5px;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;background:#38bdf8;box-shadow:0 0 12px rgba(56,189,248,.6);opacity:0;animation:flow-drop 7.5s ease-in-out infinite}
+@keyframes flow-drop{0%{left:16.66%;opacity:0;transform:translateY(-14px)}6%{opacity:1;transform:none}40%{left:50%}48%{left:50%}80%{left:83.33%;opacity:1}88%,100%{left:83.33%;opacity:0}}
+@keyframes flow-ring{0%{opacity:.7;transform:scale(1)}18%{opacity:0;transform:scale(1.7)}100%{opacity:0;transform:scale(1.7)}}
+
+/* Ranked and paid: the live board and the earning rules, side by side */
+.proof-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+.proof-card{display:grid;gap:12px;padding:28px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}
+.proof-card h2{margin:0;font:800 30px/1.15 var(--display)}
+.proof-card>p{margin:0;color:var(--muted)}
+.proof-card .live-board{margin-top:6px;box-shadow:none}
+.rule-drops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:6px 0 0;padding:0;list-style:none}
+.rule-drops li{position:relative;display:grid;gap:2px;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--canvas);overflow:hidden}
+.rule-drops li::after{content:"";position:absolute;top:50%;left:50%;width:10px;height:10px;margin:-5px;border:1px solid rgba(56,189,248,.5);border-radius:50%;opacity:0;animation:rule-ripple 6s ease-out infinite}
+.rule-drops li:nth-child(2)::after{animation-delay:1.5s}.rule-drops li:nth-child(3)::after{animation-delay:3s}.rule-drops li:nth-child(4)::after{animation-delay:4.5s}
+@keyframes rule-ripple{0%{opacity:.8;transform:scale(1)}30%{opacity:0;transform:scale(14)}100%{opacity:0;transform:scale(14)}}
+.rule-drops b{color:var(--violet);font:800 26px/1.1 var(--display)}
+.rule-drops span{color:var(--muted);font-size:14px}
+.cta-section .cta h2,.cta-section .cta p,.cta-section .cta a{position:relative;z-index:1}
+
 /* Developer mode's colours: the editor's dark canvas */
 html.dev-on body.site{--ink:#e6edf7;--muted:#94a3b8;--line:#1f2a40;--field:#2b3a55;--canvas:#0f1729;--surface:#0a0f1c;--violet:#38bdf8;--violet-dark:#7dd3fc;--violet-soft:rgba(56,189,248,.12);background:#0a0f1c radial-gradient(rgba(56,189,248,.09) 1px,transparent 1.3px) 0 0/22px 22px fixed;color:var(--ink)}
 html.dev-on .signin-card{border-color:#1f2a40;background:#0f1729;box-shadow:0 0 0 1px rgba(56,189,248,.08),0 24px 60px rgba(2,6,23,.6)}
@@ -125,14 +164,14 @@ html.dev-on .faq details{border-color:#1f2a40;background:#0f1729}
 html.dev-on .stats{border-color:#1f2a40}
 html.dev-on kbd{border-color:#2b3a55;background:#152038;color:#e6edf7}
 .dev-chip{font-family:"JetBrains Mono",ui-monospace,monospace;letter-spacing:0;text-transform:none}
+.dev-hero{position:relative}
+.dev-hero-matri{position:absolute;top:-6px;right:-4px;pointer-events:none;animation:matri-float 6s ease-in-out infinite}
+.dev-hero-matri .matri{--size:170px}
+@keyframes matri-float{50%{transform:translateY(-10px) rotate(-3deg)}}
+@media (max-width:1180px){.dev-hero-matri .matri{--size:120px}}
+@media (max-width:900px){.dev-hero-matri{top:-10px;right:0}.dev-hero-matri .matri{--size:96px}}
 .dev-prompt{color:#22c55e}
 .dev-hero h1 em{font-style:normal}
-.signin-card{position:relative}
-.matri-peek{position:absolute;top:-62px;right:18px;display:flex;flex-direction:row-reverse;align-items:flex-start;gap:6px;pointer-events:none}
-.matri-peek .matri{z-index:0}
-.matri-peek .matri-bubble{top:6px;max-width:210px;font-size:13px}
-.matri-peek .matri-bubble::before{right:-7px;left:auto;transform:rotate(225deg)}
-html.dev-on .signin-card h2{margin-top:18px}
 .signin-dev-note{display:flex;align-items:flex-start;gap:6px;margin:12px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
 .signin-dev-note svg{margin-top:3px;color:#38bdf8}
 .dev-numbers b{font-family:"JetBrains Mono",ui-monospace,monospace;color:#7dd3fc}
@@ -252,10 +291,31 @@ html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
 .dev-cta{position:relative;display:grid;justify-items:center;gap:6px;border:1px solid #1f2a40;background:radial-gradient(circle at 50% 0,rgba(56,189,248,.14),transparent 60%),#0b1324}
 .dev-cta .matri{--size:120px;margin-bottom:4px}
 
-@media (max-width:900px){.paths,.dev-split,.dev-demo.lab{grid-template-columns:minmax(0,1fr)}.dev-split.is-reverse>:first-child{order:0}.dev-split{gap:32px}.matri-peek{right:8px}}
-@media (max-width:560px){.dev-quiz-choices,.dev-langs{grid-template-columns:minmax(0,1fr)}.dev-difficulty{flex-wrap:wrap}.dev-ide-tab:nth-child(n+4){display:none}.matri-peek .matri-bubble{display:none}}
+@media (max-width:900px){.paths,.dev-split,.dev-demo.lab,.proof-split,.flow{grid-template-columns:minmax(0,1fr)}.dev-split.is-reverse>:first-child{order:0}.dev-split{gap:32px}.flow::before,.flow-drop{display:none}}
+@media (max-width:560px){.dev-quiz-choices,.dev-langs,.rule-drops{grid-template-columns:minmax(0,1fr)}.dev-difficulty{flex-wrap:wrap}.dev-ide-tab:nth-child(n+4){display:none}}
 @media (prefers-reduced-motion:reduce){
   html.js [data-reveal]{opacity:1;transform:none;transition:none}
-  .matri *,.dev-flip *,.dev-problem,.dev-quiz *,.dev-ide *{animation:none!important;transition:none!important}
+  .matri *,.dev-flip *,.dev-problem,.dev-quiz *,.dev-ide *,.flow *,.rule-drops *,.rule-drops li::after,.dev-hero-matri,.dev-story-matri{animation:none!important;transition:none!important}
   .dev-switch *,.path-card,.path-icon,.matri-teaser .matri{transition:none}
 }
+
+/* Sign-up pages: the toggle above the form, and developer mode's story beside it */
+.auth-main{position:relative}
+.auth-tools{position:absolute;top:18px;right:20px;z-index:2}
+.auth-main .dev-switch{border-color:var(--field);color:var(--ink)}
+.auth-main .dev-switch-track{background:color-mix(in srgb,var(--ink) 12%,transparent)}
+.auth-story-body{display:flex;flex-direction:column;gap:28px}
+.dev-story{position:relative}
+.dev-story h1{margin:0}
+.dev-story .dev-chip{align-self:flex-start}
+.dev-story>p{margin:0}
+.dev-story-matri{position:absolute;top:-24px;right:0;animation:matri-float 6s ease-in-out infinite}
+.type-dev{display:flex;width:fit-content;align-items:center;gap:5px;margin-top:6px;padding:2px 9px;border:1px solid rgba(56,189,248,.4);border-radius:99px;color:#7dd3fc;font:600 11.5px "JetBrains Mono",ui-monospace,monospace;font-style:normal}
+.signup-dev-note{display:flex;align-items:center;gap:12px;margin:0 0 18px;padding:10px 14px;border:1px solid rgba(56,189,248,.3);border-radius:12px;background:rgba(56,189,248,.08);font-size:14px;line-height:1.45}
+.signup-dev-note .matri{--size:64px}
+.signup-dev-note b{color:#7dd3fc}
+html.dev-on .auth-form-card{border-color:#1f2a40;background:#0f1729;box-shadow:0 0 0 1px rgba(56,189,248,.08),0 24px 60px rgba(2,6,23,.6)}
+html.dev-on .site input[type=email],html.dev-on .site input[type=password],html.dev-on .site input[type=text],html.dev-on .site input[type=number],html.dev-on .site input[type=url],html.dev-on .site select,html.dev-on .site textarea{border-color:#2b3a55;background:#0a0f1c;color:#e6edf7}
+html.dev-on .account-type:hover{border-color:#38bdf8}
+html.dev-on .occupation-choice span{background:#0a0f1c}
+@media (max-width:900px){.auth-tools{position:static;display:flex;justify-content:flex-end;width:100%;margin-bottom:12px}.auth-main{align-content:start}.dev-story-matri .matri{--size:96px}}

@@ -1,11 +1,14 @@
-// The home page's developer mode, for visitors: what practising on MyProgress is like, shown by Matri, the
-// Matrioshka-brain creature. The choice is remembered in this browser (the page reads it before it paints), and
-// signing in with it on opens the account in developer mode. Also: sections rising into view as you scroll.
+// Developer mode on the public pages (home and sign-up), for visitors: what practising on MyProgress is like, shown by
+// Matri, the Matrioshka-brain creature. The choice is remembered in this browser (each page reads it before it
+// paints), and signing in or up with it on starts a student or professional account in developer mode. Also the calm
+// touches: water that drops and ripples (code that drops, in developer mode), soft ripples where you click, and
+// sections rising into view as you scroll.
 (() => {
   const root = document.documentElement;
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const KEY = "myprogress:landing-dev";
-  const assets = JSON.parse(document.getElementById("dev-assets").textContent);
+  const assetsData = document.getElementById("dev-assets");
+  const assets = assetsData ? JSON.parse(assetsData.textContent) : {};
   const switches = [...document.querySelectorAll("[data-dev-switch]")];
   const field = document.querySelector("[data-dev-field]");
   const announce = document.querySelector("[data-dev-announce]");
@@ -27,6 +30,7 @@
   }));
   // Code colours, typing and counting up (practice.js) start when developer mode shows, so they play as it appears.
   function practiceTouches() {
+    if (!assets.practice) return;
     if (loading[assets.practice]) loading[assets.practice].then(() => window.MyProgressPractice?.enhance(document), () => {});
     else load(assets.practice).catch(() => {});
   }
@@ -126,6 +130,101 @@
     reveals.forEach(element => observer.observe(element));
   } else {
     reveals.forEach(element => element.classList.add("is-in"));
+  }
+
+  // Water: now and then a drop falls and rings spread out, slowly. Click the water to drop one. In developer mode the
+  // drops are bits of code and the rings are the editor's blue.
+  const GLYPHS = ["{ }", "=>", "0", "1", "</>", "def", "( )", "[ ]", ";", "λ"];
+  function water(host) {
+    const canvas = host.querySelector("[data-water-canvas]");
+    const context = canvas?.getContext("2d");
+    if (!context) return;
+    let width = 0;
+    let height = 0;
+    let drops = [];
+    let next = 0;
+    let running = false;
+    let shown = false;
+    const fit = () => {
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      width = host.clientWidth;
+      height = host.clientHeight;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+    new ResizeObserver(fit).observe(host);
+    fit();
+    const drop = (x, y, mine = false) => drops.push({ x, y, born: performance.now(), fall: mine ? 0 : 1100, size: mine ? 1.25 : 0.65 + Math.random() * 0.55, glyph: isOn() ? GLYPHS[Math.floor(Math.random() * GLYPHS.length)] : null });
+    const draw = now => {
+      if (!running) return;
+      context.clearRect(0, 0, width, height);
+      if (now > next) {
+        drop(width * (0.06 + Math.random() * 0.88), height * (0.3 + Math.random() * 0.62));
+        next = now + 1500 + Math.random() * 2200;
+      }
+      drops = drops.filter(item => now - item.born < item.fall + 3400);
+      for (const item of drops) {
+        const age = now - item.born;
+        const rgb = item.glyph ? "56,189,248" : "186,230,253";
+        if (age < item.fall) {  // falling
+          const t = age / item.fall;
+          const y = item.y - 120 * (1 - t * t);
+          context.fillStyle = `rgba(${rgb},${(0.12 + 0.5 * t).toFixed(3)})`;
+          if (item.glyph) {
+            context.font = '600 13px "JetBrains Mono", ui-monospace, monospace';
+            context.textAlign = "center";
+            context.fillText(item.glyph, item.x, y);
+          } else {
+            context.beginPath();
+            context.ellipse(item.x, y, 2, 4.2, 0, 0, Math.PI * 2);
+            context.fill();
+          }
+          continue;
+        }
+        const t = (age - item.fall) / 3400;
+        for (let ring = 0; ring < 3; ring += 1) {
+          const local = t - ring * 0.13;
+          if (local <= 0) continue;
+          const radius = local * 110 * item.size;
+          context.beginPath();
+          context.strokeStyle = `rgba(${rgb},${((1 - local) * 0.5 * (1 - ring * 0.28)).toFixed(3)})`;
+          context.lineWidth = 1.5;
+          context.ellipse(item.x, item.y, radius, radius * 0.34, 0, 0, Math.PI * 2);
+          context.stroke();
+        }
+      }
+      requestAnimationFrame(draw);
+    };
+    const play = () => {
+      const want = shown && !document.hidden;
+      if (want && !running) { running = true; next = performance.now() + 400; requestAnimationFrame(draw); }
+      if (!want) running = false;
+    };
+    new IntersectionObserver(entries => { shown = entries.some(entry => entry.isIntersecting); play(); }).observe(host);
+    document.addEventListener("visibilitychange", play);
+    host.addEventListener("pointerdown", event => {
+      if (event.target.closest("a, button, input, select, textarea, label, form, .signin-card")) return;
+      const box = canvas.getBoundingClientRect();
+      drop(event.clientX - box.left, event.clientY - box.top, true);
+    });
+  }
+  if (!calm) document.querySelectorAll("[data-water]").forEach(water);
+
+  // A soft ripple from where a button or card is clicked.
+  if (!calm) {
+    document.addEventListener("pointerdown", event => {
+      const target = event.target.closest(".site-btn, .path-card, .account-type, .dev-switch");
+      if (!target) return;
+      const box = target.getBoundingClientRect();
+      const ink = document.createElement("span");
+      ink.className = "ripple-ink";
+      const size = Math.max(box.width, box.height) * 2.2;
+      Object.assign(ink.style, { width: `${size}px`, height: `${size}px`, left: `${event.clientX - box.left - size / 2}px`, top: `${event.clientY - box.top - size / 2}px` });
+      target.classList.add("has-ripple");
+      target.append(ink);
+      ink.addEventListener("animationend", () => ink.remove());
+    });
   }
 
   // The dry run: a real JavaScript engine in a sandboxed frame (the same one Problems use), narrated by Matri.

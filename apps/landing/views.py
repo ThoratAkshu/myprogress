@@ -29,7 +29,7 @@ from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trendi
 from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decorate_people, find_people, follower_people, following_people, suggested_people
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.earnings.models import EarningSettings
-from apps.practice.services import WANTS_ON as PRACTICE_WANTS_ON
+from apps.practice.services import SWITCHED as PRACTICE_SWITCHED, WANTS_ON as PRACTICE_WANTS_ON, enable as enable_practice
 from apps.organizations.services import create_organization, student_summary
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
@@ -81,7 +81,6 @@ class LandingPageView(TemplateView):
             # Sample numbers for the earnings clip, worked out from the live rules so the clip always matches them.
             "tour": {"coins_from": coins_from, "ring_from": round(coins_from * 100 / max(rules.coins_per_conversion, 1)), "followers_from": max(rules.follower_goal - 3, 0), "balance_from": 260, "balance_to": 260 + rules.rupees_per_conversion},
             "top_developers": top,
-            "latest_posts": list(LearningPost.objects.filter(is_public=True).select_related("author__profile").order_by("-published_at")[:3]),
             "live_stats": {"developers": developers, "repositories": Repository.objects.exclude(languages={}).count(), "posts": LearningPost.objects.filter(is_public=True).count()} if developers >= LIVE_STATS_MINIMUM else None,
             "dev": developer_mode_preview(),
             "dev_assets": {"practice": static("landing/js/practice.js"), "acorn": "https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js",
@@ -121,7 +120,7 @@ def register_view(request):
     """Sign-up, step 1: the account type. Each one opens its own form."""
     if request.user.is_authenticated:
         return redirect("landing:dashboard")
-    return render(request, "landing/register.html", {"account_types": ACCOUNT_TYPES, "next": request.GET.get("next", "")})
+    return render(request, "landing/register.html", {"account_types": ACCOUNT_TYPES, "next": request.GET.get("next", ""), "dev": developer_mode_preview()})
 
 
 @never_cache
@@ -147,6 +146,9 @@ def register_details_view(request, account):
         login(request, user)
         request.session.cycle_key()
         send_verification_email(request, user)
+        if role == "developer" and request.POST.get("developer_mode") == "1":  # signed up with the page in developer mode
+            enable_practice(user)
+            request.session[PRACTICE_SWITCHED] = "on"
         messages.success(request, f"Welcome! {f'{organization.name} is ready. ' if organization else ''}We sent a confirmation link to {user.email}.")
         next_url = request.POST.get("next", "")
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
@@ -156,7 +158,7 @@ def register_details_view(request, account):
         for errors in form.errors.values():
             for error in errors:
                 messages.error(request, error)
-    return render(request, "landing/register.html", {"form": form, "account": chosen, "next": request.POST.get("next") or request.GET.get("next", "")})
+    return render(request, "landing/register.html", {"form": form, "account": chosen, "next": request.POST.get("next") or request.GET.get("next", ""), "dev": developer_mode_preview()})
 def login_view(request):
     if request.method != "POST":
         return redirect("landing:home")
