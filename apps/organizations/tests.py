@@ -62,7 +62,7 @@ class OrganizationTests(TestCase):
         self.assertContains(page, "What its teachers will see")
         self.assertContains(page, "Your score, rank and coding days")
         self.assertContains(page, f"{reverse('landing:register')}?next=")
-        response = self.client.post(reverse("landing:register"), {"role": "developer", "occupation": "student", "institution": "Pune University", "first_name": "Ravi", "last_name": "Kumar", "email": "ravi@example.com", "password": PASSWORD, "terms": "on", "next": join_url})
+        response = self.client.post(reverse("landing:register_details", args=["developer"]), {"role": "developer", "occupation": "student", "institution": "Pune University", "first_name": "Ravi", "last_name": "Kumar", "email": "ravi@example.com", "password": PASSWORD, "terms": "on", "next": join_url})
         self.assertRedirects(response, join_url, fetch_redirect_response=False)
         response = self.client.post(join_url)
         self.assertRedirects(response, reverse("organizations:channel", args=[self.organization.slug]))

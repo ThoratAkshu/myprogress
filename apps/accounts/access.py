@@ -27,7 +27,7 @@ def _workspace_section(kwargs):
 
 POLICY = {
     # Public pages, sign-in and account recovery.
-    "landing:home": PUBLIC, "landing:register": PUBLIC, "landing:login": PUBLIC, "landing:logout": PUBLIC,
+    "landing:home": PUBLIC, "landing:register": PUBLIC, "landing:register_details": PUBLIC, "landing:login": PUBLIC, "landing:logout": PUBLIC,
     "landing:two_step": PUBLIC,  # the second step of signing in, before there's an account to check
     "landing:verify_email": PUBLIC, "landing:health": PUBLIC, "landing:search": PUBLIC, "landing:search_suggest": PUBLIC,
     "landing:public_profile": PUBLIC, "landing:project": PUBLIC,

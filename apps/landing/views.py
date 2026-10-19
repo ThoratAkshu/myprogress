@@ -39,7 +39,6 @@ from django.core.validators import URLValidator
 from django.db import IntegrityError
 from apps.common.templatetags.ui import avatar_tone, initials
 from apps.accounts import identity, two_factor
-from apps.practice.services import SWITCHED as PRACTICE_SWITCHED, enable as enable_practice
 from apps.core.audit import record, repository_log
 from apps.accounts.views import begin_two_step, finish_sign_in
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
@@ -84,12 +83,35 @@ class LandingPageView(TemplateView):
             "live_stats": {"developers": developers, "repositories": Repository.objects.exclude(languages={}).count(), "posts": LearningPost.objects.filter(is_public=True).count()} if developers >= LIVE_STATS_MINIMUM else None,
         })
         return context
+ACCOUNT_TYPES = [
+    {"key": "developer", "label": "Student or professional", "icon": "code", "about": "Build your profile, host your projects with Git, and work on them with others."},
+    {"key": "recruiter", "label": "Recruiter", "icon": "search", "about": "Find developers through verified proof of work."},
+    {"key": "organization", "label": "Organization", "icon": "users", "about": "Run classes for an institute, college, bootcamp or community."},
+]
+
+
 @never_cache
-@rate_limit("register", 10, 3600, per="ip")
 def register_view(request):
+    """Sign-up, step 1: the account type. Each one opens its own form."""
     if request.user.is_authenticated:
         return redirect("landing:dashboard")
-    form = RegistrationForm(request.POST or None)
+    return render(request, "landing/register.html", {"account_types": ACCOUNT_TYPES, "next": request.GET.get("next", "")})
+
+
+@never_cache
+@rate_limit("register", 10, 3600, per="ip")
+def register_details_view(request, account):
+    """Sign-up, step 2: the form for the account type chosen in step 1."""
+    if request.user.is_authenticated:
+        return redirect("landing:dashboard")
+    chosen = next((item for item in ACCOUNT_TYPES if item["key"] == account), None)
+    if not chosen:
+        return redirect("landing:register")
+    data = None
+    if request.method == "POST":
+        data = request.POST.copy()
+        data["role"] = account  # the type comes from step 1, not from the form
+    form = RegistrationForm(data)
     if request.method == "POST" and form.is_valid():
         role, details = form.cleaned_data["role"], form.cleaned_data["identity"]
         with transaction.atomic():
@@ -99,10 +121,6 @@ def register_view(request):
         login(request, user)
         request.session.cycle_key()
         send_verification_email(request, user)
-        practising = role == "developer" and form.cleaned_data["developer_mode"]
-        if practising:
-            enable_practice(user)
-            request.session[PRACTICE_SWITCHED] = "on"  # the dashboard turns into developer mode and shows what's new
         messages.success(request, f"Welcome! {f'{organization.name} is ready. ' if organization else ''}We sent a confirmation link to {user.email}.")
         next_url = request.POST.get("next", "")
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
@@ -112,7 +130,7 @@ def register_view(request):
         for errors in form.errors.values():
             for error in errors:
                 messages.error(request, error)
-    return render(request, "landing/register.html", {"form": form, "next": request.POST.get("next") or request.GET.get("next", "")})
+    return render(request, "landing/register.html", {"form": form, "account": chosen, "next": request.POST.get("next") or request.GET.get("next", "")})
 def login_view(request):
     if request.method != "POST":
         return redirect("landing:home")

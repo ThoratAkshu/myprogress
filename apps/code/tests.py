@@ -282,7 +282,7 @@ class CollaboratorTests(RepositoryTestCase):
         self.client.logout()
         page = self.client.get(reverse("landing:register"))
         self.assertContains(page, "Student or professional")
-        self.assertContains(page, 'value="developer"')
+        self.assertContains(page, 'href="/register/developer/"')
         self.assertEqual(dict(Profile.ROLE_CHOICES)["developer"], "Student or professional")
 class IssueTests(RepositoryTestCase):
     def test_signed_in_users_open_issues_on_public_repositories(self):

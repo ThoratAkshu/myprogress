@@ -19,7 +19,6 @@ class RegistrationForm(forms.Form):
     organization_kind = forms.ChoiceField(choices=Organization.KINDS, required=False, label="Type")
     organization_city = forms.CharField(max_length=80, required=False, label="City")
     organization_about = forms.CharField(max_length=500, required=False, label="What you teach and who it's for", widget=forms.Textarea)
-    developer_mode = forms.BooleanField(required=False)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         identity.add_fields(self, "any")

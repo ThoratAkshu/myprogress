@@ -18,9 +18,9 @@ def make_user(email, first_name="Asha", last_name="Rao"):
     return User.objects.create_user(username=email, email=email, password="StrongPass!482", first_name=first_name, last_name=last_name)
 class PublicPortfolioTests(TestCase):
     def test_registration_assigns_a_unique_public_handle(self):
-        self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "asha@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
+        self.client.post(reverse("landing:register_details", args=["developer"]), {"first_name": "Asha", "last_name": "Rao", "email": "asha@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
         self.client.logout()
-        self.client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": "asha2@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
+        self.client.post(reverse("landing:register_details", args=["developer"]), {"first_name": "Asha", "last_name": "Rao", "email": "asha2@example.com", "password": "StrongPass!482", "role": "developer", "occupation": "student", "institution": "Pune University", "terms": "1"})
         self.assertEqual(User.objects.get(username="asha@example.com").profile.handle, "asha-rao")
         self.assertEqual(User.objects.get(username="asha2@example.com").profile.handle, "asha-rao-2")
     def test_profiles_created_lazily_also_get_a_handle(self):

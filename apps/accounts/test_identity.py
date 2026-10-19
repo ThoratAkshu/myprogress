@@ -12,7 +12,7 @@ PASSWORD = "StrongPass!482"
 
 
 def sign_up(client, role, email, **answers):
-    return client.post(reverse("landing:register"), {"first_name": "Asha", "last_name": "Rao", "email": email, "password": PASSWORD, "role": role, "terms": "1", **answers})
+    return client.post(reverse("landing:register_details", args=[role]), {"first_name": "Asha", "last_name": "Rao", "email": email, "password": PASSWORD, "terms": "1", **answers})
 
 
 def make_user(email, role="developer", **profile):
@@ -55,7 +55,7 @@ class SignUpIdentityTests(TestCase):
         response = sign_up(self.client, "organization", "office@gmail.com", organization_kind="institute")
         for message in ["Give your organization&#x27;s name.", "Tell students what you teach and who it&#x27;s for."]:
             self.assertContains(response, message)
-        self.assertContains(response, '<fieldset class="signup-details" data-for-role="organization"><legend>')  # the answers stay open after an error
+        self.assertContains(response, '<fieldset class="signup-details"><legend>Your organization')  # the same form again after an error
         sign_up(self.client, "organization", "office@gmail.com", organization_name="Sunrise Coding Institute", organization_kind="institute", organization_city="Pune", organization_about="Full-stack batches for college students")
         organization = Organization.objects.get()
         self.assertEqual((organization.name, organization.kind, organization.city, organization.about, organization.owner.email), ("Sunrise Coding Institute", "institute", "Pune", "Full-stack batches for college students", "office@gmail.com"))
@@ -63,13 +63,31 @@ class SignUpIdentityTests(TestCase):
         self.assertFalse(organization.owner.profile.needs_identity)
         self.assertNotContains(self.client.get(reverse("organizations:overview", args=[organization.slug])), "Tell people who you are")
 
-    def test_the_page_opens_the_chosen_account_types_questions(self):
-        page = self.client.get(reverse("landing:register"))
-        self.assertContains(page, '<fieldset class="signup-details" data-for-role="developer"><legend>About you')
-        self.assertContains(page, '<fieldset class="signup-details" data-for-role="recruiter" hidden disabled>')
+    def test_the_account_type_comes_first_then_its_own_form(self):
+        page = self.client.get(reverse("landing:register"), {"next": "/org/join/abc/"})
+        self.assertContains(page, "Step 1 of 2")
+        for account in ["developer", "recruiter", "organization"]:
+            self.assertContains(page, f'href="/register/{account}/?next=/org/join/abc/"')
+        self.assertNotContains(page, "<form")  # no form until the type is chosen
+        page = self.client.get(reverse("landing:register_details", args=["developer"]), {"next": "/org/join/abc/"})
+        self.assertContains(page, "Step 2 of 2")
+        self.assertContains(page, "<strong>Student or professional</strong>")
+        self.assertContains(page, '<fieldset class="signup-details"><legend>About you')
+        self.assertNotContains(page, "Your company")
+        self.assertNotContains(page, "Your organization")
+        self.assertContains(page, '<input type="hidden" name="next" value="/org/join/abc/">')
+        page = self.client.get(reverse("landing:register_details", args=["organization"]))
+        self.assertContains(page, "<legend>Your organization")
+        self.assertNotContains(page, "About you")
+        self.assertRedirects(self.client.get(reverse("landing:register_details", args=["wizard"])), reverse("landing:register"))
         page = sign_up(self.client, "recruiter", "hr@gmail.com", company_name="Acme")
-        self.assertContains(page, '<fieldset class="signup-details" data-for-role="recruiter"><legend>Your company')
+        self.assertContains(page, '<fieldset class="signup-details"><legend>Your company')
         self.assertContains(page, 'value="Acme"')
+        self.assertContains(page, "Work email")
+        response = self.client.post(reverse("landing:register_details", args=["developer"]), {"first_name": "Mallory", "last_name": "X", "email": "m@example.com", "password": PASSWORD,
+                                                                                              "role": "organization", "occupation": "student", "institution": "Pune University", "terms": "1"})
+        self.assertRedirects(response, reverse("landing:dashboard"), fetch_redirect_response=False)
+        self.assertEqual(User.objects.get(email="m@example.com").profile.role, "developer")  # the type comes from step 1, not the posted form
 
 
 class LaterIdentityTests(TestCase):
