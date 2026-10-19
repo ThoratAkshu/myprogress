@@ -354,7 +354,7 @@ def submit_api(request, slug):
 @login_required(login_url="landing:home")
 @require_POST
 def mode_view(request):
-    """The toggle under Me: developer mode on or off, at most SWITCH_LIMIT times in SWITCH_WINDOW. The next page plays
+    """The toggle under Me: developer mode on (SWITCH_LIMIT tries in SWITCH_WINDOW) or off (any time). The next page plays
     the second half of the flip, and after switching on, shows what's new."""
     if services.can_practise(request.user):
         wanted = request.POST.get("on") == "1"
@@ -363,7 +363,7 @@ def mode_view(request):
             request.session[services.SWITCHED] = "on" if wanted else "off"
         elif outcome == "limited":
             allowance = services.switch_allowance(request.user)
-            messages.error(request, f"You can switch developer mode {allowance['limit']} times in {allowance['window']} minutes. Try again in {allowance['minutes']} min.")
+            messages.error(request, f"You can try developer mode {allowance['limit']} times in {allowance['window']} minutes. Try again in {allowance['minutes']} min.")
     target = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         target = reverse("landing:dashboard")

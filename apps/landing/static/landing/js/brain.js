@@ -10,8 +10,8 @@
   const TAU = Math.PI * 2;
   const GOLDEN = Math.PI * (3 - Math.sqrt(5));
   const PALETTES = {
-    normal: { shells: ["79,70,229", "14,165,233", "124,58,237", "219,39,119"], core: "99,102,241", link: "129,140,248", pulse: "14,165,233", glow: "167,139,250", ring: 1.7 },  // daylight
-    dev: { shells: ["56,189,248", "34,197,94", "125,211,252", "134,239,172"], core: "125,211,252", link: "56,189,248", pulse: "190,242,100", glow: "14,165,233", ring: 1 },  // the night editor
+    normal: { shells: ["79,70,229", "14,165,233", "124,58,237", "219,39,119"], core: "79,70,229", link: "99,102,241", pulse: "14,165,233", glow: "167,139,250", ring: 1.7, wiring: 1.7 },  // daylight
+    dev: { shells: ["56,189,248", "34,197,94", "125,211,252", "134,239,172"], core: "125,211,252", link: "56,189,248", pulse: "190,242,100", glow: "14,165,233", ring: 1, wiring: 1 },  // the night editor
   };
   // Shells from the outside in: radius, points, tilt of the axis it turns on, and speed (negative turns the other way).
   const SHELLS = [[1, 520, 0.42, 0.05], [0.8, 380, -0.6, -0.08], [0.62, 270, 0.9, 0.11], [0.45, 190, -0.3, -0.15]];
@@ -193,7 +193,7 @@
       const core = this.core.nodes.map(node => project(turn(node, t * 0.3, 0)));
       const coreDim = this.focus === -1 ? 1 : this.focus === 4 ? 1.6 : 0.6;
       c.lineWidth = 0.7;
-      c.strokeStyle = `rgba(${palette.link},${(0.22 * coreDim).toFixed(3)})`;
+      c.strokeStyle = `rgba(${palette.link},${Math.min(0.6, 0.22 * coreDim * palette.wiring).toFixed(3)})`;
       c.beginPath();
       for (const [a, b] of this.core.links) {
         const p = core[a];

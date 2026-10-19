@@ -13,7 +13,7 @@
 <li style="--i:1"><span class="mode-intro-icon">{% icon "zap" 18 %}</span><span><b>Questions</b>Choose your language and level from the menus on the Questions tab.</span></li>
 <li style="--i:2"><span class="mode-intro-icon">{% icon "check-circle" 18 %}</span><span><b>A question at every sign-in</b>And a quick one on any page: press Practice at the bottom right.</span></li>
 <li style="--i:3"><span class="mode-intro-icon"><kbd>Ctrl</kbd><kbd>K</kbd></span><span><b>An editor look</b>File tabs, a status bar, and a palette to jump anywhere.</span></li>
-<li style="--i:4"><span class="mode-intro-icon">{% icon "user" 18 %}</span><span><b>The toggle</b>Under Me, your profile menu. You can switch it {{ nav_mode_allowance.limit }} times in {{ nav_mode_allowance.window }} minutes.</span></li>
+<li style="--i:4"><span class="mode-intro-icon">{% icon "user" 18 %}</span><span><b>The toggle</b>Under Me, your profile menu. You can try it {{ nav_mode_allowance.limit }} times in {{ nav_mode_allowance.window }} minutes; turning it off is always free.</span></li>
 </ol>
 <form method="dialog" class="mode-intro-actions"><a class="button primary" href="{% url 'practice:problems' %}">{% icon "target" 16 %} Solve a problem</a><button class="button soft" value="close" autofocus>Explore</button></form>
 </dialog>{% elif arrival == "off" %}<p class="mode-toast" role="status">{% icon "check-circle" 16 %} Developer mode is off. Your answers are kept; the toggle under Me turns it back on.</p>{% endif %}

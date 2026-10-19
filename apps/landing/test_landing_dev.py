@@ -27,18 +27,20 @@ class HomeDeveloperModeTests(TestCase):
         self.assertContains(page, "sum_evens.js")
         self.assertContains(page, '"acorn": "https://cdn.jsdelivr.net/npm/acorn@8.12.1/dist/acorn.js"')
         self.assertContains(page, f'{reverse("landing:register_details", args=["recruiter"])}"')  # Pick your path
-        self.assertContains(page, f"switch it {services.SWITCH_LIMIT} times in 15 minutes")
+        self.assertContains(page, f"try it {services.SWITCH_LIMIT} times in 15 minutes, and turn it off any time")
         self.assertNotContains(page, "Two Sum II")
+        for name in ["home.py", "dry_run.js", "problems/", "questions.py", "editor.json", "faq.md"]:
+            self.assertContains(page, f"</i>{name}</a>")  # developer mode's header: file tabs
 
-    def test_the_sign_up_pages_have_developer_mode_too(self):
+    def test_the_sign_up_pages_follow_developer_mode_without_a_toggle(self):
         for url in [reverse("landing:register"), reverse("landing:register_details", args=["developer"]), reverse("landing:register_details", args=["organization"])]:
             page = self.client.get(url)
-            self.assertContains(page, 'data-dev-switch')
+            self.assertNotContains(page, "data-dev-switch")  # chosen on the home page; sign-up only follows it
             self.assertContains(page, 'class="auth-story-body dev-story" data-for-mode="dev"')
             self.assertContains(page, f"{len(problems.PROBLEMS)} interview-style problems")
             self.assertContains(page, "landing-dev.js")
         self.assertContains(self.client.get(reverse("landing:register")), "Starts in developer mode")
-        self.assertContains(self.client.get(reverse("landing:register_details", args=["developer"])), "You'll start in developer mode.")
+        self.assertContains(self.client.get(reverse("landing:register_details", args=["developer"])), "You'll start in developer mode:")
         self.assertContains(self.client.get(reverse("landing:register_details", args=["organization"])), "Developer mode is for student and professional accounts.")
 
 

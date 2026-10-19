@@ -153,7 +153,8 @@ def payload(question):
 
 SWITCHED = "practice_mode_switched"  # session: "on" or "off" until the next page shows the switch
 WANTS_ON = "practice_wants_on"  # session: signing in with the home page's developer mode toggle on
-SWITCH_LIMIT, SWITCH_WINDOW = 3, timedelta(minutes=15)  # developer mode can be switched 3 times in any 15 minutes
+SWITCH_LIMIT, SWITCH_WINDOW = 3, timedelta(minutes=15)  # 3 tries of developer mode in any 15 minutes: turning it on
+# counts, turning it back off is free, so a try is a round trip and nobody is ever stuck in it
 
 
 def open_in_developer_mode(request, user):
@@ -179,7 +180,7 @@ def _recent_switches(practice, now):
 
 
 def switch_allowance(user, now=None):
-    """How many more times developer mode can be switched right now, and if none, how many minutes until the next."""
+    """How many more tries of developer mode are left right now, and if none, how many minutes until the next."""
     now = now or timezone.now()
     recent = _recent_switches(profile(user), now)
     left = max(0, SWITCH_LIMIT - len(recent))
@@ -190,8 +191,8 @@ def switch_allowance(user, now=None):
 
 def switch_mode(user, on):
     """Turn developer mode on (keeping the language and level chosen before, or Python for beginners) or off (answers
-    and submissions are kept). Returns "switched", "unchanged", or "limited" when it was already switched SWITCH_LIMIT
-    times in the last SWITCH_WINDOW."""
+    and submissions are kept). Turning it on uses one of SWITCH_LIMIT tries per SWITCH_WINDOW; turning it off is always
+    allowed. Returns "switched", "unchanged", or "limited" when there's no try left."""
     with transaction.atomic():
         practice, _ = PracticeProfile.objects.select_for_update().get_or_create(
             user=user, defaults={"enabled": False, "languages": DEFAULT_LANGUAGES, "level": "beginner"})
@@ -199,11 +200,14 @@ def switch_mode(user, on):
             return "unchanged"
         now = timezone.now()
         recent = _recent_switches(practice, now)
-        if len(recent) >= SWITCH_LIMIT:
+        if on and len(recent) >= SWITCH_LIMIT:
             return "limited"
         practice.enabled = on
-        practice.switches = [moment.isoformat() for moment in (recent + [now])[-SWITCH_LIMIT:]]
-        practice.save(update_fields=["enabled", "switches"])
+        fields = ["enabled"]
+        if on:
+            practice.switches = [moment.isoformat() for moment in (recent + [now])[-SWITCH_LIMIT:]]
+            fields.append("switches")
+        practice.save(update_fields=fields)
     if hasattr(user, "_practice_profile"):
         del user._practice_profile
     return "switched"

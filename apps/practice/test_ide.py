@@ -51,7 +51,7 @@ class SwitchTests(TestCase):
         menu = page.content.decode().split('<details class="app-menu">')[1].split("</details>")[0]
         self.assertIn('role="switch" aria-checked="true" aria-labelledby="mode-toggle-menu"', menu)  # under Me, the profile menu
         self.assertIn('<b id="mode-toggle-menu">Developer mode</b>', menu)
-        self.assertIn("3 switches every 15 min", menu)
+        self.assertIn("Off any time · 3 of 3 tries left", menu)
         self.assertEqual(page.content.decode().count('role="switch"'), 1)  # the only switch: not in the header, the card or the palette
         self.assertNotContains(page, "Developer view")
         self.assertNotContains(page, "mode-arriving")
@@ -67,7 +67,7 @@ class SwitchTests(TestCase):
         for gone in ["ide-auto.css", "dev-mode", "nav-file", "ide-status", "data-dock", 'href="/practice/problems/"']:
             self.assertNotContains(page, gone)  # the normal MyProgress: no editor look, no Practice tab
         self.assertContains(page, 'role="switch" aria-checked="false" aria-labelledby="mode-toggle-menu"')
-        self.assertContains(page, "2 of 3 switches left")
+        self.assertContains(page, "3 tries every 15 min")  # turning it off didn't use a try
         self.assertContains(page, "Find the toggle under Me")
         self.assertRedirects(self.client.get(reverse("practice:problems")), reverse("landing:dashboard"))  # practice waits for the toggle
         self.assertRedirects(self.switch(True, "https://evil.example/"), reverse("landing:dashboard"), fetch_redirect_response=False)
@@ -92,26 +92,33 @@ class SwitchTests(TestCase):
         self.assertContains(page, "mode-switch.js")
         self.assertNotContains(self.client.get(reverse("practice:problems")), "data-mode-intro")
 
-    def test_developer_mode_switches_three_times_in_fifteen_minutes(self):
-        for on in [False, True, False]:
-            self.switch(on)
-        self.client.get(reverse("landing:dashboard"))  # the page that shows the third switch
+    def test_three_tries_in_fifteen_minutes_and_turning_off_is_free(self):
+        for on in [False, True, False, True, False, True]:  # three round trips: only turning it on uses a try
+            self.assertRedirects(self.switch(on), "/dashboard/", fetch_redirect_response=False)
+        self.assertTrue(self.fresh().enabled)
+        self.assertEqual(len(self.fresh().switches), 3)
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, "Off any time · on again in 15 min")
+        self.assertNotContains(page, 'aria-describedby="mode-toggle-menu-note" disabled')  # it can still go off
+        self.switch(False)
+        self.assertFalse(self.fresh().enabled)  # never stuck in developer mode
+        self.client.get(reverse("landing:dashboard"))  # the page that shows the switch
         response = self.switch(True, follow=True)
-        self.assertContains(response, "You can switch developer mode 3 times in 15 minutes. Try again in 15 min.")
-        self.assertFalse(self.fresh().enabled)  # still off
+        self.assertContains(response, "You can try developer mode 3 times in 15 minutes. Try again in 15 min.")
+        self.assertFalse(self.fresh().enabled)  # a fourth try waits
         self.assertNotContains(response, "mode-arriving")
-        self.assertContains(response, "Switch again in 15 min")
+        self.assertContains(response, "Try again in 15 min")
         self.assertContains(response, 'aria-describedby="mode-toggle-menu-note" disabled')
         practice = self.fresh()
         practice.switches = [(timezone.now() - timedelta(minutes=minutes)).isoformat() for minutes in (16, 10, 2)]
         practice.save()
         user = type(self.user).objects.get(pk=self.user.pk)
-        self.assertEqual(services.switch_allowance(user)["left"], 1)  # the oldest switch is past the window
+        self.assertEqual(services.switch_allowance(user)["left"], 1)  # the oldest try is past the window
         self.switch(True)
         user = type(self.user).objects.get(pk=self.user.pk)
         self.assertTrue(services.is_on(user))
-        self.assertEqual(services.switch_allowance(user), {"left": 0, "limit": 3, "window": 15, "minutes": 5})  # the switch 10 minutes ago frees up first
-        self.assertEqual(services.switch_mode(user, True), "unchanged")  # asking for what's already on isn't a switch
+        self.assertEqual(services.switch_allowance(user), {"left": 0, "limit": 3, "window": 15, "minutes": 5})  # the try 10 minutes ago frees up first
+        self.assertEqual(services.switch_mode(user, True), "unchanged")  # asking for what's already on isn't a try
 
     def test_on_phones_the_toggle_is_on_your_own_profile(self):
         handle = self.user.profile.handle

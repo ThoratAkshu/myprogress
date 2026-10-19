@@ -35,19 +35,86 @@
     else load(assets.practice).catch(() => {});
   }
 
+  // Visitors get 3 tries of developer mode in any 15 minutes: turning it on uses a try, turning it back off is free,
+  // so a try is a round trip and nobody is stuck in it. It's counted in this browser only: another browser or a
+  // private window starts its own count, which is fine; the limit calms the flipping, it doesn't guard anything.
+  const SWITCH_LIMIT = 3;
+  const SWITCH_WINDOW = 15 * 60 * 1000;
+  const SWITCHES = "myprogress:landing-dev-switches";
+  let switchesHere = [];  // when this browser won't keep them
+  function recentSwitches() {
+    let list = switchesHere;
+    try { list = JSON.parse(localStorage.getItem(SWITCHES) || "[]"); } catch { /* use this page's count */ }
+    const now = Date.now();
+    return (Array.isArray(list) ? list : []).filter(time => typeof time === "number" && time <= now && now - time < SWITCH_WINDOW).sort((a, b) => a - b);
+  }
+  function allowance() {
+    const recent = recentSwitches();
+    const left = Math.max(0, SWITCH_LIMIT - recent.length);
+    const minutes = left ? 0 : Math.max(1, Math.ceil((recent[recent.length - SWITCH_LIMIT] + SWITCH_WINDOW - Date.now()) / 60000));
+    return { left, minutes };
+  }
+  function countSwitch() {
+    switchesHere = [...recentSwitches(), Date.now()].slice(-SWITCH_LIMIT);
+    try { localStorage.setItem(SWITCHES, JSON.stringify(switchesHere)); } catch { /* kept for this page only */ }
+  }
+  let noteTimer = 0;
+  function refuse() {
+    const { minutes } = allowance();
+    reflect();  // the switch goes back where it was
+    switches.forEach(button => {
+      button.classList.remove("is-refused");
+      void button.offsetWidth;
+      button.classList.add("is-refused");
+    });
+    let note = document.querySelector("[data-dev-limit]");
+    if (!note) {
+      note = Object.assign(document.createElement("p"), { className: "dev-limit" });
+      note.dataset.devLimit = "";
+      note.setAttribute("role", "status");
+      document.body.append(note);
+    }
+    note.textContent = `You can try developer mode ${SWITCH_LIMIT} times in 15 minutes. Try again in ${minutes} min.`;
+    note.classList.add("is-shown");
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => note.classList.remove("is-shown"), 4500);
+  }
+
   function reflect(on = isOn()) {
+    const { left, minutes } = allowance();
     switches.forEach(button => {
       button.setAttribute("aria-checked", String(on));
-      button.title = on ? "Back to the normal page" : "See MyProgress in developer mode";
+      button.title = on ? "Back to the normal page (always free)"
+        : `See MyProgress in developer mode (${left ? `${left} of ${SWITCH_LIMIT} tries left in 15 min` : `try again in ${minutes} min`})`;
+      button.classList.toggle("is-limited", !left && !on);
     });
     if (field) field.value = on ? "1" : "";
   }
+  setInterval(() => { if (!flipping) reflect(); }, 30000);  // the toggle frees up again as old switches age out
   function setMode(on) {
     root.classList.toggle("dev-on", on);
     remember(on);
     reflect(on);
     if (on) practiceTouches();
+    openTab();
   }
+
+  // Developer mode's header is a row of file tabs: the one for the section on screen is the open file.
+  const tabs = [...document.querySelectorAll("[data-dev-tab]")].map(tab => [tab, document.getElementById(tab.getAttribute("href").slice(1))]);
+  function openTab() {
+    if (!tabs.length || !isOn()) return;
+    let open = tabs[0][0];
+    for (const [tab, section] of tabs) {
+      if (section && section.offsetParent !== null && section.getBoundingClientRect().top <= window.innerHeight * 0.35) open = tab;
+    }
+    tabs.forEach(([tab]) => (tab === open ? tab.setAttribute("aria-current", "location") : tab.removeAttribute("aria-current")));
+  }
+  let tabQueued = false;
+  window.addEventListener("scroll", () => {
+    if (tabQueued) return;
+    tabQueued = true;
+    requestAnimationFrame(() => { tabQueued = false; openTab(); });
+  }, { passive: true });
 
   // The flip: the page turns edge-on behind Matri, swaps, and turns back.
   const stage = document.querySelector("[data-site-stage]");
@@ -55,8 +122,16 @@
   let flipping = false;
   let wanted = null;  // a click while the page is turning: done as soon as the turn ends
   async function flip(on) {
-    if (flipping) { wanted = on; reflect(on); return; }
+    if (flipping) {  // decided when the turn ends
+      wanted = on;
+      reflect(on);
+      return;
+    }
     if (on === isOn()) return;
+    if (on) {  // a try; going back to the normal page is free
+      if (!allowance().left) { refuse(); return; }
+      countSwitch();
+    }
     flipping = true;
     reflect(on);  // the switch moves straight away
     try {
@@ -104,6 +179,7 @@
   switches.forEach(button => button.addEventListener("click", () => flip(button.getAttribute("aria-checked") !== "true")));
   document.querySelectorAll("[data-dev-wake]").forEach(button => button.addEventListener("click", () => flip(true)));
   reflect();
+  openTab();
   if (isOn()) practiceTouches();
 
   // Matri's eyes follow the pointer.

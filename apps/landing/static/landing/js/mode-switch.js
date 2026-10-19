@@ -1,7 +1,7 @@
 // The developer mode toggle, under Me (and on your own profile on phones): the page turns half way round with a short
 // "switching" scene, the switch is sent, and the next page turns the rest of the way in (mode-switch.css, from the
 // class the server puts on <body>). After switching on, a panel shows what's new; after switching off, a short note.
-// The server allows SWITCH_LIMIT switches in SWITCH_WINDOW and disables the toggle in between.
+// The server allows SWITCH_LIMIT tries (turning it on) in SWITCH_WINDOW; turning it off is always allowed.
 (() => {
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const shift = document.querySelector("[data-mode-shift]");

@@ -13,14 +13,40 @@ html.js [data-reveal].is-in{opacity:1;transform:none}
 /* The toggle in the header */
 .dev-switch{display:inline-flex;align-items:center;gap:9px;padding:4px 5px 4px 12px;border:1px solid color-mix(in srgb,var(--header-fg,#e2e8f0) 22%,transparent);border-radius:99px;background:transparent;color:var(--header-fg,#e2e8f0);font:600 13.5px var(--text);cursor:pointer;transition:border-color .2s,background .2s}
 .dev-switch:hover{border-color:#38bdf8}
-.dev-switch-track{position:relative;display:block;width:48px;height:24px;border-radius:99px;background:color-mix(in srgb,var(--header-fg,#e2e8f0) 14%,transparent);transition:background .3s,box-shadow .3s}
+.dev-switch{flex:none;white-space:nowrap}
+.dev-switch-track{flex:none;position:relative;display:block;width:48px;height:24px;border-radius:99px;background:color-mix(in srgb,var(--header-fg,#e2e8f0) 14%,transparent);transition:background .3s,box-shadow .3s}
 .dev-switch-knob{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .35s cubic-bezier(.3,1.5,.5,1)}
 .dev-switch-glyph{position:absolute;top:50%;left:24px;color:#7dd3fc;font:700 9.5px/1 "JetBrains Mono",ui-monospace,monospace;transform:translateY(-50%);transition:left .35s ease,color .3s}
 .dev-switch[aria-checked=true]{border-color:#38bdf8;background:rgba(56,189,248,.1)}
 .dev-switch[aria-checked=true] .dev-switch-track{background:#0284c7;box-shadow:0 0 14px rgba(56,189,248,.5)}
 .dev-switch[aria-checked=true] .dev-switch-knob{transform:translateX(24px)}
 .dev-switch[aria-checked=true] .dev-switch-glyph{left:6px;color:#fff}
-@media (max-width:640px){.dev-switch-label{display:none}.dev-switch{padding:4px}}
+.dev-switch.is-limited{opacity:.6}
+.dev-switch.is-refused{animation:dev-refuse .45s ease-in-out}
+@keyframes dev-refuse{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+.dev-limit{position:fixed;top:76px;right:24px;z-index:320;max-width:min(360px,calc(100vw - 32px));margin:0;padding:11px 14px;border:1px solid rgba(248,113,113,.4);border-radius:12px;background:#0b1324;color:#fecaca;font:14px/1.45 var(--text);box-shadow:0 14px 40px rgba(2,6,23,.35);opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s;pointer-events:none}
+.dev-limit.is-shown{opacity:1;transform:none}
+/* below these widths the label is read but not shown: the </> knob says it */
+@media (max-width:640px){.dev-switch-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.dev-switch{padding:4px}}
+/* Developer mode's header: its links are an editor's file tabs, and the section on screen is the open file */
+.dev-tab-icon{flex:none;width:8px;height:8px;border-radius:2px;background:#94a3b8}
+.dev-tab-icon.is-py{background:#3b82f6}.dev-tab-icon.is-js{background:#facc15}.dev-tab-icon.is-json{background:#fb923c}.dev-tab-icon.is-md{background:#4ade80}
+.dev-tab-icon.is-dir{width:10px;height:8px;border-radius:1px 2px 2px 2px;background:#a78bfa;box-shadow:-1px -2px 0 -1px #a78bfa}
+.site-nav .dev-tab{display:flex;align-items:center;gap:7px;color:#94a3b8;font:500 13px "JetBrains Mono",ui-monospace,monospace;white-space:nowrap}
+.site-nav .dev-tab:hover{color:#e6edf7;text-decoration:none}
+@media (min-width:861px){
+  html.dev-on .site-nav{align-self:stretch;gap:0;border-left:1px solid #1f2a40}
+  .site-nav .dev-tab{padding:0 13px;border-right:1px solid #1f2a40;transition:background .15s,color .15s}
+  .site-nav .dev-tab:hover{background:#0f1729}
+  .site-nav .dev-tab[aria-current]{background:#0a0f1c;color:#fff;box-shadow:inset 0 2px 0 #38bdf8}
+}
+/* next to developer mode's file tabs (the header is never wider than 1180px) the toggle is the compact pill; its
+   label is still read out */
+html.dev-on .dev-switch-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+html.dev-on .dev-switch{padding:4px}
+@media (max-width:1120px){.site-nav .dev-tab{padding:0 9px;font-size:12px}.dev-tab-icon{display:none}}
+@media (min-width:861px) and (max-width:1100px){.site-nav .dev-tab[href="#top"]{display:none}}  /* the logo goes home too */
+@media (max-width:860px){.site-nav .dev-tab[aria-current]{color:#fff;box-shadow:inset 2px 0 0 #38bdf8;padding-left:10px}}
 .site-actions .site-btn{white-space:nowrap}
 @media (max-width:420px){.site-actions{gap:6px}.site-actions .site-btn{padding-inline:12px}.dev-switch-track{width:42px}.dev-switch[aria-checked=true] .dev-switch-knob{transform:translateX(18px)}.dev-switch-glyph{left:21px}}
 
@@ -284,18 +310,19 @@ html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
   html.js [data-reveal]{opacity:1;transform:none;transition:none}
   .matri *,.dev-flip *,.dev-problem,.dev-quiz *,.dev-ide *,.rule-drops *,.rule-drops li::after,.dev-hero-matri,.dev-story-matri{animation:none!important;transition:none!important}
   .dev-switch *,.path-card,.path-icon,.matri-teaser .matri{transition:none}
+  .dev-switch.is-refused{animation:none}.dev-limit{transition:none}
 }
 
 /* Sign-up pages: the toggle above the form, and developer mode's story beside it */
 .auth-main{position:relative}
-.auth-tools{position:absolute;top:18px;right:20px;z-index:2}
-.auth-main .dev-switch{border-color:var(--field);color:var(--ink)}
-.auth-main .dev-switch-track{background:color-mix(in srgb,var(--ink) 12%,transparent)}
 .auth-story-body{display:flex;flex-direction:column;gap:28px}
 .dev-story{position:relative}
 .dev-story h1{max-width:calc(100% - 130px);margin:0}
 .dev-story-matri .matri{--size:120px}
-.dev-story .dev-chip{align-self:flex-start}
+.dev-story .dev-chip,.day-story .day-chip{align-self:flex-start}
+.day-story{position:relative}
+.day-story h1{max-width:calc(100% - 130px)}
+.day-chip{font-size:11.5px}
 .dev-story>p{margin:0}
 .dev-story-matri{position:absolute;top:-24px;right:0;animation:matri-float 6s ease-in-out infinite}
 .type-dev{display:flex;width:fit-content;align-items:center;gap:5px;margin-top:6px;padding:2px 9px;border:1px solid rgba(56,189,248,.4);border-radius:99px;color:#7dd3fc;font:600 11.5px "JetBrains Mono",ui-monospace,monospace;font-style:normal}
@@ -306,7 +333,7 @@ html.dev-on .auth-form-card{border-color:#1f2a40;background:#0f1729;box-shadow:0
 html.dev-on .site input[type=email],html.dev-on .site input[type=password],html.dev-on .site input[type=text],html.dev-on .site input[type=number],html.dev-on .site input[type=url],html.dev-on .site select,html.dev-on .site textarea{border-color:#2b3a55;background:#0a0f1c;color:#e6edf7}
 html.dev-on .account-type:hover{border-color:#38bdf8}
 html.dev-on .occupation-choice span{background:#0a0f1c}
-@media (max-width:900px){.auth-tools{position:static;display:flex;justify-content:flex-end;width:100%;margin-bottom:12px}.auth-main{align-content:start}.dev-story-matri .matri{--size:96px}}
+@media (max-width:900px){.auth-main{align-content:start}.dev-story-matri .matri{--size:96px}}
 
 /* Normal mode is daylight: a soft pearl sky with faint lavender, blue and peach light, white glass cards and dark
    ink, with the brain drawn in indigo (brain.js). Developer mode is the night editor (html.dev-on), so the two looks
@@ -447,4 +474,45 @@ html.dev-on .site-auth .type-icon{background:rgba(125,211,252,.12);color:#7dd3fc
 html.dev-on .site-auth .occupation-choice span{border-color:rgba(148,163,184,.28);background:rgba(5,9,19,.5);color:#e8eefb}
 html.dev-on .site-auth .signup-details,html.dev-on .site-auth .signup-chosen{border-color:rgba(148,163,184,.16);background:rgba(5,9,19,.4)}
 html.dev-on .site-auth .auth-note{background:rgba(13,21,40,.7)}
-@media (max-width:700px){.site-auth .auth-story{gap:18px;padding-block:28px}.site-auth .auth-points,.site-auth .auth-note{display:none}.site-auth .dev-story h1{max-width:none}.site-auth .dev-story-matri{display:none}}
+@media (max-width:700px){.site-auth .auth-story{gap:18px;padding-block:28px}.site-auth .auth-points,.site-auth .auth-note{display:none}.site-auth .dev-story h1,.site-auth .day-story h1{max-width:none}.site-auth .dev-story-matri{display:none}}
+
+/* Sign-up fits one screen: account types, or a type's whole form, without scrolling (desktop and laptop) */
+.site-auth .auth-split{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);min-height:100vh}
+.site-auth .auth-story{justify-content:center;gap:20px;padding:28px clamp(24px,4vw,56px)}
+.site-auth .auth-story-body{gap:18px}
+.site-auth .auth-points{gap:12px}
+.site-auth .auth-note{margin-top:4px}
+.site-auth .auth-main{padding:10px 24px;align-content:center}
+.site-auth .auth-form-card{width:min(660px,100%);padding:22px 28px}
+.site-auth .auth-form-card h2{font-size:24px}
+.signup-top{display:flex;align-items:center;gap:14px;margin-bottom:10px;font-size:14px}
+.signup-top .back-link{margin:0}
+.signup-top .signup-step{margin:0}
+.signup-have{margin-left:auto;color:var(--muted)}
+.site-auth .card-sub{margin:4px 0 14px}
+.site-auth .account-types{margin-bottom:14px}
+.site-auth .account-type{padding:12px 14px}
+.site-auth .card-foot{margin-top:12px;padding-top:12px}
+.signup-title{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;margin-bottom:14px}
+.signup-title h2{margin:0}
+.site-auth .signup-chosen{display:inline-flex;gap:8px;margin:0;padding:5px 12px 5px 6px;border-radius:99px;font-size:14px}
+.site-auth .signup-chosen .type-icon{width:28px;height:28px;border-radius:50%}
+.site-auth .signup-chosen a{margin-left:4px;font-weight:600}
+.site-auth .signup-dev-note{gap:8px;margin:0 0 12px;padding:8px 12px;font-size:13.5px}
+.site-auth .signup-dev-note svg{flex:none;color:#7dd3fc}
+.site-auth .signup-details{margin-bottom:12px;padding:12px 14px 0}
+.site-auth .signup-details legend{font-size:13.5px}
+.site-auth .occupation-choice{margin-bottom:12px}
+.site-auth .occupation-choice span{height:40px}
+.site-auth .field{gap:4px;margin-bottom:12px}
+.site-auth .field label{font-size:13.5px}
+.site-auth input[type=email],.site-auth input[type=password],.site-auth input[type=text],.site-auth input[type=number],.site-auth input[type=url],.site-auth select{height:40px}
+.site-auth textarea{padding:8px 12px}
+.name-row.is-three{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr)}
+.signup-hint{margin:-4px 0 12px}
+.signup-submit{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.signup-submit .check{margin:0}
+.signup-submit .site-btn{flex:none;margin:0}
+@media (max-width:1100px){.site-auth .auth-split{grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr)}.site-auth .auth-story .auth-points small{display:none}}
+@media (max-width:900px){.site-auth .auth-split{grid-template-columns:minmax(0,1fr)}.signup-submit{flex-direction:column;align-items:stretch}.signup-submit .site-btn{width:100%}.signup-have{display:none}}
+@media (max-width:560px){.name-row.is-three{grid-template-columns:minmax(0,1fr)}}
