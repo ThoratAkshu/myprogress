@@ -22,7 +22,7 @@ from django.utils.text import slugify
 from django.views.generic import TemplateView
 from apps.accounts.access import user_role
 from apps.accounts.emails import send_verification_email, user_from_verification_token
-from apps.accounts.forms import ChannelForm, EmailLoginForm, ProfileForm, RegistrationForm
+from apps.accounts.forms import ChannelForm, EditProfileForm, EmailLoginForm, RegistrationForm
 from apps.accounts.models import BRAND_COLORS, Follow, Profile
 from apps.common.http import redirect_back
 from apps.core.feed import FEED_FILTERS, build_feed, people_you_may_know, trending_posts
@@ -30,6 +30,8 @@ from apps.core.network import NETWORK_ROLES, NETWORK_SORTS, NETWORK_VIEWS, decor
 from apps.core.models import ContentView, DailyLoopCompletion, EarningTransaction, GitAccessToken, LearningPost, PostLike, Project, ProjectMilestone, Repository, RepositoryCollaborator
 from apps.earnings.models import EarningSettings
 from apps.practice.services import SWITCHED as PRACTICE_SWITCHED, WANTS_ON as PRACTICE_WANTS_ON, enable as enable_practice
+from apps.organizations.forms import OrganizationDetailsForm
+from apps.organizations.models import Organization
 from apps.organizations.services import create_organization, student_summary
 from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
@@ -649,22 +651,24 @@ def public_profile_view(request, handle):
     context["email_visible"] = bool(owner.email) and (request.user == owner or profile.show_email or context.get("contact_status") == "accepted")
     return render(request, "landing/profile.html", context)
 @login_required(login_url="landing:home")
-@require_POST
 @rate_limit("profile", 30, 600)
 def update_profile_view(request):
+    """Edit profile: every detail about you on one page. Students and professionals, recruiters and organizations
+    each get their own questions; an organization also edits its institute. The forms work on copies, so a page sent
+    back with errors still shows what's saved everywhere else."""
     profile, _ = Profile.objects.get_or_create(user=request.user)
-    form = ProfileForm(request.POST, instance=profile)
-    if form.is_valid():
-        form.save()
+    organization = request.user.organizations_owned.order_by("created_at").first() if profile.role == "organization" else None
+    data, files = (request.POST, request.FILES) if request.method == "POST" else (None, None)
+    form = EditProfileForm(data, files, instance=Profile.objects.select_related("user").get(pk=profile.pk))
+    organization_form = OrganizationDetailsForm(data, instance=Organization.objects.get(pk=organization.pk)) if organization else None
+    if request.method == "POST" and all([form.is_valid(), organization_form.is_valid() if organization_form else True]):
+        if organization_form:
+            organization_form.save()
+        saved = form.save()
         refresh_rank(request.user)
-        messages.success(request, "Portfolio updated.")
-    else:
-        for errors in form.errors.values():
-            for error in errors:
-                messages.error(request, error)
-    if user_role(request.user) != "developer":
-        return redirect("landing:public_profile", handle=profile.handle)
-    return redirect("landing:workspace_section", section="portfolio")
+        messages.success(request, "Profile saved. This is how everyone sees it.")
+        return redirect("landing:public_profile", handle=saved.handle)
+    return render(request, "landing/edit_profile.html", {"section": "profile", "form": form, "organization_form": organization_form, "organization": organization, "profile": profile, "owner": request.user})
 @login_required(login_url="landing:home")
 @rate_limit("channel", 30, 600)
 def channel_settings_view(request):

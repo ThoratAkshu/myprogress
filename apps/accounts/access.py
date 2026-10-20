@@ -29,7 +29,8 @@ POLICY = {
     # Public pages, sign-in and account recovery.
     "landing:home": PUBLIC, "landing:register": PUBLIC, "landing:register_details": PUBLIC, "landing:login": PUBLIC, "landing:logout": PUBLIC,
     "landing:two_step": PUBLIC,  # the second step of signing in, before there's an account to check
-    "landing:verify_email": PUBLIC, "landing:health": PUBLIC, "landing:search": PUBLIC, "landing:search_suggest": PUBLIC,
+    "landing:verify_email": PUBLIC, "landing:confirm_email_change": PUBLIC, "landing:undo_email_change": PUBLIC,  # links sent by email; the token says whose account
+    "landing:health": PUBLIC, "landing:search": PUBLIC, "landing:search_suggest": PUBLIC,
     "landing:public_profile": PUBLIC, "landing:project": PUBLIC,
     "landing:password_reset": PUBLIC, "landing:password_reset_done": PUBLIC, "landing:password_reset_confirm": PUBLIC, "landing:password_reset_complete": PUBLIC,
     # Git over HTTP signs in with an account email and write key; the repository decides who may read or push.

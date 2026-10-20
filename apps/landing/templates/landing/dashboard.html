@@ -4,7 +4,7 @@
 <aside class="feed-left">
 <section class="card profile-mini"><div class="profile-mini-cover"></div><a class="avatar avatar-lg {{ request.user|avatar_tone }}" href="{% url 'landing:public_profile' profile.handle %}">{{ request.user|face }}</a><a class="profile-mini-name" href="{% url 'landing:public_profile' profile.handle %}">{{ request.user.get_full_name|default:profile.handle }}</a><p>{{ profile.headline|default:"Add a headline so people know what you build." }}</p>
 <dl class="mini-stats"><div><dt>Profile viewers (30 days)</dt><dd>{{ portfolio_views }}</dd></div><div><dt>Followers</dt><dd>{{ follower_count }}</dd></div><div><dt>Progress score</dt><dd>{{ profile.score }}{% if profile.rank and profile.score %} · #{{ profile.rank }}{% endif %}</dd></div></dl>
-<a class="card-footer-link" href="{% url 'landing:workspace_section' 'portfolio' %}">{% if setup_percent < 100 %}Complete your profile ({{ setup_percent }}%){% else %}Edit profile{% endif %}</a></section>
+<a class="card-footer-link" href="{% url 'landing:update_profile' %}">{% if setup_percent < 100 %}Complete your profile ({{ setup_percent }}%){% else %}Edit profile{% endif %}</a></section>
 <nav class="card side-links" aria-label="Shortcuts"><a href="{% url 'landing:workspace_section' 'projects' %}">{% icon "box" 18 %}My projects<span>{{ project_count }}</span></a><a href="{% url 'landing:workspace_section' 'learning' %}?tab=mine">{% icon "book-open" 18 %}My posts<span>{{ learning_count }}</span></a><a href="{% url 'landing:workspace_section' 'rankings' %}">{% icon "award" 18 %}Rankings</a><a href="{% url 'landing:workspace_section' 'earnings' %}">{% icon "dollar" 18 %}Earnings</a></nav>
 </aside>
 <section class="feed-center" aria-label="Feed">

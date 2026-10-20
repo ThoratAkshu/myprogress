@@ -1802,3 +1802,42 @@ fieldset.visibility-choice input[type=radio]{flex:none;display:block;width:auto;
 .checklist-show{margin:-6px 0 0}
 .company-checklist li b a{color:var(--violet);text-decoration:none}
 .company-checklist li b a:hover{text-decoration:underline}
+/* Edit profile: every detail on one page, in the channel form's cards; the save bar stays in reach on a long page */
+.profile-wide{grid-column:1/-1}
+.channel-form-grid>.card,.profile-stack>.card{margin-top:0}
+.channel-settings .page-title>.button{flex:none;white-space:nowrap}
+.profile-stack{display:grid;gap:16px;align-content:start}
+.profile-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.profile-photo-row{display:flex;align-items:center;gap:20px}
+.profile-photo-row .avatar-xl{flex:none;width:104px;height:104px;font-size:34px;transition:opacity .2s}
+.profile-photo-row .avatar-xl.is-removed{opacity:.35}
+.profile-photo-row .logo-upload{display:grid;flex:1;gap:6px;min-width:0}
+.profile-aside-link{display:inline-flex;align-items:center;gap:6px;width:fit-content;color:var(--violet);font-size:13px;font-weight:600;text-decoration:none}
+.profile-aside-link:hover{text-decoration:underline}
+.channel-section select{width:100%;height:42px;padding:0 10px;border:1px solid #d5dce5;border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.handle-field{display:flex;align-items:baseline;border:1px solid #d5dce5;border-radius:8px;background:var(--surface);overflow:hidden}
+.handle-field:focus-within{border-color:var(--violet);box-shadow:0 0 0 3px var(--violet-soft)}
+.handle-field span{flex:none;max-width:55%;padding-left:12px;overflow:hidden;color:var(--muted);font-size:14px;text-overflow:ellipsis;white-space:nowrap}
+.channel-section .handle-field input[type=text]{flex:1;min-width:0;padding-left:1px;border:0;border-radius:0;background:transparent;box-shadow:none;outline:0}
+.profile-toggle{align-items:flex-start!important;gap:10px!important;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.profile-toggle input{flex:none;margin-top:2px!important}
+.channel-section label.profile-toggle{margin:0}
+.channel-section .form-field,.channel-link-field{align-content:start}  /* an error under one field doesn't stretch its neighbour */
+.profile-toggle span{display:grid;gap:2px}
+.profile-toggle b{font-size:13px}
+.profile-toggle small{color:var(--muted);font-size:12px;font-weight:500;line-height:1.45}
+.profile-signin{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.profile-signin>.muted{flex-basis:100%}
+.profile-signin b{font-size:15px;overflow-wrap:anywhere}
+.profile-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:99px;background:#f1f5f9;color:#475569;font-size:12px;font-style:normal;font-weight:700}
+.profile-badge.is-ok{background:#dcfce7;color:#166534}
+#sign-in .button{justify-self:start}
+.profile-actions{position:sticky;bottom:12px;z-index:5;padding:12px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 10px 30px rgba(15,23,42,.12)}
+.profile-settings .channel-section{scroll-margin-top:84px}
+.channel-more{align-content:start}
+.channel-more .button{justify-self:start}
+.security-form .errorlist{margin:-4px 0 0;padding:0;list-style:none;color:var(--danger);font-size:12px;font-weight:600}
+.security-form small{line-height:1.45}
+@media (max-width:780px){.profile-actions{bottom:calc(74px + env(safe-area-inset-bottom))}}
+@media (max-width:640px){.profile-links{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:520px){.profile-photo-row{flex-direction:column;align-items:flex-start}}

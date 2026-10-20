@@ -1,7 +1,20 @@
 {% extends "landing/app_base.html" %}{% load static ui %}
 {% block title %}Security{% endblock %}
 {% block content %}<div class="section-page security-page">
-<header class="page-title"><div><span class="kicker">YOUR ACCOUNT</span><h1>Security</h1><p>Keep your account yours, even if someone learns your password.</p></div></header>
+<header class="page-title"><div><span class="kicker">YOUR ACCOUNT</span><h1>Security</h1><p>How you sign in: your email, your password and two-step sign-in. Everything else about you is in <a href="{% url 'landing:update_profile' %}">Edit profile</a>.</p></div></header>
+<section class="card security-card" id="email"><header class="security-head"><div><h2>{% icon "mail" 18 %} Email</h2><p class="muted">You sign in with <b>{{ user.email }}</b>. A new email only takes effect once you open the link we send to it, so a typo can't lock you out.</p></div><em class="security-status{% if nav_profile.email_verified_at %} is-on{% endif %}">{% if nav_profile.email_verified_at %}Confirmed{% else %}Not confirmed{% endif %}</em></header>
+<details class="security-action"{% if email_form.errors %} open{% endif %}><summary>Change email</summary><form method="post" class="security-form" novalidate>{% csrf_token %}<input type="hidden" name="action" value="email">
+<label>New email<input type="email" name="email" required maxlength="150" autocomplete="email" value="{{ email_form.email.value|default:'' }}"></label>{{ email_form.email.errors }}
+<label>Your password<input type="password" name="password" required autocomplete="current-password"></label>{{ email_form.password.errors }}
+<button class="button primary">Send the link</button>{% if nav_profile.role == "recruiter" %}<small class="muted">Use your work email, so developers know which company is asking.</small>{% endif %}</form></details>
+</section>
+<section class="card security-card" id="password"><header class="security-head"><div><h2>{% icon "lock" 18 %} Password</h2><p class="muted">Changing it keeps you signed in here and signs you out on every other device.</p></div></header>
+<details class="security-action"{% if password_form.errors %} open{% endif %}><summary>Change password</summary><form method="post" class="security-form" novalidate>{% csrf_token %}<input type="hidden" name="action" value="password">
+<label>Current password<input type="password" name="old_password" required autocomplete="current-password"></label>{{ password_form.old_password.errors }}
+<label>New password<input type="password" name="new_password1" required minlength="8" autocomplete="new-password"></label>{{ password_form.new_password1.errors }}
+<label>New password again<input type="password" name="new_password2" required minlength="8" autocomplete="new-password"></label>{{ password_form.new_password2.errors }}
+<small class="muted">At least 8 characters, not only numbers, not a common password, and not close to your name or email.</small><button class="button primary">Change password</button></form></details>
+</section>
 <section class="card security-card" id="two-step"><header class="security-head"><div><h2>{% icon "shield" 18 %} Two-step sign-in</h2><p class="muted">After your password, we ask for a 6-digit code from an authenticator app on your phone, like Google Authenticator, Microsoft Authenticator or 1Password.</p></div><em class="security-status{% if device.enabled_at %} is-on{% endif %}">{% if device.enabled_at %}On{% else %}Off{% endif %}</em></header>
 {% if requiring %}<p class="security-note">{% icon "briefcase" 15 %}<span>{% for company in requiring %}{{ company.name }}{% if not forloop.last %}, {% endif %}{% endfor %} require{{ requiring|length|pluralize:"s," }} two-step sign-in to reach {{ requiring|length|pluralize:"its,their" }} repositories.</span></p>{% endif %}
 {% if new_codes %}<div class="recovery-codes" data-recovery-codes><h3>Save your recovery codes</h3><p>If you lose your phone, each code signs you in once. Keep them somewhere safe, like a password manager. We won't show them again.</p>

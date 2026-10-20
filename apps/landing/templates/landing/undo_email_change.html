@@ -1,0 +1,8 @@
+{% extends "landing/public_base.html" %}
+{% block title %}Undo the email change{% endblock %}
+{% block kicker %}ACCOUNT{% endblock %}
+{% block content %}<section class="workspace-card auth-panel"><span class="kicker">WASN'T YOU?</span><h1>Put your email back</h1>
+<p>Your MyProgress account now signs in with <b>{{ changed_to }}</b>. If you didn't change it, someone knows your password.</p>
+<p>This puts <b>{{ old_email }}</b> back, signs everyone out, and clears your password. On the next page, enter {{ old_email }} and we'll send it a link to choose a new password.</p>
+<form method="post">{% csrf_token %}<button class="button primary">Put {{ old_email }} back</button></form>
+<a class="auth-back" href="{% url 'landing:home' %}">← I made the change, leave it</a></section>{% endblock %}

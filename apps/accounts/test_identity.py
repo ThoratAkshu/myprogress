@@ -1,4 +1,4 @@
-"""Who someone is: asked at sign-up for each account type, editable in channel settings, and searchable by recruiters."""
+"""Who someone is: asked at sign-up for each account type, editable in Edit profile, and searchable by recruiters."""
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import TestCase
@@ -91,16 +91,16 @@ class SignUpIdentityTests(TestCase):
 
 
 class LaterIdentityTests(TestCase):
-    """Accounts made before sign-up asked are reminded, and anyone can change their answers in channel settings."""
+    """Accounts made before sign-up asked are reminded, and anyone can change their answers in Edit profile."""
     def save(self, user, **answers):
         self.client.force_login(user)
-        return self.client.post(reverse("landing:channel_settings"), {"channel_name": "", "headline": "", "bio": "", "location": "", "brand_color": "ocean", **answers})
+        return self.client.post(reverse("landing:update_profile"), {"first_name": user.first_name, "handle": user.profile.handle, "headline": "", "bio": "", **answers})
 
     def test_older_accounts_are_reminded_until_they_answer(self):
         developer = make_user("dev@example.com")
         self.client.force_login(developer)
         self.assertContains(self.client.get(reverse("landing:dashboard")), "Tell people who you are")
-        page = self.client.get(reverse("landing:channel_settings"))
+        page = self.client.get(reverse("landing:update_profile"))
         self.assertContains(page, "Who you are")
         self.assertNotContains(page, "Tell people who you are")
         self.assertContains(self.save(developer), "Choose whether you")

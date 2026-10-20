@@ -115,7 +115,7 @@ class RoleBoundaryTests(TestCase):
 
     def test_changing_the_role_in_the_page_does_nothing(self):
         self.client.force_login(self.recruiter)
-        self.client.post(reverse("landing:update_profile"), {"handle": "hiring-team", "headline": "Hiring", "role": "developer", "score": "999", "rank": "1", "email_verified_at": "2026-01-01"})
+        self.client.post(reverse("landing:update_profile"), {"first_name": "Hira", "handle": "hiring-team", "headline": "Hiring", "company_name": "Acme", "role": "developer", "score": "999", "rank": "1", "email_verified_at": "2026-01-01"})
         profile = Profile.objects.get(user=self.recruiter)
         self.assertEqual((profile.role, profile.email_verified_at, profile.headline), ("recruiter", None, "Hiring"))
         self.assertNotEqual(profile.score, 999)  # the score is worked out from real activity, never taken from the form

@@ -46,24 +46,37 @@ class ChannelTests(TestCase):
 
     def save(self, user, **data):
         self.client.force_login(user)
-        fields = {"channel_name": "", "headline": "", "bio": "", "location": "", "brand_color": "ocean", **IDENTITY, **data}
-        return self.client.post(reverse("landing:channel_settings"), fields)
+        return self.client.post(reverse("landing:channel_settings"), {"channel_name": "", "brand_color": "ocean", **data})
+
+    def edit(self, user, **data):
+        """Edit profile, where the headline, about and links are."""
+        self.client.force_login(user)
+        fields = {"first_name": user.first_name, "last_name": user.last_name, "handle": user.profile.handle, "headline": "", "bio": "", **IDENTITY}
+        organization = user.organizations_owned.first()
+        if organization:
+            fields.update({"org-name": organization.name, "org-kind": organization.kind, "org-city": organization.city, "org-website": organization.website, "org-about": organization.about})
+        return self.client.post(reverse("landing:update_profile"), {**fields, **data})
 
     def test_every_account_type_can_customize_its_channel(self):
         for user in [self.institute, make_user("hr@company.example", role="recruiter"), make_user("dev@example.com")]:
             self.client.force_login(user)
             self.assertContains(self.client.get(reverse("landing:channel_settings")), "Customize your channel")
+            self.assertContains(self.client.get(reverse("landing:update_profile")), 'name="link_youtube"')
         page = self.client.get(reverse("landing:channel_settings"))
         self.assertContains(page, "Make one")
-        self.assertContains(page, 'name="link_youtube"')
+        self.assertContains(page, reverse("landing:update_profile"))
+        self.assertNotContains(page, 'name="link_youtube"')  # what the channel says is in Edit profile
+        self.assertNotContains(page, 'name="headline"')
 
     def test_logo_banner_colour_and_links_are_saved_cleaned_up(self):
-        response = self.save(self.institute, channel_name="Sunrise Academy", headline="Coding classes in Pune", brand_color="emerald", avatar=picture((900, 500)), banner=picture((1800, 600), "JPEG", "banner.jpg"),
-                             link_youtube="https://www.youtube.com/@sunrise", link_website="https://sunrise.example", link_instagram="")
+        response = self.save(self.institute, channel_name="Sunrise Academy", brand_color="emerald", avatar=picture((900, 500)), banner=picture((1800, 600), "JPEG", "banner.jpg"))
         profile = Profile.objects.get(user=self.institute)
         self.assertRedirects(response, reverse("landing:public_profile", args=[profile.handle]))
         self.assertEqual((profile.channel_name, profile.brand_color), ("Sunrise Academy", "emerald"))
-        self.assertEqual(profile.links, {"youtube": "https://www.youtube.com/@sunrise", "website": "https://sunrise.example"})
+        self.edit(self.institute, headline="Coding classes in Pune", link_youtube="https://www.youtube.com/@sunrise", link_website="https://sunrise.example", link_instagram="")
+        profile.refresh_from_db()
+        self.assertEqual((profile.headline, profile.links), ("Coding classes in Pune", {"youtube": "https://www.youtube.com/@sunrise", "website": "https://sunrise.example"}))
+        self.assertTrue(profile.avatar)  # saving Edit profile without a new photo keeps the logo
         with Image.open(profile.avatar.path) as logo:
             self.assertEqual((logo.format, logo.size), ("PNG", (400, 400)))  # re-encoded, cropped square
         with Image.open(profile.banner.path) as banner:
@@ -77,10 +90,11 @@ class ChannelTests(TestCase):
         self.assertEqual((profile.avatar.name, profile.banner.name), ("", ""))
 
     def test_bad_links_and_files_are_refused(self):
-        response = self.save(self.institute, link_youtube="https://evil.example/watch", link_x="http://x.com/sunrise", avatar=SimpleUploadedFile("logo.png", b"not really an image", content_type="image/png"))
+        response = self.edit(self.institute, link_youtube="https://evil.example/watch", link_x="http://x.com/sunrise", avatar=SimpleUploadedFile("logo.png", b"not really an image", content_type="image/png"))
         self.assertContains(response, "That isn&#x27;t a YouTube address")
         self.assertContains(response, "Use a full https:// address for X")
         self.assertContains(response, "Upload a valid image")
+        self.assertContains(self.save(self.institute, avatar=SimpleUploadedFile("logo.png", b"not really an image", content_type="image/png")), "Upload a valid image")
         svg = SimpleUploadedFile("logo.svg", b'<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>', content_type="image/svg+xml")
         self.assertContains(self.save(self.institute, avatar=svg), "Upload a valid image")
         self.assertContains(self.save(self.institute, banner=picture((300, 100))), "at least 600 pixels wide")

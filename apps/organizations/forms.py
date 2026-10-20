@@ -17,6 +17,22 @@ class OrganizationForm(forms.ModelForm):
         fields = ["name", "kind", "city", "website", "about", "join_requires_approval", "show_leaderboard", "parent_digest"]
         labels = {"name": "Organization name", "kind": "Type", "about": "About", "join_requires_approval": "Approve new members before they join", "show_leaderboard": "Show the class leaderboard to students", "parent_digest": "Email parents a weekly summary"}
         widgets = {"about": forms.Textarea(attrs={"rows": 3, "placeholder": "What you teach and who it's for."}), "name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"})}
+class OrganizationDetailsForm(forms.ModelForm):
+    """An organization account's institute, edited from Edit profile: how students and parents know it. Joining and
+    class rules stay in the organization's own Settings."""
+    about = forms.CharField(max_length=2000, required=False, label="About the institute", widget=forms.Textarea(attrs={"rows": 4, "placeholder": "What you teach and who it's for."}))
+    class Meta:
+        model = Organization
+        fields = ["name", "kind", "city", "website", "about"]
+        labels = {"name": "Institute name", "kind": "Type"}
+        widgets = {"name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"}),
+                   "city": forms.TextInput(attrs={"placeholder": "Pune"}), "website": forms.URLInput(attrs={"placeholder": "https://your-institute.com"})}
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("label_suffix", "")
+        kwargs.setdefault("prefix", "org")
+        super().__init__(*args, **kwargs)
+    def clean_name(self):
+        return " ".join(self.cleaned_data["name"].split())
 class InviteForm(forms.Form):
     emails = forms.CharField(widget=forms.Textarea(attrs={"rows": 4, "placeholder": "one@example.com, two@example.com\nor one email per line"}), label="Email addresses")
     role = forms.ChoiceField(choices=[("student", "Student"), ("teacher", "Teacher")], initial="student")

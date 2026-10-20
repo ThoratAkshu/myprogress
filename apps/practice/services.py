@@ -263,6 +263,7 @@ def palette(user):
         go("Notifications", reverse("notifications:list"), "inbox.log"),
         go("Companies", reverse("companies:list"), "companies/"),
         go("Your profile", reverse("landing:public_profile", args=[handle]), f"@{handle}") if handle else None,
+        go("Edit profile", reverse("landing:update_profile"), "profile.json"),
         go("Customize your channel", reverse("landing:channel_settings"), "channel.css"),
         go("Security", reverse("landing:security"), "security.lock"),
     ]

@@ -6,8 +6,6 @@
   const preview = form.querySelector("[data-channel-preview]");
   const find = selector => form.querySelector(selector);
   const nameOut = find("[data-preview-name]");
-  const taglineOut = find("[data-preview-tagline]");
-  const linksOut = find("[data-preview-links]");
   const bannerOut = find("[data-preview-banner]");
   const logoInput = form.elements.avatar;
   const bannerInput = form.elements.banner;
@@ -31,21 +29,8 @@
   logoSpots.forEach(spot => { spot.dataset.initial = spot.innerHTML; });
   bannerOut.dataset.initial = bannerOut.innerHTML;
 
-  // Basics and links, as you type.
+  // The name, as you type. The tagline and links come from Edit profile.
   form.elements.channel_name.addEventListener("input", () => { nameOut.textContent = form.elements.channel_name.value.trim() || nameOut.dataset.default; });
-  form.elements.headline.addEventListener("input", () => { taglineOut.textContent = form.elements.headline.value.trim(); });
-  const linkInputs = [...form.querySelectorAll('input[name^="link_"]')];
-  const linkIcons = Object.fromEntries(linkInputs.map(input => [input.name, input.closest(".channel-link-field").querySelector("svg")?.outerHTML || ""]));
-  function renderLinks() {
-    linksOut.replaceChildren(...linkInputs.filter(input => /^https:\/\/\S+\.\S+/.test(input.value.trim())).map(input => {
-      const item = document.createElement("li");
-      const label = input.closest(".channel-link-field").querySelector("label").textContent.trim();
-      item.innerHTML = `<span>${linkIcons[input.name]}<span></span></span>`;
-      item.querySelector("span span").textContent = label;
-      return item;
-    }));
-  }
-  linkInputs.forEach(input => input.addEventListener("input", renderLinks));
 
   // Brand colour: the banner gradient when there's no banner image.
   form.querySelectorAll('input[name="brand_color"]').forEach(radio => radio.addEventListener("change", () => {
@@ -127,14 +112,4 @@
     }, "image/png");
   });
   drawLogo();
-})();
-
-// Who you are: show the student or the working professional questions.
-(() => {
-  const choice = document.querySelector("[data-occupation-switch]");
-  if (!choice) return;
-  choice.addEventListener("change", () => {
-    const chosen = choice.querySelector("input:checked")?.value || "";
-    document.querySelectorAll("[data-for-occupation]").forEach(group => { group.hidden = group.dataset.forOccupation !== chosen; });
-  });
 })();
