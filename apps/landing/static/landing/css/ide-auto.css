@@ -1986,7 +1986,44 @@ body.ide .profile-badge{background:var(--ide-panel);color:var(--ide-muted)}
 body.ide .profile-badge.is-ok{background:hsla(141,70%,60%,.13);color:hsl(143,74%,72%)}
 body.ide .profile-actions{border:1px solid var(--line);background:var(--surface)}
 body.ide .security-form .errorlist{color:var(--danger)}
-/* practice.css */
+body.ide .feed-video{background:#000}
+body.ide .feed-video-progress{background:rgba(255,255,255,.22)}
+body.ide .feed-video-progress::after{background:var(--ide-panel)}
+body.ide .video-sound{border:0;background:rgba(2,6,23,.6);color:#fff}
+body.ide .video-sound:hover{background:rgba(2,6,23,.8)}
+body.ide .reel-state{color:#fff}
+body.ide .reel-frame{background:#000}
+body.ide .reel-embed{background:#000}
+body.ide .reel-embed iframe{border:0}
+body.ide .reel-cover{color:#fff}
+body.ide .reel-seek{border:0;background:transparent}
+body.ide .reel-seek::-webkit-slider-runnable-track{background:linear-gradient(90deg,#fff calc(var(--progress,0) * 100%),rgba(255,255,255,.3) 0)}
+body.ide .reel-seek::-webkit-slider-thumb{background:var(--ide-panel)}
+body.ide .reel-seek::-moz-range-track{background:rgba(255,255,255,.3)}
+body.ide .reel-seek::-moz-range-progress{background:var(--ide-panel)}
+body.ide .reel-seek::-moz-range-thumb{border:0;background:var(--ide-panel)}
+body.ide .reel-info{color:var(--ink)}
+body.ide .reel-name{color:inherit}
+body.ide .reel-follow{border:1px solid var(--violet);background:var(--ide-accent-strong);color:#fff}
+body.ide .reel-follow.is-following{border-color:var(--line);background:transparent;color:var(--ink)}
+body.ide .reel .reel-title{color:inherit}
+body.ide .reel-title a{color:inherit}
+body.ide .reel-summary{color:var(--muted)}
+body.ide .reel-meta{color:var(--muted)}
+body.ide .reel-project{border:1px solid var(--line);color:var(--ink)}
+body.ide .reel-project:hover{border-color:var(--violet);color:var(--violet)}
+body.ide .reel-action{border:0;background:none;color:var(--ink)}
+body.ide .reel-action.liked{color:#ef4444}
+body.ide .reels-nav button{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .reels-nav button:hover:not(:disabled){border-color:var(--violet);color:var(--violet)}
+body.ide .reels-end{color:var(--muted)}
+body.ide .reels-end b{color:var(--ink)}
+@media (max-width:780px){body.ide .reel-info,body.ide .reel.is-tall .reel-info{background:linear-gradient(transparent,rgba(0,0,0,.7));color:#fff}
+body.ide .reel-summary,body.ide .reel-meta{color:rgba(255,255,255,.82)}
+body.ide .reel-project{border-color:rgba(255,255,255,.4);color:#fff}
+body.ide .reel-follow.is-following{border-color:var(--ide-line);color:#fff}
+body.ide .reel-action{color:#fff}
+}/* practice.css */
 body.ide .tok-key{color:var(--tok-key)}
 body.ide .tok-str{color:var(--tok-str)}
 body.ide .tok-num{color:var(--tok-num)}

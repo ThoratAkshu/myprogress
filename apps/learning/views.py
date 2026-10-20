@@ -10,7 +10,7 @@ from apps.common.views import stored_file_response
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F
+from django.db.models import Case, Count, Exists, F, OuterRef, Q, When
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -28,7 +28,7 @@ from apps.organizations.services import announce_lesson, lesson_organization, me
 from .assist import ACTIONS as ASSIST_ACTIONS, AssistUnavailable, assist
 from .formatting import article_outline, render_article
 from .forms import ArticleImageForm, LearningPostForm
-from .media import note_duration, place_post_files, youtube_embed_url
+from .media import YOUTUBE_VIDEO_REGEX, note_duration, place_post_files, youtube_embed_url
 from .studio import StudioError, branch_paths, draft_post, lecture_plan, project_branches
 from .timeline import parse_captions, parse_chapters
 MAX_INSERT_BYTES = 300_000
@@ -337,7 +337,44 @@ def like_view(request, post_id):
         notify(post.author, request.user, "like", f"{_display_name(request.user)} liked “{post.title}”", reverse("learning:detail", args=[post.pk]))
     else:
         like.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":  # feeds and Watch like without leaving the page
+        return JsonResponse({"liked": created, "likes": post.likes.count()})
     return redirect_back(request, f'{reverse("learning:detail", args=[post.pk])}#engagement')
+WATCH_BATCH = 6
+def _watch_posts(user):
+    """Public videos that play here: uploaded ones and YouTube links. Ones you haven't watched come first, then ones
+    you have, then your own; newest first within each."""
+    seen = ContentView.objects.filter(post=OuterRef("pk"), viewer=user)
+    return (LearningPost.objects.filter(is_public=True).filter(~Q(video_file="") | Q(video_url__regex=YOUTUBE_VIDEO_REGEX))
+            .select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True), seen=Exists(seen))
+            .order_by(Case(When(author=user, then=2), When(seen=True, then=1), default=0), "-published_at"))
+def _reels_context(user, reels):
+    for post in reels:
+        post.embed_url = "" if post.video_file else youtube_embed_url(post.video_url)
+        post.is_tall = "/shorts/" in post.video_url
+    authors = {post.author_id for post in reels}
+    return {"reels": reels, "liked_ids": set(PostLike.objects.filter(user=user, post__in=reels).values_list("post_id", flat=True)),
+            "following_ids": set(user.following_relationships.filter(following_id__in=authors).values_list("following_id", flat=True))}
+@login_required(login_url="landing:home")
+def watch_view(request):
+    """Watch: public videos one at a time at full height, each playing as it comes into view, like Reels. ?post=
+    starts with that video. ?more=1 returns the next few, leaving out the ones already on the page (?shown=)."""
+    posts = _watch_posts(request.user)
+    if request.GET.get("more"):
+        shown = [int(value) for value in request.GET.get("shown", "").split(",") if value.isdigit()][:300]
+        return render(request, "learning/_reels.html", _reels_context(request.user, list(posts.exclude(pk__in=shown)[:WATCH_BATCH])))
+    start = request.GET.get("post", "")
+    first = posts.filter(pk=start).first() if start.isdigit() else None
+    reels = [first, *posts.exclude(pk=first.pk)[:WATCH_BATCH - 1]] if first else list(posts[:WATCH_BATCH])
+    return render(request, "learning/watch.html", {"section": "learning", **_reels_context(request.user, reels)})
+@login_required(login_url="landing:home")
+@require_POST
+@rate_limit("watched", 120, 600)
+def watched_view(request, post_id):
+    """A video played for a few seconds in a feed or in Watch. That counts as a view, like opening the post: once
+    per browser session a day, and never the author's own."""
+    record_post_view(request, _visible_post(request, post_id))
+    return HttpResponse(status=204)
 @login_required(login_url="landing:home")
 @require_POST
 @rate_limit("post-comment", 20, 600)

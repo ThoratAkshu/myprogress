@@ -65,6 +65,7 @@ POLICY = {
     "recruiting:contact": HIRING, "recruiting:outreach": HIRING,
     # Learning posts: anyone can read what they're allowed to see; developers and organizations create.
     "learning:detail": PUBLIC, "learning:captions": PUBLIC, "learning:media": PUBLIC,
+    "learning:watch": ALL_ROLES, "learning:watched": ALL_ROLES,  # Watch: public videos one at a time, like Reels
     "learning:like": ALL_ROLES, "learning:comment": ALL_ROLES, "learning:comment_delete": ALL_ROLES,
     "learning:create": CREATORS, "learning:edit": CREATORS, "learning:delete": CREATORS,
     "learning:studio_branches": CREATORS, "learning:studio_draft": CREATORS, "learning:studio_preview": CREATORS, "learning:studio_image": CREATORS,

@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 MAX_VIDEO_BYTES = 200 * 1024 * 1024
 MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024
 YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+# The same links as youtube_embed_url() reads, as a database regex: Watch only lists videos that can play there.
+YOUTUBE_VIDEO_REGEX = r"^https?://((www\.|m\.)?youtube\.com/(watch\?(.*&)?v=|shorts/|embed/|live/)|youtu\.be/)[A-Za-z0-9_-]{11}([^A-Za-z0-9_-]|$)"
 def validate_video_file(upload):
     extension = Path(upload.name).suffix.lower()
     if extension not in {".mp4", ".webm"}:

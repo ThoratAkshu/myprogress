@@ -1,0 +1,22 @@
+{% load ui learning_tags %}{% for post in reels %}{% with author=post.author profile=post.author.profile detail_url=post.get_absolute_url here=request.path %}<article class="reel{% if post.is_tall %} is-tall{% endif %}" data-reel data-post="{{ post.pk }}" aria-label="{{ post.title }}">
+<div class="reel-frame{% if not post.video_file %} is-embed{% endif %}" data-video style="--ratio:{% if post.is_tall %}0.5625{% else %}1.7778{% endif %}">{% if post.video_file %}<video data-autoplay muted loop playsinline preload="none" tabindex="0" src="{{ post.video_src }}"{% if post.thumbnail %} poster="{{ post.thumbnail_src }}"{% endif %} data-count-view="{% url 'learning:watched' post.pk %}">{% if post.captions %}<track kind="captions" label="Captions" src="{% url 'learning:captions' post.pk %}" default>{% endif %}</video>
+<span class="reel-state" aria-hidden="true">{% icon "play" 56 %}</span>
+<button class="video-sound" type="button" data-video-sound aria-pressed="false" aria-label="Sound">{% icon "volume-x" 18 %}{% icon "volume" 18 %}</button>
+<input class="reel-seek" type="range" min="0" max="1000" value="0" step="1" data-reel-seek aria-label="Position in “{{ post.title }}”">
+{% elif post.embed_url %}<div class="reel-embed" data-reel-embed="{{ post.embed_url }}" data-title="{{ post.title }}">{% if post.thumbnail %}<img src="{{ post.thumbnail_src }}" alt="" loading="lazy">{% endif %}</div>
+{% else %}<a class="reel-cover {{ post|tone }}" href="{{ post.video_url }}" target="_blank" rel="noopener nofollow">{% icon "play" 48 %}<b>{{ post.title }}</b><small>Watch the video ↗</small></a>{% endif %}
+<span class="reel-heart" aria-hidden="true">{% icon "heart" 96 %}</span></div>
+<div class="reel-info">
+<div class="reel-author"><a class="avatar {{ author|avatar_tone }}" href="{% url 'landing:public_profile' profile.handle %}">{{ author|face }}</a><a class="reel-name" href="{% url 'landing:public_profile' profile.handle %}">{{ author.get_full_name|default:profile.handle }}</a>{% if author != user %}<form method="post" action="{% url 'landing:follow' profile.handle %}" data-follow="{{ author.pk }}">{% csrf_token %}<input type="hidden" name="next" value="{{ here }}?post={{ post.pk }}"><button class="reel-follow{% if author.pk in following_ids %} is-following{% endif %}">{% if author.pk in following_ids %}Following{% else %}Follow{% endif %}</button></form>{% endif %}</div>
+<h2 class="reel-title"><a href="{{ detail_url }}" data-expand-post>{{ post.title }}</a></h2>
+{% if post.summary %}<p class="reel-summary">{{ post.summary|truncatechars:220 }}</p>{% endif %}
+<p class="reel-meta">{% if post.project %}<a class="reel-project" href="{% url 'landing:project' post.project.pk %}">{% icon "repo" 14 %}{{ post.project.title }}</a>{% endif %}<span>{{ post.published_at|timesince }} ago</span></p>
+</div>
+<div class="reel-rail">
+<form method="post" action="{% url 'learning:like' post.pk %}" data-like>{% csrf_token %}<input type="hidden" name="next" value="{{ here }}?post={{ post.pk }}"><button class="reel-action{% if post.pk in liked_ids %} liked{% endif %}" aria-pressed="{% if post.pk in liked_ids %}true{% else %}false{% endif %}" aria-label="{% if post.pk in liked_ids %}Unlike{% else %}Like{% endif %}">{% icon "heart" 26 %}<span data-like-count>{{ post.like_count }}</span></button></form>
+<a class="reel-action" href="{{ detail_url }}#comment-box" data-expand-post aria-label="Comments">{% icon "message" 26 %}<span>{{ post.comment_count }}</span></a>
+<button class="reel-action" type="button" data-copy-text="{{ request.scheme }}://{{ request.get_host }}{{ detail_url }}" aria-label="Copy the link">{% icon "share" 24 %}<span>Share</span></button>
+<span class="reel-action is-static" title="Views">{% icon "eye" 24 %}<span>{{ post.views }}</span></span>
+<a class="reel-action" href="{{ detail_url }}" aria-label="Open the post, with chapters and comments">{% icon "maximize" 22 %}<span>Open</span></a>
+</div>
+</article>{% endwith %}{% endfor %}

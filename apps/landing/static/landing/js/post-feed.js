@@ -161,3 +161,170 @@
     }
   });
 })();
+
+// Videos in feeds and in Watch, like Instagram: the one on screen plays by itself, one at a time, without sound
+// until you turn it on (browsers only allow sound after a tap on the page). Tapping a feed video opens it in Watch,
+// carrying on from the same moment; tapping in Watch pauses. A double tap likes.
+// A view counts after 3 seconds of playing. Nothing starts by itself for people who ask for less motion or to
+// save data; their feed videos keep the normal controls.
+window.MyProgressVideo = (() => {
+  const SOUND_KEY = "myprogress:video-sound";
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(navigator.connection?.saveData);
+  const csrf = () => document.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
+  let soundOn = false;
+  try { soundOn = sessionStorage.getItem(SOUND_KEY) === "on"; } catch {}
+
+  function showSound() {
+    document.querySelectorAll("[data-video-sound]").forEach(button => {
+      button.setAttribute("aria-pressed", String(soundOn));
+      button.setAttribute("aria-label", soundOn ? "Mute" : "Turn the sound on");
+    });
+  }
+  function setSound(on) {
+    soundOn = on;
+    try { sessionStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch {}
+    document.querySelectorAll("video[data-autoplay]").forEach(video => { video.muted = !on; });
+    showSound();
+  }
+  function play(video) {
+    document.querySelectorAll("video[data-autoplay]").forEach(other => { if (other !== video && !other.paused) other.pause(); });
+    video.muted = !soundOn;
+    return video.play().catch(() => {
+      if (video.muted) return;
+      soundOn = false;  // no tap on this page yet: start muted, the button turns it on
+      showSound();
+      video.muted = true;
+      return video.play().catch(() => {});
+    });
+  }
+  function openInWatch(video) {
+    const url = new URL(video.dataset.watchUrl, location.href);
+    if (video.currentTime > 1) url.searchParams.set("t", Math.floor(video.currentTime));
+    location.href = url.pathname + url.search;
+  }
+  function toggle(video) {
+    if (video.paused) {
+      delete video.dataset.held;
+      play(video);
+    } else {
+      video.dataset.held = "";  // paused by hand: scrolling doesn't restart it
+      video.pause();
+    }
+  }
+  function like(form, liked) {
+    if (liked !== undefined && form.querySelector("button").classList.contains("liked") === liked) return Promise.resolve();
+    return fetch(form.action, { method: "POST", body: new FormData(form), headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" })
+      .then(response => response.ok ? response.json() : Promise.reject(response.status))
+      .then(result => {
+        const button = form.querySelector("button");
+        button.classList.toggle("liked", result.liked);
+        button.setAttribute("aria-pressed", String(result.liked));
+        button.setAttribute("aria-label", result.liked ? "Unlike" : "Like");
+        form.closest(".post-card, .reel")?.querySelectorAll("[data-like-count]").forEach(count => {
+          count.textContent = count.hasAttribute("data-like-words") ? `${result.likes} like${result.likes === 1 ? "" : "s"}` : result.likes;
+        });
+      });
+  }
+  function heart(frame) {
+    const burst = frame.querySelector(".reel-heart");
+    if (!burst) return;
+    burst.classList.remove("is-on");
+    void burst.offsetWidth;
+    burst.classList.add("is-on");
+  }
+
+  showSound();
+  document.addEventListener("submit", event => {
+    const form = event.target.closest("form[data-like]");
+    if (!form) return;
+    event.preventDefault();
+    like(form).catch(() => form.submit());
+  });
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-video-sound]");
+    if (!button) return;
+    setSound(!soundOn);
+    const video = button.closest("[data-video]")?.querySelector("video");
+    if (video?.paused) play(video);
+  });
+
+  // Tap pauses or plays; two taps like the post (only ever adding a like, as on Instagram).
+  let tapTimer = 0;
+  document.addEventListener("click", event => {
+    const video = event.target.closest("video[data-autoplay]");
+    if (!video) return;
+    const frame = video.closest("[data-video]");
+    if (event.detail > 1) {
+      clearTimeout(tapTimer);
+      heart(frame);
+      const form = frame.closest(".post-card, .reel")?.querySelector("form[data-like]");
+      if (form) like(form, true).catch(() => {});
+      return;
+    }
+    tapTimer = setTimeout(() => (video.dataset.watchUrl ? openInWatch(video) : toggle(video)), 240);
+  });
+  document.addEventListener("keydown", event => {
+    const video = event.target instanceof Element ? event.target.closest("video[data-autoplay]") : null;
+    if (!video || (event.key !== " " && event.key !== "Enter")) return;
+    event.preventDefault();
+    if (event.key === "Enter" && video.dataset.watchUrl) openInWatch(video);
+    else toggle(video);
+  });
+  document.addEventListener("play", event => { event.target.closest?.("[data-video]")?.classList.remove("is-paused"); }, true);
+  document.addEventListener("pause", event => { event.target.closest?.("[data-video]")?.classList.add("is-paused"); }, true);
+
+  // A view: 3 seconds actually played (not skipped through), sent once per page.
+  const played = new WeakMap();
+  document.addEventListener("timeupdate", event => {
+    const video = event.target;
+    if (!(video instanceof HTMLVideoElement) || !video.dataset.countView || video.dataset.counted !== undefined) return;
+    const last = played.get(video) || { at: video.currentTime, total: 0 };
+    const step = video.currentTime - last.at;
+    if (step > 0 && step < 1.5) last.total += step;
+    last.at = video.currentTime;
+    played.set(video, last);
+    if (last.total < 3) return;
+    video.dataset.counted = "";
+    fetch(video.dataset.countView, { method: "POST", headers: { "X-CSRFToken": csrf(), "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin", keepalive: true }).catch(() => {});
+  }, true);
+
+  // Feeds: the video most on screen plays; the others pause.
+  const feedVideos = [...document.querySelectorAll("video[data-feed-video]")];
+  if (!still && "IntersectionObserver" in window && feedVideos.length) {
+    const watcher = new IntersectionObserver(entries => entries.forEach(entry => {
+      const video = entry.target;
+      if (entry.intersectionRatio >= 0.6) {
+        if (video.dataset.held === undefined) play(video);
+      } else {
+        delete video.dataset.held;
+        if (!video.paused) video.pause();
+      }
+    }), { threshold: [0, 0.6, 1] });
+    feedVideos.forEach(video => {
+      const frame = video.closest("[data-video]");
+      video.removeAttribute("controls");
+      video.tabIndex = 0;  // Space pauses it, Enter opens it in Watch
+      video.dataset.autoplay = "";
+      video.muted = true;
+      frame.classList.add("is-paused");
+      frame.querySelectorAll("[hidden]").forEach(element => { element.hidden = false; });
+      const fit = () => { if (video.videoWidth) frame.style.setProperty("--ratio", Math.max(video.videoWidth / video.videoHeight, 0.8)); };
+      video.addEventListener("loadedmetadata", fit);
+      fit();
+      video.addEventListener("timeupdate", () => { if (video.duration) frame.style.setProperty("--progress", video.currentTime / video.duration); });
+      watcher.observe(video);
+    });
+    showSound();
+  }
+  let resume = [];  // another tab or app: pause, and carry on when they come back
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      resume = [...document.querySelectorAll("video[data-autoplay]")].filter(video => !video.paused);
+      resume.forEach(video => video.pause());
+    } else {
+      resume.forEach(video => play(video));
+      resume = [];
+    }
+  });
+  return { play, toggle, setSound, soundOn: () => soundOn, still };
+})();
