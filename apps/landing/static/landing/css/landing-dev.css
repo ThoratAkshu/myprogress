@@ -301,7 +301,7 @@ html.dev-on .diff-hard{background:rgba(239,68,68,.15);color:#fca5a5}
 .dev-ide.is-found .dev-ide-palette li.is-hit{background:rgba(56,189,248,.14);color:#fff;transition:background .2s}
 .dev-ide-status{display:flex;flex-wrap:wrap;gap:4px 18px;padding:6px 14px;background:#0284c7;color:#e0f2fe;font:12px "JetBrains Mono",ui-monospace,monospace}
 .dev-ide-end{margin-left:auto}
-.dev-cta{position:relative;display:grid;justify-items:center;gap:6px;border:1px solid #1f2a40;background:radial-gradient(circle at 50% 0,rgba(56,189,248,.14),transparent 60%),#0b1324}
+.dev-cta{position:relative;display:grid;justify-items:center;gap:6px}
 .dev-cta .matri{--size:120px;margin-bottom:4px}
 
 @media (max-width:900px){.paths,.dev-split,.dev-demo.lab,.proof-split{grid-template-columns:minmax(0,1fr)}.dev-split.is-reverse>:first-child{order:0}.dev-split{gap:32px}}
@@ -369,6 +369,10 @@ html:not(.dev-on) .site-landing .dev-switch-glyph{color:#6366f1}
 html.dev-on .site-landing .site-footer{background:rgba(5,9,19,.6)}
 html.dev-on .site-landing .kicker{color:#7dd3fc}
 html.dev-on .site-landing .section-head h2,html.dev-on .site-landing h2{color:#f1f5ff}
+html.dev-on .site-landing .cta{border-color:#1f2a40;background:radial-gradient(circle at 50% 0,rgba(56,189,248,.14),transparent 60%),#0b1324;box-shadow:0 0 0 1px rgba(56,189,248,.08),0 24px 60px rgba(2,6,23,.6)}
+html.dev-on .site-landing .cta p{color:#94a3b8}
+html.dev-on .site-landing .site-btn.light{background:#0284c7}
+html.dev-on .site-landing .site-btn.light:hover{background:#0369a1}
 
 /* The brain behind the hero headline */
 .brain-host{position:relative;overflow:hidden;isolation:isolate}
