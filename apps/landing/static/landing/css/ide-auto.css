@@ -1166,12 +1166,17 @@ body.ide .feed-item-head small{color:var(--muted)}
 body.ide .feed-actor:hover{color:var(--violet)}
 body.ide .feed-text a{color:var(--violet)}
 body.ide .feed-subtle{color:var(--muted)}
-body.ide .feed-post img,body.ide .feed-post-cover{color:#fff;background:#24527a}
-body.ide .feed-post-body{background:var(--ide-panel)}
-body.ide .feed-post-body span{color:var(--muted)}
+body.ide .feed-media{background:#0f1822}
+body.ide .feed-cover{color:#fff}
+body.ide .feed-cover-play{background:rgba(2,6,23,.5);color:#fff}
+body.ide .feed-cover:hover .feed-cover-play{background:rgba(2,6,23,.72)}
+body.ide .feed-caption{color:var(--ink)}
+body.ide .feed-caption span{color:var(--muted)}
+body.ide .feed-caption:hover b{color:var(--violet)}
 body.ide .feed-actions button,body.ide .feed-actions a{border:0;background:none;color:var(--muted)}
 body.ide .feed-actions button:hover,body.ide .feed-actions a:hover{background:var(--ide-panel);color:var(--ink)}
 body.ide .feed-actions button.liked{color:var(--danger)}
+body.ide .feed-views{color:var(--muted)}
 body.ide .feed-project{border:1px solid var(--line);background:var(--ide-panel)}
 body.ide .feed-project-icon{background:var(--violet-soft);color:var(--violet)}
 body.ide .feed-project p{color:var(--muted)}
@@ -1183,6 +1188,7 @@ body.ide .person-row{border-top:1px solid var(--line)}
 body.ide .person-row:first-of-type{border-top:0}
 body.ide .person-row small{color:var(--muted)}
 body.ide .person-row .shared{color:hsl(157,90%,72%)}
+body.ide .card-head-link{color:var(--violet)}
 body.ide .trend-list a:hover b{color:var(--violet)}
 body.ide .trend-list small{color:var(--muted)}
 body.ide .profile-header-cover{background:var(--ide-panel-2)}
@@ -2023,7 +2029,13 @@ body.ide .reel-summary,body.ide .reel-meta{color:rgba(255,255,255,.82)}
 body.ide .reel-project{border-color:rgba(255,255,255,.4);color:#fff}
 body.ide .reel-follow.is-following{border-color:var(--ide-line);color:#fff}
 body.ide .reel-action{color:#fff}
-}/* practice.css */
+}body.ide .watch-shelf-all{color:var(--violet)}
+body.ide .watch-shelf-nav button{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .watch-shelf-nav button:hover:not(:disabled){border-color:var(--violet);color:var(--violet)}
+body.ide .watch-tile{background:#0f172a;color:#fff}
+body.ide .watch-tile::after{background:linear-gradient(transparent 45%,rgba(0,0,0,.78))}
+body.ide .watch-tile-play{background:rgba(2,6,23,.55)}
+/* practice.css */
 body.ide .tok-key{color:var(--tok-key)}
 body.ide .tok-str{color:var(--tok-str)}
 body.ide .tok-num{color:var(--tok-num)}

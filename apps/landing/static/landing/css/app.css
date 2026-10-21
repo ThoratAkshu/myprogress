@@ -117,20 +117,34 @@ body.app .button.block{width:100%}
 .feed-item-head small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35}
 .feed-actor{font-weight:700;font-size:14.5px;text-decoration:none}
 .feed-actor:hover{color:var(--violet);text-decoration:underline}
-.feed-text{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 10px;font-size:14.5px}
+.feed-text{margin:12px 0 10px;font-size:14.5px;line-height:1.5}
+.feed-text.feed-code{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .feed-text a{color:var(--violet);font-weight:700}
 .feed-subtle{margin:-4px 0 4px;color:var(--muted)}
-.feed-post{display:block;overflow:hidden;margin:0 -18px;border-block:1px solid var(--line);text-decoration:none}
-.feed-post img,.feed-post-cover{display:grid;place-items:center;width:100%;aspect-ratio:2/1;object-fit:cover;color:#fff;background:#24527a}
-.feed-post-body{display:block;padding:12px 18px;background:#f8f9fb}
-.feed-post-body b{display:block;font-size:15.5px}
-.feed-post-body span{display:block;margin-top:4px;color:var(--muted);font-size:13.5px}
-.feed-actions{display:flex;gap:4px;margin:8px -8px -4px}
+/* Home feed posts: the video or cover edge to edge, then a caption, like Instagram */
+.feed-media{margin:0 -18px;overflow:hidden;background:#0f1822}
+.feed-video video{display:block;width:100%;height:100%;object-fit:contain}
+.feed-media .feed-video{max-height:70vh}
+.feed-cover{position:relative;display:grid;place-items:center;align-content:center;gap:8px;aspect-ratio:16/9;padding:28px;color:#fff;text-align:center;text-decoration:none;overflow:hidden}
+.feed-cover b{position:relative;max-width:460px;font:800 clamp(20px,2.4vw,26px)/1.25 Manrope,"DM Sans",sans-serif}
+.feed-cover small{position:relative;opacity:.85;font-size:13px;font-weight:600}
+.feed-cover.has-image{display:block;aspect-ratio:auto;padding:0}
+.feed-cover.has-image img{display:block;width:100%;max-height:70vh;object-fit:cover}
+.feed-cover-play{position:relative;display:grid;place-items:center;width:60px;height:60px;border-radius:50%;background:rgba(2,6,23,.5);color:#fff}
+.feed-cover.has-image .feed-cover-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+.feed-cover:hover .feed-cover-play{background:rgba(2,6,23,.72)}
+.feed-caption{display:grid;gap:4px;margin:12px 0 2px;color:var(--ink);text-decoration:none}
+.feed-caption:empty{display:none}
+.feed-caption b{font:800 16.5px/1.3 Manrope,"DM Sans",sans-serif}
+.feed-caption span{display:-webkit-box;overflow:hidden;color:var(--muted);font-size:14px;line-height:1.5;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.feed-caption:hover b{color:var(--violet)}
+.feed-actions{display:flex;align-items:center;gap:2px;margin:6px -8px -6px}
 .feed-actions form{margin:0}
 .feed-actions button,.feed-actions a{display:flex;align-items:center;gap:6px;padding:9px 12px;border:0;border-radius:8px;background:none;color:var(--muted);font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
 .feed-actions button:hover,.feed-actions a:hover{background:#f3f4f6;color:var(--ink)}
 .feed-actions button.liked{color:var(--danger)}
 .feed-actions button.liked .icon{fill:currentColor}
+.feed-views{display:inline-flex;align-items:center;gap:5px;margin-left:auto;padding-right:8px;color:var(--muted);font-size:13px;font-weight:600}
 .feed-project{display:flex;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fafbfc}
 .feed-project-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:10px;background:var(--violet-soft);color:var(--violet);flex:none}
 .feed-project p{margin:4px 0 8px;color:var(--muted)}
@@ -138,12 +152,16 @@ body.app .button.block{width:100%}
 .week-dots i{display:grid;place-items:center;height:30px;margin-top:4px;border-radius:8px;background:#f1f2f5;font-style:normal;font-weight:700}
 .week-dots li.active i{background:var(--violet);color:#fff}
 .week-dots li.today span{color:var(--ink);font-weight:800}
-.person-row{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.person-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.person-row>div{min-width:0}
 .person-row:first-of-type{border-top:0;padding-top:0}
 .person-row b{font-size:14px}
 .person-row small{display:block;color:var(--muted);font-size:12.5px;line-height:1.35}
 .person-row .shared{color:#0a7a4f}
-.person-row form{margin:8px 0 0}
+.person-row form{margin:0}
+body.app .person-row .button.pill{padding:5px 11px;font-size:12.5px}
+.card-head-link{color:var(--violet);font-size:13px;font-weight:700;text-decoration:none}
+.card-head-link:hover{text-decoration:underline}
 .trend-list{margin:0;padding-left:18px;display:grid;gap:10px}
 .trend-list a{text-decoration:none}
 .trend-list b{display:block;font-size:13.5px;line-height:1.35}
@@ -248,7 +266,7 @@ body.app .post-header h1{font-size:32px}
   .feed-left{display:none}
   .feed-right{grid-column:auto}
   .card{padding:14px 16px}
-  .feed-post{margin:0 -16px}
+  .feed-media{margin:0 -16px}
   .composer-actions a{padding:8px 6px}
   .profile-header-cover{height:110px}
   .profile-header-top{margin-top:-52px}
@@ -261,10 +279,6 @@ body.app .post-header h1{font-size:32px}
   .post-tile-overlay{padding:20px 8px 6px}
   .post-tile-overlay small{display:none}
 }
-.feed-post-article{display:flex;align-items:stretch}
-.feed-post-article .feed-post-cover{width:112px;aspect-ratio:auto;min-height:96px;flex:none}
-.feed-post-article .feed-post-body{flex:1;display:flex;flex-direction:column;justify-content:center}
-.feed-post-video .feed-post-cover{aspect-ratio:3/1}
 @media(max-width:780px){.card.profile-header,.card.profile-mini{padding:0}}
 
 /* Page header used by Projects, Learn, Talent */
@@ -1940,3 +1954,27 @@ html:has(body.reels-page){overflow:hidden}
   .reels-nav{display:none}
 }
 @media (prefers-reduced-motion:reduce){.reel-heart.is-on{animation:none}.reel-action svg{transition:none}}
+/* The Watch row on the home page: tall video tiles that scroll sideways, like Shorts on YouTube's home */
+.watch-shelf{padding:14px 0 16px;overflow:hidden}
+.watch-shelf-head{display:flex;align-items:center;gap:10px;padding:0 18px 12px}
+.watch-shelf-head h2{display:flex;align-items:center;gap:8px;margin:0;font-size:16px}
+.watch-shelf-all{margin-left:auto;color:var(--violet);font-size:13px;font-weight:700;text-decoration:none}
+.watch-shelf-all:hover{text-decoration:underline}
+.watch-shelf-nav{display:flex;gap:6px}
+.watch-shelf-nav button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);cursor:pointer}
+.watch-shelf-nav button:hover:not(:disabled){border-color:var(--violet);color:var(--violet)}
+.watch-shelf-nav button:disabled{opacity:.35;cursor:default}
+.watch-shelf-row{display:grid;grid-auto-flow:column;grid-auto-columns:150px;gap:10px;margin:0;padding:0 18px;overflow-x:auto;list-style:none;scroll-snap-type:x mandatory;scroll-padding:0 18px;scrollbar-width:none}
+.watch-shelf-row::-webkit-scrollbar{display:none}
+.watch-shelf-row li{scroll-snap-align:start}
+.watch-tile{position:relative;display:block;aspect-ratio:9/16;overflow:hidden;border-radius:12px;background:#0f172a;color:#fff;text-decoration:none}
+.watch-tile img,.watch-tile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .3s}
+.watch-tile:hover img,.watch-tile:hover video{transform:scale(1.04)}
+.watch-tile::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 45%,rgba(0,0,0,.78))}
+.watch-tile-play{position:absolute;top:8px;left:8px;z-index:1;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:rgba(2,6,23,.55)}
+.watch-tile-text{position:absolute;right:10px;bottom:10px;left:10px;z-index:1;display:grid;gap:3px}
+.watch-tile-text b{display:-webkit-box;overflow:hidden;font-size:13.5px;line-height:1.3;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.watch-tile-text small{overflow:hidden;opacity:.85;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}
+.watch-tile:focus-visible{outline:3px solid #38bdf8;outline-offset:2px}
+@media (max-width:780px){.watch-shelf-row{grid-auto-columns:128px}.watch-shelf-nav{display:none}}
+@media (prefers-reduced-motion:reduce){.watch-tile img,.watch-tile video{transition:none}}

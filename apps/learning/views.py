@@ -341,7 +341,7 @@ def like_view(request, post_id):
         return JsonResponse({"liked": created, "likes": post.likes.count()})
     return redirect_back(request, f'{reverse("learning:detail", args=[post.pk])}#engagement')
 WATCH_BATCH = 6
-def _watch_posts(user):
+def watch_posts(user):
     """Public videos that play here: uploaded ones and YouTube links. Ones you haven't watched come first, then ones
     you have, then your own; newest first within each."""
     seen = ContentView.objects.filter(post=OuterRef("pk"), viewer=user)
@@ -359,7 +359,7 @@ def _reels_context(user, reels):
 def watch_view(request):
     """Watch: public videos one at a time at full height, each playing as it comes into view, like Reels. ?post=
     starts with that video. ?more=1 returns the next few, leaving out the ones already on the page (?shown=)."""
-    posts = _watch_posts(request.user)
+    posts = watch_posts(request.user)
     if request.GET.get("more"):
         shown = [int(value) for value in request.GET.get("shown", "").split(",") if value.isdigit()][:300]
         return render(request, "learning/_reels.html", _reels_context(request.user, list(posts.exclude(pk__in=shown)[:WATCH_BATCH])))

@@ -220,7 +220,7 @@ window.MyProgressVideo = (() => {
         button.classList.toggle("liked", result.liked);
         button.setAttribute("aria-pressed", String(result.liked));
         button.setAttribute("aria-label", result.liked ? "Unlike" : "Like");
-        form.closest(".post-card, .reel")?.querySelectorAll("[data-like-count]").forEach(count => {
+        form.closest(".post-card, .reel, .feed-item")?.querySelectorAll("[data-like-count]").forEach(count => {
           count.textContent = count.hasAttribute("data-like-words") ? `${result.likes} like${result.likes === 1 ? "" : "s"}` : result.likes;
         });
       });
@@ -257,7 +257,7 @@ window.MyProgressVideo = (() => {
     if (event.detail > 1) {
       clearTimeout(tapTimer);
       heart(frame);
-      const form = frame.closest(".post-card, .reel")?.querySelector("form[data-like]");
+      const form = frame.closest(".post-card, .reel, .feed-item")?.querySelector("form[data-like]");
       if (form) like(form, true).catch(() => {});
       return;
     }

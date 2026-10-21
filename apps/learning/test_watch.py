@@ -6,7 +6,9 @@ from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from apps.accounts.models import Follow
 from apps.core.models import ContentView, LearningPost, PostLike
+from apps.core.services import record_activity
 from apps.organizations import services
 from .media import YOUTUBE_VIDEO_REGEX, youtube_embed_url
 from .tests import make_user
@@ -117,3 +119,36 @@ class YouTubeLinkTests(SimpleTestCase):
                     "https://www.youtube.com/watch?feature=share&v=dQw4w9WgXcQ", "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=10", "https://www.youtube.com/live/dQw4w9WgXcQ",
                     "https://www.youtube.com/watch?v=abc", "https://www.youtube.com/@channel", "https://youtu.be/dQw4w9WgXcQxx", "https://vimeo.com/123", ""]:
             self.assertEqual(bool(pattern.search(url)), bool(youtube_embed_url(url)), url)
+
+
+class HomeFeedTests(TestCase):
+    """The home feed plays videos in place like the Learn feed, and shows a Watch row once there are a few videos."""
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.viewer = make_user("asha@example.com", "Asha", "Rao", handle="asha")
+        self.author = make_user("dev@example.com", "Dev", "Patil", handle="dev")
+        Follow.objects.create(follower=self.viewer, following=self.author)
+        self.client.force_login(self.viewer)
+
+    def publish(self, post):
+        record_activity(post.author, "learning", "published_learning", 0, {"post_id": post.pk})
+        return post
+
+    def test_videos_play_in_the_feed_and_a_tap_opens_watch(self):
+        post = self.publish(video(self.author, "Binary search", 1))
+        self.publish(LearningPost.objects.create(author=self.author, title="Revision notes", kind="article", body="Text " * 50))
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, f'data-feed-video data-count-view="{reverse("learning:watched", args=[post.pk])}" data-watch-url="{reverse("learning:watch")}?post={post.pk}"')
+        self.assertContains(page, f'action="{reverse("learning:like", args=[post.pk])}" data-like')
+        self.assertContains(page, "<b>Revision notes</b><small>1 min read</small>")  # an article without a picture: its title on a big cover
+        self.assertNotContains(page, 'class="card watch-shelf"')  # one video isn't a row
+
+    def test_the_watch_row_shows_once_there_are_three_videos(self):
+        posts = [self.publish(video(self.author, f"Lesson {number}", number)) for number in range(3)]
+        page = self.client.get(reverse("landing:dashboard"))
+        self.assertContains(page, 'class="card watch-shelf"', count=1)
+        self.assertContains(page, '<a class="watch-tile', count=3)
+        self.assertContains(page, f'href="{reverse("learning:watch")}?post={posts[0].pk}"')
+        self.assertNotContains(self.client.get(reverse("landing:dashboard"), {"show": "articles"}), 'class="card watch-shelf"')
+        self.assertContains(self.client.get(reverse("landing:dashboard"), {"show": "videos"}), 'class="card watch-shelf"')
