@@ -1,0 +1,13 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Your enquiries{% endblock %}
+{% block content %}<div class="section-page org-page find-page">
+{% include "organizations/_find_tabs.html" %}
+{% if page.object_list %}<div class="card enquiry-list">{% for enquiry in page.object_list %}{% with last=enquiry.last_message %}
+<a class="enquiry-row{% if enquiry.unread_for_student %} unread{% endif %}" href="{% url 'organizations:my_enquiry' enquiry.pk %}">
+<span class="org-logo sm" aria-hidden="true">{{ enquiry.organization|face }}</span>
+<span class="enquiry-row-main"><b>{{ enquiry.organization.name }}</b><small>{{ enquiry.topic }}</small><span class="enquiry-preview">{% if last.from_centre %}{{ enquiry.organization.name }}: {% else %}You: {% endif %}{{ last.text|truncatechars:120 }}</span></span>
+<span class="enquiry-row-side"><small class="muted">{{ enquiry.last_message_at|ago }}</small><em class="org-pill status-{{ enquiry.status }}">{% if enquiry.status == 'new' %}Sent{% else %}{{ enquiry.get_status_display }}{% endif %}</em>{% if enquiry.unread_for_student %}<span class="unread-dot" title="New reply"><span class="sr-only">New reply</span></span>{% endif %}</span>
+</a>{% endwith %}{% endfor %}</div>
+{% if page.has_other_pages %}<nav class="pager" aria-label="Pages">{% if page.has_previous %}<a class="button soft" href="?page={{ page.previous_page_number }}">{% icon "chevron-left" 16 %}Newer</a>{% endif %}<span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button soft" href="?page={{ page.next_page_number }}">Older{% icon "chevron-right" 16 %}</a>{% endif %}</nav>{% endif %}
+{% else %}<section class="card empty-state">{% icon "message" 36 %}<h2>No enquiries yet</h2><p>Find a class and ask the centre about fees, timings or anything else. Their replies show up here.</p><a class="button primary" href="{% url 'organizations:find' %}">Find a class</a></section>{% endif %}
+</div>{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ enquiry.student|public_name }} · Admissions{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% include "organizations/_admissions_tabs.html" with admissions_tab="enquiries" %}
+<a class="page-back" href="{% url 'organizations:admissions' organization.slug %}">{% icon "chevron-left" 16 %}All enquiries</a>
+<div class="enquiry-layout">
+<div class="enquiry-main">
+<section class="card enquiry-head"><span class="avatar {{ enquiry.student|avatar_tone }}" aria-hidden="true">{{ enquiry.student|face }}</span>
+<div><h2>{{ enquiry.student|public_name }}</h2><p class="muted">{% if enquiry.batch %}<a href="{% url 'organizations:batch_edit' organization.slug enquiry.batch.pk %}">{{ enquiry.batch.title }}</a>{% else %}General enquiry{% endif %} · asked {{ enquiry.created_at|date:"j M Y" }}</p></div>
+<em class="org-pill status-{{ enquiry.status }}">{{ enquiry.get_status_display }}</em></section>
+{% include "organizations/_enquiry_thread.html" with centre_view=True %}
+<form method="post" class="card org-form enquiry-reply">{% csrf_token %}<input type="hidden" name="action" value="reply"><label>{{ form.text.label }}{{ form.text }}{% for error in form.text.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<div class="org-form-actions"><button class="button primary">{% icon "send" 16 %}Send reply</button><small class="muted">{{ enquiry.student|public_name }} gets a notification.{% if enquiry.status == 'new' %} Replying marks it Replied.{% endif %}</small></div></form>
+</div>
+<aside class="enquiry-side">
+<section class="card"><h2>Student</h2><ul class="class-facts">
+{% if enquiry.student.profile.handle %}<li>{% icon "user" 16 %}<a href="{% url 'landing:public_profile' enquiry.student.profile.handle %}">View profile</a></li>{% endif %}
+{% if enquiry.phone %}<li>{% icon "phone" 16 %}<a href="tel:{{ enquiry.phone|cut:' '|cut:'-' }}">{{ enquiry.phone }}</a></li>{% endif %}
+{% if enquiry.student.profile.location %}<li>{% icon "map-pin" 16 %}<span>{{ enquiry.student.profile.location }}</span></li>{% endif %}
+</ul>
+{% if membership.status == 'active' %}<p class="muted small">{% icon "check" 14 %} Already a member of {{ organization.name }}.</p>{% elif membership.status == 'pending' %}<p class="muted small">{% icon "clock" 14 %} Asked to join. Approve them in <a href="{% url 'organizations:members' organization.slug %}">Students</a>.</p>{% endif %}
+</section>
+<section class="card"><h2>Status</h2>
+<form method="post" class="enquiry-status">{% csrf_token %}<input type="hidden" name="action" value="status"><label class="sr-only" for="enquiry-status">Status</label><select id="enquiry-status" name="status">{% for value, label in statuses %}<option value="{{ value }}"{% if value == enquiry.status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="button soft">Update</button></form>
+<small class="muted">Closed and Joined enquiries leave the Open list. The student can't write on a closed one.</small>
+{% if not membership %}<form method="post" class="enquiry-invite">{% csrf_token %}<input type="hidden" name="action" value="invite"><button class="button soft block">{% icon "user-plus" 16 %}Send the invite link</button><small class="muted">Posts your centre's invite link here so they can join.</small></form>{% endif %}
+</section>
+{% if others %}<section class="card"><h2>Their other enquiries</h2><ul class="class-facts">{% for other in others %}<li>{% icon "message" 14 %}<a href="{% url 'organizations:enquiry' organization.slug other.pk %}">{{ other.topic }}</a> <small class="muted">{{ other.get_status_display }}</small></li>{% endfor %}</ul></section>{% endif %}
+</aside>
+</div>
+</div>{% endblock %}

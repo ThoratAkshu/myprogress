@@ -6,27 +6,48 @@ from django.core.validators import validate_email
 from apps.core.models import Repository
 from apps.learning.media import MAX_THUMBNAIL_BYTES
 from apps.learning.timeline import clean_chapters
-from .models import MAX_FILE_BYTES, Certificate, ClassRecording, ParentAccess, Playlist, ChannelPost, LiveClass, Membership, Organization, Submission, Task
+from .models import MAX_FILE_BYTES, Batch, Certificate, ClassRecording, ParentAccess, Playlist, ChannelPost, LiveClass, Membership, Organization, Submission, Task
 def check_size(upload):
     if upload and getattr(upload, "size", 0) > MAX_FILE_BYTES:
         raise forms.ValidationError("Files can be up to 25 MB.")
     return upload
-class OrganizationForm(forms.ModelForm):
+CENTRE_FIELDS = ["area", "address", "pincode", "contact_phone", "opening_hours"]
+CENTRE_LABELS = {"area": "Area or locality", "pincode": "PIN code", "contact_phone": "Phone for enquiries (optional)", "opening_hours": "Opening hours"}
+CENTRE_WIDGETS = {"area": forms.TextInput(attrs={"placeholder": "Kothrud"}), "address": forms.TextInput(attrs={"placeholder": "2nd floor, Lane 5, Karve Road"}),
+                  "pincode": forms.TextInput(attrs={"placeholder": "411038", "inputmode": "numeric"}), "contact_phone": forms.TextInput(attrs={"placeholder": "+91 98765 43210", "inputmode": "tel"}),
+                  "opening_hours": forms.TextInput(attrs={"placeholder": "Mon–Sat, 8 am – 8 pm"})}
+class CentreDetailsMixin:
+    """Where the centre is and how to reach it, for Find a coaching centre; on both Settings and Edit profile."""
+    def clean_pincode(self):
+        from .admissions import PINCODE
+        value = self.cleaned_data["pincode"].replace(" ", "")
+        if value and not PINCODE.match(value):
+            raise forms.ValidationError("Enter the 6-digit PIN code.")
+        return value
+    def clean_contact_phone(self):
+        from .admissions import clean_phone
+        try:
+            return clean_phone(self.cleaned_data["contact_phone"])
+        except ValueError as error:
+            raise forms.ValidationError(str(error))
+class OrganizationForm(CentreDetailsMixin, forms.ModelForm):
     class Meta:
         model = Organization
-        fields = ["name", "kind", "city", "website", "about", "join_requires_approval", "show_leaderboard", "parent_digest"]
-        labels = {"name": "Organization name", "kind": "Type", "about": "About", "join_requires_approval": "Approve new members before they join", "show_leaderboard": "Show the class leaderboard to students", "parent_digest": "Email parents a weekly summary"}
-        widgets = {"about": forms.Textarea(attrs={"rows": 3, "placeholder": "What you teach and who it's for."}), "name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"})}
-class OrganizationDetailsForm(forms.ModelForm):
+        fields = ["name", "kind", "city", *CENTRE_FIELDS, "website", "about", "join_requires_approval", "show_leaderboard", "parent_digest", "is_listed", "listing_pitch", "courses"]
+        labels = {"name": "Organization name", "kind": "Type", "about": "About", "join_requires_approval": "Approve new members before they join", "show_leaderboard": "Show the class leaderboard to students", "parent_digest": "Email parents a weekly summary",
+                  "is_listed": "List us in Find a coaching centre", "listing_pitch": "One line for the list", "courses": "Courses you teach", **CENTRE_LABELS}
+        widgets = {"about": forms.Textarea(attrs={"rows": 3, "placeholder": "What you teach and who it's for."}), "name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"}),
+                   "listing_pitch": forms.TextInput(attrs={"placeholder": "Full-stack web development, weekend batches"}), "courses": forms.TextInput(attrs={"placeholder": "Python, Web development, Data science"}), **CENTRE_WIDGETS}
+class OrganizationDetailsForm(CentreDetailsMixin, forms.ModelForm):
     """An organization account's institute, edited from Edit profile: how students and parents know it. Joining and
     class rules stay in the organization's own Settings."""
     about = forms.CharField(max_length=2000, required=False, label="About the institute", widget=forms.Textarea(attrs={"rows": 4, "placeholder": "What you teach and who it's for."}))
     class Meta:
         model = Organization
-        fields = ["name", "kind", "city", "website", "about"]
-        labels = {"name": "Institute name", "kind": "Type"}
+        fields = ["name", "kind", "city", *CENTRE_FIELDS, "website", "about"]
+        labels = {"name": "Institute name", "kind": "Type", **CENTRE_LABELS}
         widgets = {"name": forms.TextInput(attrs={"placeholder": "Sunrise Coding Institute"}),
-                   "city": forms.TextInput(attrs={"placeholder": "Pune"}), "website": forms.URLInput(attrs={"placeholder": "https://your-institute.com"})}
+                   "city": forms.TextInput(attrs={"placeholder": "Pune"}), "website": forms.URLInput(attrs={"placeholder": "https://your-institute.com"}), **CENTRE_WIDGETS}
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("label_suffix", "")
         kwargs.setdefault("prefix", "org")
@@ -223,3 +244,40 @@ class PlaylistForm(forms.ModelForm):
         fields = ["title", "description", "group"]
         labels = {"group": "Only for batch (optional)"}
         widgets = {"title": forms.TextInput(attrs={"placeholder": "Linux, from zero"}), "description": forms.Textarea(attrs={"rows": 3, "placeholder": "What the course covers, and in what order to take it."})}
+class BatchForm(forms.ModelForm):
+    """A class the centre lists in Find a coaching centre."""
+    starts_on = forms.DateField(required=False, label="Starts on (optional)", widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), input_formats=["%Y-%m-%d"])
+    field_order = ["title", "course", "level", "mode", "schedule", "starts_on", "duration", "fee", "fee_period", "seats", "area", "city", "description", "is_open"]
+    class Meta:
+        model = Batch
+        fields = ["title", "course", "level", "mode", "schedule", "starts_on", "duration", "fee", "fee_period", "seats", "area", "city", "description", "is_open"]
+        labels = {"title": "Class name", "course": "Course", "mode": "Where", "schedule": "Days and time", "duration": "Length (optional)", "fee": "Fee in ₹ (optional)", "fee_period": "Fee is",
+                  "seats": "Seats (optional)", "area": "Area (optional)", "city": "City (optional)", "description": "What students learn (optional)", "is_open": "Taking enquiries"}
+        widgets = {"title": forms.TextInput(attrs={"placeholder": "Python for beginners, weekend batch"}), "course": forms.TextInput(attrs={"placeholder": "Python"}),
+                   "schedule": forms.TextInput(attrs={"placeholder": "Sat and Sun, 10 am – 1 pm"}), "duration": forms.TextInput(attrs={"placeholder": "3 months"}),
+                   "fee": forms.NumberInput(attrs={"placeholder": "12000", "min": 0}), "seats": forms.NumberInput(attrs={"placeholder": "20", "min": 1}),
+                   "area": forms.TextInput(attrs={"placeholder": "The centre's area"}), "city": forms.TextInput(attrs={"placeholder": "The centre's city"}),
+                   "description": forms.Textarea(attrs={"rows": 4, "placeholder": "Topics, projects students build, and who it suits."})}
+    def clean_title(self):
+        return " ".join(self.cleaned_data["title"].split())
+    def clean_course(self):
+        return " ".join(self.cleaned_data["course"].split())
+class EnquiryForm(forms.Form):
+    message = forms.CharField(min_length=10, max_length=2000, label="Your question", widget=forms.Textarea(attrs={"rows": 4, "placeholder": "Hi, I'd like to know about the next batch, the fees and whether beginners can join."}))
+    phone = forms.CharField(max_length=20, required=False, label="Phone (optional)", widget=forms.TextInput(attrs={"placeholder": "+91 98765 43210", "inputmode": "tel", "autocomplete": "tel"}))
+    batch = forms.IntegerField(required=False, widget=forms.HiddenInput)
+    def clean_message(self):
+        return self.cleaned_data["message"].strip()
+    def clean_phone(self):
+        from .admissions import clean_phone
+        try:
+            return clean_phone(self.cleaned_data["phone"])
+        except ValueError as error:
+            raise forms.ValidationError(str(error))
+class EnquiryReplyForm(forms.Form):
+    text = forms.CharField(max_length=2000, label="Reply", widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Write a reply"}))
+    def clean_text(self):
+        text = self.cleaned_data["text"].strip()
+        if not text:
+            raise forms.ValidationError("Write a reply first.")
+        return text

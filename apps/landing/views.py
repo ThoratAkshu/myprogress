@@ -37,6 +37,8 @@ from apps.earnings.services import creator_dashboard, refresh_creator
 from apps.core.services import achievements,coding_streak, complete_daily_step, contribution_calendar, earning_balance, language_breakdown, leaderboard, platform_languages, progress_facts, record_activity, record_rank_snapshots, refresh_rank, score_breakdown, weekly_movement
 from apps.learning.views import record_post_view, watch_posts
 from apps.notifications.services import notify
+from apps.guidance import services as guidance
+from apps.promotions import services as promotions
 from apps.recruiting.models import RECRUITER_ROLES, ContactRequest, PortfolioView, ShortlistEntry
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -47,7 +49,7 @@ from apps.core.audit import record, repository_log
 from apps.accounts.views import begin_two_step, finish_sign_in
 from apps.common.ratelimit import client_ip, is_limited, rate_limit, record_hit, too_many_requests
 from apps.code.invitations import ROLE_HELP, abilities, open_invitations, pending_for
-from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer, user_can_change_visibility
+from apps.core.git_service import GitRequestTooLarge, authenticate_git_request, branch_heads, code_version, clean_repo_path, commit_file, count_new_commits, create_branch, find_readme, initialize_repository, last_commit, list_branches, list_commits, list_contributors, list_tree, object_type, read_blob, refresh_repository_languages, resolve_ref, smart_http, user_can_access, user_can_administer, user_can_change_visibility
 from apps.code.access import RepositoryDenied, breadcrumbs, load_repository, repository_context
 from urllib.parse import urlencode
 import logging
@@ -200,9 +202,16 @@ def dashboard_view(request):
     if role in RECRUITER_ROLES:
         return redirect("recruiting:search")
     context = _workspace_context(request)
+    # What they've been doing lately decides the next step and which sponsored posts fit them. The next step is
+    # MyProgress's own suggestion and shows in the feed like a sponsored post, in the first of those slots.
+    summary = guidance.activity_summary(request.user)
+    step = guidance.next_step(request.user, summary)
+    if step:
+        guidance.record_shown(request.user, step["key"])
+    house = {"key": f"next-step:{step['key']}", "next_step": True, "step": step} if step else None
     show = request.GET.get("show") if request.GET.get("show") in FEED_FILTERS else ""
     shelf = list(watch_posts(request.user)[:10]) if show in {"", "videos"} else []  # the Watch row, like Shorts on YouTube's home
-    context.update({"classes": student_summary(request.user), "feed": build_feed(request.user, show=show), "watch_shelf": shelf if len(shelf) >= 3 else [], "feed_show": show, "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
+    context.update({"classes": student_summary(request.user), "next_step": step, "feed": promotions.into_feed(request.user, summary, build_feed(request.user, show=show), house), "watch_shelf": shelf if len(shelf) >= 3 else [], "feed_show": show, "suggestions": people_you_may_know(request.user), "trending": trending_posts(), "portfolio_views": PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30)).count()})
     return render(request, "landing/dashboard.html", context)
 
 @login_required(login_url="landing:home")
@@ -314,6 +323,28 @@ def _network_context(request, pending):
         "network_counts": {"following": request.user.following_relationships.count(), "followers": request.user.follower_relationships.count(), "requests": pending},
         "contact_requests": request.user.contact_requests.select_related("recruiter__profile")[:20] if view == "requests" else [],
     }
+LEARNING_PAGE_SIZE = 10
+def _learning_posts(user, tab):
+    posts = LearningPost.objects.select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))
+    if tab == "mine":
+        posts = posts.filter(author=user)
+    elif tab == "following":
+        posts = posts.filter(is_public=True, author__in=user.following_relationships.values("following"))
+    else:
+        posts = posts.filter(is_public=True)
+    return posts.order_by("-published_at")
+def _learning_items(request, posts, suggest):
+    """A page of Learn posts with ads placed among them as on the home feed: MyProgress's suggestion for this member
+    (only when `suggest`, so it shows once and not on every page that loads) and the sponsored posts that fit them."""
+    return promotions.with_ads(request.user, [{"key": f"post:{post.pk}", "post": post} for post in posts], suggest)
+def _for_you_cards(request):
+    """For you never ends: the next page of post cards, and after the oldest page the newest one again. Each page
+    can bring a sponsored post; the suggestion stays on the first page the member opened."""
+    paginator = Paginator(_learning_posts(request.user, "for-you"), LEARNING_PAGE_SIZE)
+    page = paginator.get_page(request.GET.get("page"))
+    next_page = (page.next_page_number() if page.has_next() else 1) if paginator.count else ""
+    liked = set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))
+    return render(request, "landing/partials/post_cards.html", {"items": _learning_items(request, page, suggest=False), "next_page": next_page, "liked_ids": liked})
 @login_required(login_url="landing:home")
 @never_cache
 def workspace_section_view(request, section):
@@ -322,6 +353,8 @@ def workspace_section_view(request, section):
         return redirect("landing:dashboard")
     if section == "network":
         return redirect(network_url("requests" if request.user.contact_requests.filter(status="pending").exists() else "discover"))
+    if section == "learning" and request.GET.get("cards"):
+        return _for_you_cards(request)
     context = _workspace_context(request, section)
     if section == "projects":
         projects = list(request.user.projects.select_related("repository").prefetch_related("milestones"))
@@ -349,18 +382,14 @@ def workspace_section_view(request, section):
         if tab == "network":
             context.update(_network_context(request, pending))
         else:
-            posts = LearningPost.objects.select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True))
-            if tab == "mine":
-                posts = posts.filter(author=request.user)
-            elif tab == "following":
-                posts = posts.filter(is_public=True, author__in=request.user.following_relationships.values("following"))
-            else:
-                posts = posts.filter(is_public=True)
+            posts = _learning_posts(request.user, tab)
             creators = list(User.objects.filter(pk__in=request.user.following_relationships.values("following"), learning_posts__is_public=True).annotate(latest_post=Max("learning_posts__published_at")).select_related("profile").order_by("-latest_post")[:12])
             for creator in creators:
                 creator.posted_recently = creator.latest_post >= timezone.now() - timedelta(days=7)
-            page = Paginator(posts.order_by("-published_at"), 10).get_page(request.GET.get("page"))
-            context.update({"learning_creators": creators, "learning_page": page, "liked_ids": set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))})
+            page = Paginator(posts, LEARNING_PAGE_SIZE).get_page(request.GET.get("page"))
+            # Ads go in For you and Following, like Instagram's feeds; your own content stays free of them.
+            items = _learning_items(request, page, suggest=page.number == 1) if tab != "mine" else [{"key": f"post:{post.pk}", "post": post} for post in page]
+            context.update({"learning_creators": creators, "learning_page": page, "learning_items": items, "liked_ids": set(PostLike.objects.filter(user=request.user, post_id__in=[post.pk for post in page]).values_list("post_id", flat=True))})
     if section == "portfolio":
         views = PortfolioView.objects.filter(profile=context["profile"], viewed_on__gte=timezone.localdate() - timedelta(days=30))
         context["portfolio_views"] = views.count()
@@ -373,7 +402,7 @@ def create_project_view(request):
     title = request.POST.get("title", "").strip()
     if not title:
         messages.error(request, "Project title is required.")
-        return redirect("landing:dashboard")
+        return redirect(reverse("landing:workspace_section", args=["projects"]) + "#new-project")
     # Like a new repository on GitHub: private unless you choose public, and it applies to the project and its code.
     public = request.POST.get("visibility") == "public"
     project = request.user.projects.create(title=title[:140], summary=request.POST.get("summary", "").strip(), skills=request.POST.get("skills", "").strip(), status="planning", is_public=public)
@@ -382,7 +411,8 @@ def create_project_view(request):
     complete_daily_step(request.user, "build")
     refresh_rank(request.user)
     messages.success(request, f"{'Public' if public else 'Private'} project created. You can now add its proof of work.")
-    return redirect("landing:dashboard")
+    # Stay on Projects, where the dialog was opened, with the new project in view (not the home page).
+    return redirect(reverse("landing:workspace_section", args=["projects"]) + f"#project-{project.pk}")
 @login_required(login_url="landing:home")
 @require_POST
 def update_project_view(request, project_id):
@@ -645,6 +675,8 @@ def public_profile_view(request, handle):
     if (context["tab"] == "posts" or profile.role != "developer") and request.user.is_authenticated:
         context["liked_ids"] = set(PostLike.objects.filter(user=request.user, post__author=owner).values_list("post_id", flat=True))
     if can_recruit:
+        from apps.resumes.services import recruiter_can_see
+        context["resume_available"] = recruiter_can_see(owner, request.user)
         context["viewer_shortlists"] = request.user.shortlists.all()
         context["is_shortlisted"] = ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate=owner).exists()
         context["contact_status"] = ContactRequest.objects.filter(recruiter=request.user, developer=owner).order_by("-created_at").values_list("status", flat=True).first()
@@ -789,6 +821,7 @@ def project_detail_view(request, project_id):
         "owner_profile": Profile.objects.get_or_create(user=project.owner)[0],
         "is_owner": is_owner,
         "repository": visible_repository,
+        "code_version": code_version(visible_repository) if visible_repository else "",  # the page offers a refresh when it changes
         "repository_hidden": bool(repository and not visible_repository),
         "languages": language_breakdown([visible_repository.languages]) if visible_repository else [],
         "posts": posts.annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True)),

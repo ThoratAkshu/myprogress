@@ -1,0 +1,3 @@
+{% load ui %}<ol class="card enquiry-thread" aria-label="Messages">{% for message in thread %}<li class="enquiry-message{% if message.from_centre == centre_view %} mine{% endif %}">
+<span class="enquiry-who">{% if message.from_centre %}{{ enquiry.organization.name }}{% if centre_view and message.author %} · {{ message.author|public_name }}{% endif %}{% elif centre_view %}{{ enquiry.student|public_name }}{% else %}You{% endif %}</span>
+<p>{{ message.text|urlize|linebreaksbr }}</p><time class="muted" datetime="{{ message.created_at|date:'c' }}">{{ message.created_at|date:"j M, g:i a" }}</time></li>{% endfor %}</ol>

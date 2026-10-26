@@ -1,0 +1,14 @@
+{% extends "landing/app_base.html" %}{% load ui %}
+{% block title %}Member activity{% endblock %}
+{% block content %}<div class="section-page guidance-report">
+<header class="page-head"><div><span class="kicker">STAFF</span><h1>Member activity</h1><p class="muted">Students and professionals over the last {{ window_days }} days, and how they respond to the next-step suggestions on their home feed.</p></div><a class="button soft" href="{% url 'promotions:review' %}">{% icon "spotlight" 16 %}Review sponsored posts</a></header>
+<div class="guidance-stats">
+<div class="card"><span class="muted">Active members</span><b>{{ active }}</b><small class="muted">Did something besides signing in</small></div>
+<div class="card"><span class="muted">Only watching</span><b>{{ watching_only }}</b><small class="muted">{{ watching_min }}+ videos watched, nothing built</small></div>
+<div class="card"><span class="muted">Building</span><b>{{ building }}</b><small class="muted">Projects, code or posts</small></div>
+</div>
+<section class="card"><header class="card-head"><h2>Suggestions, last {{ report_days }} days</h2></header>
+<div class="table-wrap"><table class="data-table"><thead><tr><th scope="col">Suggestion</th><th scope="col" class="num">Members shown</th><th scope="col" class="num">Opened</th><th scope="col" class="num">Put aside</th><th scope="col" class="num">Open rate</th></tr></thead>
+<tbody>{% for step in steps %}<tr><td>{{ step.label }}</td><td class="num">{{ step.shown }}</td><td class="num">{{ step.clicked }}</td><td class="num">{{ step.dismissed }}</td><td class="num">{{ step.rate }}%</td></tr>{% endfor %}</tbody></table></div>
+<p class="muted small">Members shown counts each person once. Opened and put aside count every click.</p></section>
+</div>{% endblock %}

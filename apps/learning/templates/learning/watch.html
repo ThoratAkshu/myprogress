@@ -7,4 +7,4 @@
 <nav class="reels-nav" aria-label="Videos"><button type="button" data-reels-step="-1" aria-label="Previous video" title="Previous video (↑). Space pauses, M turns the sound on or off.">{% icon "chevron-up" 22 %}</button><button type="button" data-reels-step="1" aria-label="Next video" title="Next video (↓)">{% icon "chevron-down" 22 %}</button></nav>
 {% else %}<section class="card empty-state reels-empty">{% icon "film" 36 %}<h2>No videos yet</h2><p>Videos people share publicly play here, one after another.</p>{% if nav_is_organization or not nav_is_recruiter %}<a class="button primary" href="{% url 'learning:create' %}?kind=video">Record a video</a>{% endif %}</section>{% endif %}
 {% endblock %}
-{% block scripts %}<script src="{% static 'landing/js/reels.js' %}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'landing/js/reels.js' %}"></script><script src="{% static 'guidance/feed.js' %}" defer></script>{% endblock %}

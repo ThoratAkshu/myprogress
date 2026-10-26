@@ -7,5 +7,6 @@
 {% if member.is_staff or organization.show_leaderboard %}<a href="{% url 'organizations:leaderboard' organization.slug %}"{% if org_section == 'leaderboard' %} aria-current="page"{% endif %}>{% icon "trending-up" 16 %}Leaderboard</a>{% endif %}
 <a href="{% url 'organizations:certificates' organization.slug %}"{% if org_section == 'certificates' %} aria-current="page"{% endif %}>{% icon "award" 16 %}Certificates</a>
 {% if member.is_staff %}<a href="{% url 'organizations:invite' organization.slug %}"{% if org_section == 'invite' %} aria-current="page"{% endif %}>{% icon "user-plus" 16 %}Invite</a>{% endif %}
+{% if member.is_staff %}<a href="{% url 'organizations:admissions' organization.slug %}"{% if org_section == 'admissions' %} aria-current="page"{% endif %}>{% icon "message" 16 %}Admissions{% if admissions_unread %}<span class="tab-badge" aria-label="{{ admissions_unread }} unread">{{ admissions_unread }}</span>{% endif %}</a>{% endif %}
 {% if member.role == 'owner' %}<a href="{% url 'organizations:settings' organization.slug %}"{% if org_section == 'settings' %} aria-current="page"{% endif %}>{% icon "sliders" 16 %}Settings</a>{% endif %}
 </nav>

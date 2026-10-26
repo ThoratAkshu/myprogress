@@ -49,7 +49,9 @@ def _organization(request, slug, staff=False):
     return organization, member
 def _render(request, template, organization, member, section, context=None):
     groups = sorted({group for group in Membership.objects.filter(organization=organization).exclude(group="").values_list("group", flat=True)}, key=str.lower)
-    return render(request, f"organizations/{template}", {"organization": organization, "member": member, "org_section": section, "section": "organization", "org_groups": groups, **(context or {})})
+    from .admissions import unread_for_centre
+    unread = unread_for_centre(organization) if member.is_staff else 0
+    return render(request, f"organizations/{template}", {"organization": organization, "member": member, "org_section": section, "section": "organization", "org_groups": groups, "admissions_unread": unread, **(context or {})})
 def _back(request, fallback):
     target = request.POST.get("next", "")
     return redirect(target if url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}) else fallback)
@@ -166,6 +168,39 @@ def join_view(request, code):
     """The shared invite link. Shows the organization and exactly what teachers will see before anyone joins."""
     organization = get_object_or_404(Organization, invite_code=code)
     return _join(request, organization, None)
+FIND_PAGE_SIZE = 12
+def find_centres_view(request):
+    """Find a coaching centre, by centre: organizations that chose to be listed, searchable by course, name, area and
+    city. Someone who already has an invite code can type it here instead. (Classes are in admissions_views.)"""
+    code = request.GET.get("code", "").strip()
+    if code:
+        organization = Organization.objects.filter(invite_code=code).first()
+        if organization:
+            return redirect("organizations:join", code=organization.invite_code)
+        messages.error(request, "That invite code doesn't match a class. Check it with your teacher.")
+    listed = Organization.objects.filter(is_listed=True)
+    query, city, kind = request.GET.get("q", "").strip()[:80], request.GET.get("city", "").strip(), request.GET.get("kind", "")
+    found = listed
+    if query:
+        found = found.filter(Q(name__icontains=query) | Q(courses__icontains=query) | Q(listing_pitch__icontains=query) | Q(about__icontains=query)
+                             | Q(area__icontains=query) | Q(pincode=query) | Q(batches__is_open=True, batches__course__icontains=query)).distinct()
+    if city:
+        found = found.filter(city__iexact=city)
+    if kind in dict(Organization.KINDS):
+        found = found.filter(kind=kind)
+    found = found.annotate(student_count=Count("memberships", filter=Q(memberships__status="active", memberships__role="student"), distinct=True),
+                           class_count=Count("batches", filter=Q(batches__is_open=True), distinct=True)).order_by("-student_count", "name")
+    page = Paginator(found, FIND_PAGE_SIZE).get_page(request.GET.get("page"))
+    page.object_list = list(page.object_list)
+    states = dict(Membership.objects.filter(user=request.user, organization__in=page.object_list).values_list("organization_id", "status")) if request.user.is_authenticated else {}
+    for organization in page.object_list:
+        organization.my_state = states.get(organization.pk, "")
+    cities = sorted({value for value in listed.exclude(city="").values_list("city", flat=True)}, key=str.lower)
+    from .admissions import unread_for_student
+    return render(request, "organizations/find_centres.html", {
+        "section": "organization", "find_tab": "centres", "page": page, "cities": cities, "kinds": Organization.KINDS,
+        "query": query, "city": city, "kind": kind, "listed_count": listed.count(), "code": code, "unread": unread_for_student(request.user),
+    })
 def accept_invite_view(request, token):
     invite = get_object_or_404(Invite.objects.select_related("organization"), token=token)
     if invite.accepted_at and invite.accepted_by != request.user:

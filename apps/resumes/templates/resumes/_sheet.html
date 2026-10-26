@@ -1,0 +1,26 @@
+{% load ui %}<article class="resume-sheet is-{{ resume.template }}" aria-label="Resume of {{ resume.name }}">
+<header class="rs-head"><h1>{{ resume.name }}</h1>{% if resume.headline %}<p class="rs-headline">{{ resume.headline }}</p>{% endif %}
+<ul class="rs-contact">{% if resume.email %}<li>{% icon "mail" 13 %}<a href="mailto:{{ resume.email }}">{{ resume.email }}</a></li>{% endif %}{% if resume.phone %}<li>{% icon "phone" 13 %}{{ resume.phone }}</li>{% endif %}{% if resume.location %}<li>{% icon "map-pin" 13 %}{{ resume.location }}</li>{% endif %}{% if resume.portfolio_url %}<li>{% icon "globe" 13 %}<a href="{{ resume.portfolio_url }}">{{ resume.portfolio_url|cut:"https://"|cut:"http://" }}</a></li>{% endif %}{% for link in resume.links %}<li>{% icon "link" 13 %}<a href="{{ link.url }}">{{ link.label }}</a></li>{% endfor %}</ul></header>
+<div class="rs-body">
+<div class="rs-main">
+{% if resume.summary %}<section><h2>Summary</h2><p>{{ resume.summary }}</p></section>{% endif %}
+{% if resume.experience %}<section><h2>Experience</h2><div class="rs-item"><b>{{ resume.experience.title|default:"Working professional" }}</b>{% if resume.experience.company %}<span>{{ resume.experience.company }}</span>{% endif %}</div></section>{% endif %}
+{% if resume.projects %}<section><h2>Projects</h2>{% for project in resume.projects %}<div class="rs-project">
+<div class="rs-project-head"><b>{{ project.title }}</b><span class="rs-tag">{{ project.status }}</span>{% if project.private and resume.for_owner %}<span class="rs-tag is-private">Private</span>{% endif %}</div>
+{% if project.summary %}<p>{{ project.summary|truncatechars:280 }}</p>{% endif %}
+{% if project.meta %}<p class="rs-meta">{{ project.meta|join:" · " }}</p>{% endif %}
+{% if project.url or project.live_url %}<p class="rs-links">{% if project.url %}<a href="{{ project.url }}">{{ project.url|cut:"https://"|cut:"http://" }}</a>{% endif %}{% if project.url and project.live_url %} · {% endif %}{% if project.live_url %}<a href="{{ project.live_url }}">Live demo</a>{% endif %}</p>{% endif %}
+</div>{% endfor %}</section>{% endif %}
+{% if resume.certificates %}<section><h2>Certificates</h2>{% for certificate in resume.certificates %}<div class="rs-item"><b>{{ certificate.title }}</b><span>{{ certificate.organization }} · {{ certificate.issued|date:"M Y" }} · <a href="{{ certificate.url }}">Verify</a></span></div>{% endfor %}</section>{% endif %}
+{% if resume.writing %}<section><h2>Writing and videos</h2>{% for post in resume.writing %}<div class="rs-item"><b><a href="{{ post.url }}">{{ post.title }}</a></b><span>{{ post.kind }}{% if post.views %} · {{ post.views }} view{{ post.views|pluralize }}{% endif %}</span></div>{% endfor %}{% if resume.post_count > resume.writing|length %}<p class="rs-note">{{ resume.post_count }} posts in all on MyProgress</p>{% endif %}</section>{% endif %}
+</div>
+<aside class="rs-side">
+{% if resume.skills %}<section><h2>Skills</h2><ul class="rs-chips">{% for skill in resume.skills %}<li>{{ skill }}</li>{% endfor %}</ul></section>{% endif %}
+{% if resume.languages %}<section><h2>Languages in their code</h2><ul class="rs-bars">{% for language in resume.languages %}<li><span>{{ language.name }}</span><i style="--w:{{ language.percent }}%"></i><small>{{ language.percent|floatformat:0 }}%</small></li>{% endfor %}</ul><p class="rs-note">From code pushed to MyProgress</p></section>{% endif %}
+{% if resume.education %}<section><h2>Education</h2><div class="rs-item"><b>{{ resume.education.institution }}</b>{% if resume.education.year %}<span>Class of {{ resume.education.year }}</span>{% endif %}</div></section>{% endif %}
+{% if resume.stats %}<section><h2>On MyProgress</h2><dl class="rs-stats"><div><dt>Score</dt><dd>{{ resume.stats.score }}</dd></div>{% if resume.stats.rank %}<div><dt>Rank</dt><dd>#{{ resume.stats.rank }}</dd></div>{% endif %}<div><dt>Coding days</dt><dd>{{ resume.stats.coding_days }}<small> in {{ resume.stats.window }} days</small></dd></div><div><dt>Commits</dt><dd>{{ resume.stats.commits }}</dd></div></dl></section>{% endif %}
+{% if resume.solved %}<section><h2>Practice</h2><p>{{ resume.solved }} coding problem{{ resume.solved|pluralize }} solved</p></section>{% endif %}
+</aside>
+</div>
+<p class="rs-foot">Made from {{ resume.name }}'s work on MyProgress{% if resume.portfolio_url %}: projects, code and certificates are on {{ resume.portfolio_url|cut:"https://"|cut:"http://" }}{% endif %}</p>
+</article>

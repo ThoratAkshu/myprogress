@@ -1,0 +1,13 @@
+{% load ui %}<section class="card enquiry-card" id="enquire"><h2>{% if batch %}Ask about this class{% else %}Send an enquiry{% endif %}</h2>
+{% if open_enquiry %}<p class="enquiry-open">{% icon "message" 16 %}<span>You asked on {{ open_enquiry.created_at|date:"j M" }}. <a href="{% url 'organizations:my_enquiry' open_enquiry.pk %}">See the conversation</a></span></p>{% endif %}
+{% if viewer_is_staff %}<p class="muted">Students write to you from here. Their enquiries arrive in <a href="{% url 'organizations:admissions' organization.slug %}">Admissions</a>.</p>
+{% elif batch and not batch.is_open %}<p class="muted">This class isn't taking enquiries now. <a href="{% url 'organizations:listing' organization.slug %}#enquire">Ask the centre</a> about their other batches.</p>
+{% elif can_send %}<form method="post" action="{% url 'organizations:enquire' organization.slug %}" class="org-form enquiry-form">{% csrf_token %}{{ form.batch }}{% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+<label>{{ form.message.label }}{{ form.message }}{% for error in form.message.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<label>{{ form.phone.label }}{{ form.phone }}{% for error in form.phone.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<small class="muted">{{ organization.name }} sees your name, your profile and this message, and your phone number if you add it. Replies come to <a href="{% url 'organizations:my_enquiries' %}">Your enquiries</a>.</small>
+<button class="button primary">{% icon "send" 16 %}{% if open_enquiry %}Send another message{% else %}Send enquiry{% endif %}</button></form>
+{% elif user.is_authenticated %}<p class="muted">Enquiries come from student and professional accounts.</p>
+{% else %}<a class="button primary block" href="{% url 'landing:register' %}?next={{ request.path|urlencode }}">Create a free account to ask</a>
+<form class="org-signin" action="{% url 'landing:login' %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}#enquire"><p class="muted">Already on MyProgress? Sign in to ask.</p><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="button soft block">Sign in and continue</button></form>{% endif %}
+</section>

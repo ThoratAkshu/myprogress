@@ -1,0 +1,21 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}Your resume{% endblock %}
+{% block body_class %}resume-page{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'resumes/resume.css' %}">{% endblock %}
+{% block content %}<div class="resume-layout">
+<form method="post" class="card resume-editor" data-resume-form>{% csrf_token %}
+<h1>Your resume</h1>
+<p class="muted">Made from your work on MyProgress: projects, code, certificates and write-ups. It keeps up as you build, so there's nothing to update by hand.</p>
+<fieldset class="resume-templates"><legend>Layout</legend>{% for choice in form.template %}<label class="resume-template-choice">{{ choice.tag }}<span class="resume-thumb is-{{ choice.data.value }}" aria-hidden="true"><i></i><i></i><i></i></span><b>{{ choice.choice_label }}</b></label>{% endfor %}</fieldset>
+<label class="resume-field">{{ form.summary.label }}{{ form.summary }}<small class="muted">Leave it empty to use the one written from your work (shown in grey).</small>{% for error in form.summary.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<label class="resume-field">{{ form.phone.label }}{{ form.phone }}<small class="muted">Recruiters see it only after you accept their contact request.</small>{% for error in form.phone.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>
+<label class="resume-check">{{ form.show_email }}<span>{{ form.show_email.label }} <small class="muted">on your copy</small></span></label>
+<fieldset class="resume-pick"><legend>{{ form.projects.label }} <small class="muted">up to 6, in this order</small></legend>{% for choice in form.projects %}<label class="resume-check">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% empty %}<p class="muted small">No projects yet. <a href="{% url 'landing:workspace_section' 'projects' %}#new-project">Start one</a> and it shows here.</p>{% endfor %}{% if form.projects.field.choices %}<small class="muted">None ticked shows your strongest ones.</small>{% endif %}{% for error in form.projects.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</fieldset>
+<fieldset class="resume-pick"><legend>{{ form.sections.label }}</legend>{% for choice in form.sections %}<label class="resume-check">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</fieldset>
+<label class="resume-check">{{ form.recruiters_can_download }}<span>{{ form.recruiters_can_download.label }}<small class="muted own-line">They get your public projects only, and your email only if you share it or accept their request.</small></span></label>
+<button class="button primary">Save</button>
+</form>
+<div class="resume-preview"><div class="resume-tools"><button class="button primary" type="button" data-print>{% icon "download" 16 %}Download PDF</button><small class="muted">In the print window, choose "Save as PDF".</small></div>
+{% include "resumes/_sheet.html" %}</div>
+</div>{% endblock %}
+{% block scripts %}<script src="{% static 'resumes/resume.js' %}" defer></script>{% endblock %}

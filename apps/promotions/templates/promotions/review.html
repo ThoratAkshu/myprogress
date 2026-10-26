@@ -1,0 +1,18 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}Review sponsored posts{% endblock %}
+{% block content %}<div class="section-page promo-page">
+<header class="page-head"><div><span class="kicker">STAFF</span><h1>Sponsored posts</h1><p class="muted">Approve posts that are honest and clear, or send them back with a note saying what to change.</p></div><a class="button soft" href="{% url 'guidance:report' %}">{% icon "activity" 16 %}Member activity</a></header>
+<nav class="promo-tabs" aria-label="Sponsored posts"><a class="{% if tab == 'pending' %}active{% endif %}" href="?tab=pending"{% if tab == 'pending' %} aria-current="page"{% endif %}>Waiting <span>{{ counts.pending }}</span></a><a class="{% if tab == 'live' %}active{% endif %}" href="?tab=live"{% if tab == 'live' %} aria-current="page"{% endif %}>Live <span>{{ counts.live }}</span></a><a class="{% if tab == 'reported' %}active{% endif %}" href="?tab=reported"{% if tab == 'reported' %} aria-current="page"{% endif %}>Reported <span>{{ counts.reported }}</span></a></nav>
+{% for promotion in posts %}<section class="card promo-review">
+<div class="promo-review-card">{% include "promotions/_card.html" with promotion=promotion preview=True %}</div>
+<div class="promo-review-info"><dl class="promo-facts"><div><dt>Sponsor</dt><dd>{{ promotion.sponsor_name }} · {{ promotion.get_sponsor_kind_display }}</dd></div><div><dt>Submitted by</dt><dd>{{ promotion.created_by.get_full_name|default:promotion.created_by.email }} ({{ promotion.created_by.email }})</dd></div>
+<div><dt>Shown to</dt><dd>{{ promotion.audience_labels|join:", " }}{% if promotion.skill_list %}; skills {{ promotion.skill_list|join:", " }}{% endif %}{% if promotion.city %}; in {{ promotion.city }}{% endif %}</dd></div>
+<div><dt>Button goes to</dt><dd>{% if promotion.cta_url %}<code>{{ promotion.cta_url }}</code>{% else %}The sponsor's own page{% endif %}</dd></div>
+<div><dt>Runs</dt><dd>{% if promotion.starts_on %}{{ promotion.starts_on|date:"M j, Y" }}{% else %}On approval{% endif %} – {% if promotion.ends_on %}{{ promotion.ends_on|date:"M j, Y" }}{% else %}until ended{% endif %}{% if promotion.max_views %}, up to {{ promotion.max_views }} views{% endif %}</dd></div>
+<div><dt>So far</dt><dd>{{ promotion.views }} views · {{ promotion.clicks }} clicks{% if promotion.report_count %} · <b class="form-error">{{ promotion.report_count }} report{{ promotion.report_count|pluralize }}</b>{% endif %}</dd></div>
+<div><dt>Status</dt><dd>{{ promotion.get_status_display }}{% if promotion.review_note %} · {{ promotion.review_note }}{% endif %}</dd></div></dl>
+<form method="post" action="{% url 'promotions:review_action' promotion.pk %}" class="promo-review-actions">{% csrf_token %}<input type="hidden" name="tab" value="{{ tab }}">
+{% if promotion.status != "live" %}<button class="button primary" name="action" value="approve">{% icon "check" 16 %}Approve</button>{% endif %}
+<label class="promo-note">Note for the sponsor<input name="note" maxlength="300" placeholder="What needs to change"></label><button class="button soft" name="action" value="reject">{% if promotion.status == "live" %}Stop and send back{% else %}Send back{% endif %}</button></form></div>
+</section>{% empty %}<section class="card empty-state">{% icon "check-circle" 36 %}<h2>{% if tab == "pending" %}Nothing waiting for review{% elif tab == "live" %}No posts are live{% else %}No reported posts{% endif %}</h2></section>{% endfor %}
+</div>{% endblock %}

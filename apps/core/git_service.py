@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 import re
 import subprocess
@@ -172,6 +173,14 @@ def refresh_repository_languages(repository):
 def branch_heads(repository):
     result = run_git("for-each-ref", "--format=%(objectname)", "refs/heads", cwd=repository_path(repository))
     return set(result.stdout.split())
+def code_version(repository):
+    """A short fingerprint of the branch heads. It changes whenever a branch moves (a push, a merge or an edit on the
+    site), so an open page can compare it and offer a refresh."""
+    try:
+        heads = sorted(branch_heads(repository))
+    except Exception:
+        return ""
+    return hashlib.sha1(" ".join(heads).encode()).hexdigest()[:16] if heads else "empty"
 def count_new_commits(repository, previous_heads):
     new_heads = branch_heads(repository) - previous_heads
     if not new_heads:

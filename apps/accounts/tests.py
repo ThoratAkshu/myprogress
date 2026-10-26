@@ -41,8 +41,8 @@ class AuthenticationFlowTests(TestCase):
         user = User.objects.create_user(username="builder@example.com", password="StrongPass!482")
         self.client.force_login(user)
         response = self.client.post(reverse("landing:create_project"), {"title": "Portfolio API", "summary": "A documented API", "skills": "Django, PostgreSQL"})
-        self.assertRedirects(response, reverse("landing:dashboard"))
         project = user.projects.get(title="Portfolio API")
+        self.assertRedirects(response, reverse("landing:workspace_section", args=["projects"]) + f"#project-{project.pk}", fetch_redirect_response=False)  # stays on Projects
         self.assertEqual(project.milestones.count(), 4)
         self.assertTrue(user.activity_events.filter(action="created_project").exists())
         self.assertTrue(user.daily_loop_completions.filter(step="build").exists())

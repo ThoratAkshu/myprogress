@@ -1,0 +1,6 @@
+{% load ui %}<nav class="chip-tabs admissions-tabs" aria-label="Admissions">
+<a href="{% url 'organizations:admissions' organization.slug %}"{% if admissions_tab == 'enquiries' %} aria-current="page"{% endif %}>{% icon "message" 15 %}Enquiries{% if admissions_unread %}<span class="tab-badge">{{ admissions_unread }}</span>{% endif %}</a>
+<a href="{% url 'organizations:batches' organization.slug %}"{% if admissions_tab == 'classes' %} aria-current="page"{% endif %}>{% icon "calendar" 15 %}Classes you list</a>
+{% if organization.is_listed %}<a href="{% url 'organizations:listing' organization.slug %}">{% icon "eye" 15 %}Your page in Find a class</a>{% endif %}
+</nav>
+{% if not organization.is_listed %}<p class="card org-note">{% icon "info" 16 %}<span>Your centre isn't listed in Find a coaching centre yet, so students can't find it or send enquiries. {% if member.role == 'owner' %}<a href="{% url 'organizations:settings' organization.slug %}">Turn on "List us in Find a coaching centre" in Settings</a>.{% else %}Ask the owner to list it in Settings.{% endif %}</span></p>{% endif %}

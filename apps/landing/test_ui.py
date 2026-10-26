@@ -63,7 +63,7 @@ class FeedTests(TestCase):
         self.event(self.friend, "created_project", project_id=private_repo.project_id)
         self.event(self.stranger, "created_project", project_id=Project.objects.create(owner=self.stranger, title="Not followed").pk)
         response = self.client.get(reverse("landing:dashboard"))
-        feed = response.context["feed"]
+        feed = [item for item in response.context["feed"] if "action" in item]  # activity only, not the next-step suggestion
         network = [item for item in feed if not item["suggested"]]
         self.assertEqual([item["action"] for item in network], ["published_learning", "pushed_commits"])
         self.assertEqual(network[1]["commits"], 5)
@@ -81,7 +81,7 @@ class FeedTests(TestCase):
         self.event(self.friend, "created_project", project_id=project.pk)
         def shown(show):
             response = self.client.get(reverse("landing:dashboard"), {"show": show})
-            return response, [item.get("post", item.get("project")) for item in response.context["feed"]]
+            return response, [item.get("post", item.get("project")) for item in response.context["feed"] if "action" in item]
         response, items = shown("videos")
         self.assertEqual(items, [video])
         self.assertContains(response, 'class="active" href="/dashboard/" aria-current="true"')

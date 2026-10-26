@@ -1,0 +1,11 @@
+{% load ui org_tags %}<a class="card find-card class-card" href="{% url 'organizations:batch' batch.pk %}">
+{% if not hide_centre %}<span class="class-card-centre"><span class="org-logo xs" aria-hidden="true">{{ batch.organization|face }}</span><span>{{ batch.organization.name }}</span></span>{% endif %}
+<b class="class-card-title">{{ batch.title }}</b>
+<ul class="course-chips" aria-label="About this class"><li>{{ batch.course }}</li><li class="chip-plain">{{ batch.get_level_display }}</li><li class="chip-plain">{{ batch.get_mode_display }}</li></ul>
+<ul class="class-facts">
+<li>{% icon "clock" 14 %}<span>{{ batch.schedule }}</span></li>
+{% if batch.starts_on %}<li>{% icon "calendar" 14 %}<span>{% if batch.has_started %}Started{% else %}Starts{% endif %} {{ batch.starts_on|date:"j M" }}{% if batch.duration %} · {{ batch.duration }}{% endif %}</span></li>{% elif batch.duration %}<li>{% icon "calendar" 14 %}<span>{{ batch.duration }}</span></li>{% endif %}
+{% if batch.in_person and batch.place %}<li>{% icon "map-pin" 14 %}<span>{{ batch.place }}{% if batch.mode == 'both' %}, or online{% endif %}</span></li>{% elif batch.mode == 'online' %}<li>{% icon "globe" 14 %}<span>Online, join from anywhere</span></li>{% endif %}
+</ul>
+<span class="find-card-foot"><span class="class-fee">{% if batch.fee is not None %}<b>{{ batch.fee|rupees }}</b> <small class="muted">{{ batch.get_fee_period_display }}</small>{% else %}<small class="muted">Fee on enquiry</small>{% endif %}</span><span class="find-state join">Details {% icon "chevron-right" 14 %}</span></span>
+</a>

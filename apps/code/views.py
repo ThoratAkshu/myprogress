@@ -7,13 +7,13 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db.models import Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.models import Profile
-from apps.core.git_service import MAX_RAW_BYTES, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access, user_can_administer
+from apps.core.git_service import MAX_RAW_BYTES, code_version, MergeConflict, can_merge_cleanly, clean_repo_path, commit_detail, compare_branches, merge_branches, object_type, read_blob, refresh_repository_languages, resolve_ref, user_can_access, user_can_administer
 from apps.core.models import Issue, IssueComment, Repository, RepositoryCollaborator, RepositoryInvitation, invitation_expiry, invitation_token
 from apps.core.audit import record
 from apps.core.services import record_activity
@@ -352,3 +352,12 @@ def invitation_list_view(request):
         invitation.abilities = invitations.abilities(invitation.role)
     from apps.companies.services import pending_for as company_invitations
     return render(request, "code/invitations.html", {"invitations": waiting, "company_invitations": list(company_invitations(request.user)), "section": "code"})
+def state_view(request, repository_id):
+    """The repository's code version as JSON. Its open pages check it every few seconds and offer a refresh once a
+    push has moved a branch, so new code shows without reloading by hand."""
+    repository = Repository.objects.filter(pk=repository_id).first()
+    if repository is None or not user_can_access(request.user, repository):
+        return JsonResponse({"error": "Not available"}, status=404)
+    response = JsonResponse({"version": code_version(repository)})
+    response["Cache-Control"] = "no-store"
+    return response

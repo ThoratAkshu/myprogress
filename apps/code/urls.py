@@ -1,7 +1,8 @@
 from django.urls import path
-from .views import blob_view, collaborators_view, leave_view, transfer_view, commit_view, issue_comment_view, issue_create_view, issue_detail_view, issue_list_view, issue_state_view, pull_create_view, pull_merge_view, raw_view
+from .views import state_view, blob_view, collaborators_view, leave_view, transfer_view, commit_view, issue_comment_view, issue_create_view, issue_detail_view, issue_list_view, issue_state_view, pull_create_view, pull_merge_view, raw_view
 app_name = "code"
 urlpatterns = [
+    path("state/", state_view, name="state"),
     path("blob/", blob_view, name="blob"),
     path("raw/", raw_view, name="raw"),
     path("commits/<str:sha>/", commit_view, name="commit"),

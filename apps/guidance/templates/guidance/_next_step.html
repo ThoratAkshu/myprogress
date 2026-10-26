@@ -1,0 +1,12 @@
+{% load ui %}<article class="card sponsored suggested ad-card" data-next-step data-ad-card aria-label="A suggestion from MyProgress">
+<header class="sponsored-head"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="sponsored-who"><b>MyProgress</b><small class="muted">Recommended for you</small></span>
+<details class="sponsored-menu"><summary aria-label="Options for this suggestion" title="Options">{% icon "menu" 18 %}</summary><form method="post" action="{% url 'guidance:dismiss' step.key %}" class="app-menu-panel" data-next-step-dismiss>{% csrf_token %}
+<button name="reason" value="later">{% icon "clock" 16 %}Not now</button><button name="reason" value="not_for_me">{% icon "eye-off" 16 %}{{ step.not_for_me }}</button></form></details></header>
+<a class="ad-creative" href="{% url 'guidance:go' step.key %}" tabindex="-1" aria-hidden="true">
+<span class="ad-creative-top"><span class="ad-creative-icon">{% icon step.icon 26 %}</span><span class="ad-creative-text"><small>Your next step</small><b>{{ step.title }}</b></span></span>
+{% if step.highlights %}<ol class="ad-creative-steps">{% for item in step.highlights %}<li><span>{{ forloop.counter }}</span>{{ item }}</li>{% endfor %}</ol>{% endif %}
+{% if step.tags %}<span class="ad-creative-tags">{% for tag in step.tags %}<i>{{ tag }}</i>{% endfor %}</span>{% endif %}
+</a>
+<div class="sponsored-body"><h3 class="sr-only">{{ step.title }}</h3><p>{{ step.reason }}</p></div>
+<footer class="sponsored-foot ad-cta"><a class="button primary" href="{% url 'guidance:go' step.key %}">{{ step.primary.label }}{% icon "arrow-up-right" 16 %}</a>{% if step.secondary %}<a class="button soft" href="{% url 'guidance:go' step.key %}?to=other">{{ step.secondary.label }}</a>{% endif %}<small class="muted sponsored-why" title="Why am I seeing this?">{% icon "info" 14 %}Based on your last two weeks on MyProgress</small></footer>
+</article>

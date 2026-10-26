@@ -9,7 +9,8 @@
   let active = null;
   let loading = false;
   const startAt = Number(new URLSearchParams(location.search).get("t")) || 0;  // opened from a feed mid-video
-  let finished = false;
+  let finished = false;  // only when there are no videos at all: otherwise Watch never ends
+  let round = new Set(items().map(item => item.dataset.post));  // videos already on the page in this pass through the list
 
   // The scroller fills the space between the header and the bars fixed at the bottom (phone tabs, the status bar).
   function fit() {
@@ -87,7 +88,7 @@
     if (video && !player.still) player.play(video);
     const embed = reel.querySelector("[data-reel-embed]");
     if (embed) mountEmbed(embed);
-    history.replaceState(history.state, "", `${location.pathname}?post=${reel.dataset.post}`);
+    if (reel.dataset.post) history.replaceState(history.state, "", `${location.pathname}?post=${reel.dataset.post}`);  // ad slides have none
     showPlace();
     if (index >= list.length - 2) loadMore();
   }
@@ -109,11 +110,12 @@
     });
   }
 
-  async function loadMore() {
+  async function loadMore(restarted = false) {
     if (loading || finished) return;
     loading = true;
+    let restart = false;
     try {
-      const shown = items().map(item => item.dataset.post).join(",");
+      const shown = [...round].join(",");
       const response = await fetch(`${reels.dataset.moreUrl}?more=1&shown=${shown}`, { headers: { Accept: "text/html" }, credentials: "same-origin" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const page = new DOMParser().parseFromString(await response.text(), "text/html");
@@ -122,14 +124,16 @@
         const node = document.importNode(reel, true);
         reels.append(node);
         prepare(node);
+        if (node.dataset.post) round.add(node.dataset.post);
+        window.MyProgressAds?.watch(node);  // an ad slide glows once when it comes into view
       });
       if (!added.length) {
-        finished = true;
-        const end = document.createElement("section");
-        end.className = "reels-end";
-        end.innerHTML = '<p><b>You\'re all caught up.</b> That\'s every video shared so far.</p><button class="button soft" type="button">Watch from the start</button>';
-        end.querySelector("button").addEventListener("click", () => items()[0]?.scrollIntoView({ block: "start" }));
-        reels.append(end);
+        // Every video has been on the page: keep going from the first one again, like Reels, instead of ending.
+        if (restarted || !items().length) finished = true;
+        else {
+          round = new Set();
+          restart = true;
+        }
       }
       showPlace();
     } catch {
@@ -137,6 +141,7 @@
     } finally {
       loading = false;
     }
+    if (restart) loadMore(true);
   }
 
   document.querySelectorAll("[data-reels-step]").forEach(button => button.addEventListener("click", () => go(Number(button.dataset.reelsStep))));

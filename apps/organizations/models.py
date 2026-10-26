@@ -4,9 +4,11 @@ from datetime import timedelta
 import uuid
 from django.conf import settings
 from pathlib import PurePosixPath
+from urllib.parse import quote_plus
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.utils import timezone
 MATERIAL_EXTENSIONS = ["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv", "txt", "md", "zip", "png", "jpg", "jpeg", "ipynb", "py", "js", "java", "c", "cpp", "sql"]
 MAX_FILE_BYTES = 25 * 1024 * 1024
 def private_upload(instance, filename):
@@ -28,15 +30,36 @@ class Organization(models.Model):
     join_requires_approval = models.BooleanField(default=False, help_text="New members wait until a teacher approves them")
     show_leaderboard = models.BooleanField(default=True, help_text="Students can see the class leaderboard")
     parent_digest = models.BooleanField(default=True, help_text="Parents with a report link get a weekly summary email")
+    # Find a coaching centre: organizations choose to be listed; students then ask to join and a teacher approves.
+    is_listed = models.BooleanField(default=False, help_text="Show it in Find a coaching centre so students can ask to join")
+    listing_pitch = models.CharField(max_length=160, blank=True, help_text="One line for the list, like Full-stack web development, weekend batches")
+    courses = models.CharField(max_length=300, blank=True, help_text="Comma-separated, so students can search for them")
+    # Where and how to reach the centre, shown on its listing so students can search by place and visit or call.
+    area = models.CharField(max_length=80, blank=True, help_text="Neighbourhood or locality, like Kothrud")
+    address = models.CharField(max_length=255, blank=True, help_text="Street address students can visit")
+    pincode = models.CharField(max_length=10, blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True, help_text="Shown on your listing. Leave it empty to take enquiries only through MyProgress.")
+    opening_hours = models.CharField(max_length=120, blank=True, help_text="Like Mon–Sat, 8 am – 8 pm")
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ["name"]
     def __str__(self):
         return self.name
     @property
+    def place(self):
+        return ", ".join(part for part in [self.area, self.city] if part)
+    @property
+    def map_url(self):
+        """A Google Maps search for the address; no key or embed needed."""
+        query = ", ".join(part for part in [self.name, self.address, self.area, self.city, self.pincode] if part)
+        return "https://www.google.com/maps/search/?api=1&query=" + quote_plus(query) if (self.address or self.area) else ""
+    @property
     def initials(self):
         words = [word for word in self.name.split() if word[:1].isalnum()]
         return "".join(word[0] for word in words[:2]).upper() or self.name[:2].upper()
+    @property
+    def course_list(self):
+        return [course.strip() for course in self.courses.split(",") if course.strip()]
 class Membership(models.Model):
     ROLES = [("owner", "Owner"), ("teacher", "Teacher"), ("student", "Student")]
     STATUSES = [("active", "Active"), ("pending", "Waiting for approval")]
@@ -312,3 +335,86 @@ class PlaylistItem(models.Model):
     class Meta:
         ordering = ["position", "pk"]
         constraints = [models.UniqueConstraint(fields=["playlist", "post"], name="playlist_item_once")]
+class Batch(models.Model):
+    """A class a listed centre runs for new students: what, when, where and for how much. Students find these in
+    Find a coaching centre by course and place, and send the centre an enquiry about one."""
+    MODES = [("centre", "At the centre"), ("online", "Online"), ("both", "At the centre or online")]
+    LEVELS = [("beginner", "Beginner"), ("intermediate", "Intermediate"), ("advanced", "Advanced"), ("all", "All levels")]
+    FEE_PERIODS = [("course", "for the course"), ("month", "a month")]
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="batches")
+    title = models.CharField(max_length=120, help_text="Like Python for beginners, weekend batch")
+    course = models.CharField(max_length=60, help_text="The subject students search for, like Python")
+    description = models.TextField(max_length=2000, blank=True, help_text="What students learn and who it's for")
+    level = models.CharField(max_length=12, choices=LEVELS, default="beginner")
+    mode = models.CharField(max_length=10, choices=MODES, default="centre")
+    area = models.CharField(max_length=80, blank=True, help_text="Leave empty to use the centre's area")
+    city = models.CharField(max_length=80, blank=True, help_text="Leave empty to use the centre's city")
+    schedule = models.CharField(max_length=120, help_text="Days and time, like Sat and Sun, 10 am – 1 pm")
+    starts_on = models.DateField(null=True, blank=True)
+    duration = models.CharField(max_length=60, blank=True, help_text="Like 3 months")
+    fee = models.PositiveIntegerField(null=True, blank=True, help_text="In rupees. Leave it empty to share it when students ask.")
+    fee_period = models.CharField(max_length=10, choices=FEE_PERIODS, default="course")
+    seats = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Leave it empty if there's no limit")
+    is_open = models.BooleanField(default=True, help_text="Taking enquiries. Turn it off when the batch is full.")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["starts_on", "title"]
+    def __str__(self):
+        return self.title
+    @property
+    def where_area(self):
+        return self.area or self.organization.area
+    @property
+    def where_city(self):
+        return self.city or self.organization.city
+    @property
+    def place(self):
+        return ", ".join(part for part in [self.where_area, self.where_city] if part)
+    @property
+    def in_person(self):
+        return self.mode in {"centre", "both"}
+    @property
+    def has_started(self):
+        return bool(self.starts_on and self.starts_on < timezone.localdate())
+class Enquiry(models.Model):
+    """A student's question to a listed centre, about one class or the centre in general. Both sides write back and
+    forth on it; the centre keeps track of where it stands."""
+    STATUSES = [("new", "New"), ("replied", "Replied"), ("joined", "Joined"), ("closed", "Closed")]
+    OPEN = {"new", "replied"}
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="enquiries")
+    batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True, blank=True, related_name="enquiries")
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name="enquiries")
+    phone = models.CharField(max_length=20, blank=True, help_text="Shared only with this centre")
+    status = models.CharField(max_length=10, choices=STATUSES, default="new", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_message_at = models.DateTimeField(default=timezone.now)
+    student_read_at = models.DateTimeField(null=True, blank=True)
+    centre_read_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        ordering = ["-last_message_at"]
+    def __str__(self):
+        return f"{self.student} → {self.organization}"
+    @property
+    def topic(self):
+        return self.batch.title if self.batch else "General enquiry"
+    @property
+    def last_message(self):
+        """The newest message, from the prefetched ones when the list prefetched them."""
+        messages = list(self.messages.all())
+        return messages[-1] if messages else None
+    @property
+    def unread_for_centre(self):
+        return not self.centre_read_at or self.centre_read_at < self.last_message_at
+    @property
+    def unread_for_student(self):
+        return not self.student_read_at or self.student_read_at < self.last_message_at
+class EnquiryMessage(models.Model):
+    enquiry = models.ForeignKey(Enquiry, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    from_centre = models.BooleanField(default=False)
+    text = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ["created_at", "pk"]

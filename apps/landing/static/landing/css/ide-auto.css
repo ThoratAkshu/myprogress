@@ -844,6 +844,82 @@ body.ide .optional-editor>span{background:hsla(210,70%,60%,.13);color:var(--viol
 body.ide .optional-editor a{color:var(--violet-dark)}
 body.ide .desktop-setup footer{border-top:1px solid var(--ide-line);color:var(--ide-muted)}
 body.ide .desktop-setup footer b{color:hsl(222,39%,72%)}
+/* growth.css */
+body.ide .sr-only{border:0}
+body.ide .page-back{color:var(--muted)}
+body.ide .page-back:hover{color:var(--violet)}
+body.ide .reel-ad-hint{color:var(--muted)}
+body.ide .push-notice{background:var(--hero-bg);color:#fff}
+@media (prefers-reduced-motion:reduce){body.ide .project-row:target{background:var(--violet-soft)}
+}body.ide .ad-creative{background:var(--hero-bg);color:#fff}
+body.ide .ad-creative:hover{color:#fff}
+body.ide .ad-creative-icon{background:rgba(255,255,255,.14);color:#fff}
+body.ide .ad-creative-text small{color:rgba(255,255,255,.72)}
+body.ide .ad-creative-steps li{background:rgba(255,255,255,.09)}
+body.ide .ad-creative-steps span{background:var(--accent);color:#fff}
+body.ide .ad-creative-tags i{background:rgba(255,255,255,.16)}
+body.ide .sponsored-menu>summary{color:var(--muted)}
+body.ide .sponsored-menu>summary:hover{background:var(--canvas);color:var(--ink)}
+body.ide .sponsored-menu .app-menu-panel{background:var(--surface)}
+body.ide .sponsored-media{background:var(--canvas)}
+body.ide .sponsored-body p{color:var(--ink)}
+body.ide .find-q{border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+body.ide .find-q input{border:0;background:none;color:var(--ink)}
+body.ide .find-search select,body.ide .find-code input{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .find-card{color:var(--ink)}
+body.ide .find-card:hover{border-color:var(--violet)}
+body.ide .find-card-foot{border-top:1px solid var(--line)}
+body.ide .find-state{color:var(--muted)}
+body.ide .find-state.join{color:var(--violet)}
+body.ide .find-state.member{color:hsl(137,76%,72%)}
+body.ide .course-chips li{background:var(--violet-soft);color:var(--violet)}
+body.ide .tab-badge{background:var(--ide-accent-strong);color:#fff}
+body.ide .org-logo.xs{background:var(--violet-soft);color:var(--violet)}
+body.ide .class-card-centre{color:var(--muted)}
+body.ide a.class-card-centre:hover{color:var(--violet)}
+body.ide .course-chips .chip-plain{background:var(--canvas);color:var(--muted)}
+body.ide .class-facts li>.icon{color:var(--muted)}
+body.ide .class-facts a{color:var(--violet)}
+body.ide .centre-preview .icon{color:var(--violet)}
+body.ide .class-spec dt{color:var(--muted)}
+body.ide .enquiry-open{background:var(--violet-soft);color:var(--ink)}
+body.ide .enquiry-open .icon{color:var(--violet)}
+body.ide .enquiry-row{border-top:1px solid var(--line);color:var(--ink)}
+body.ide .enquiry-row:first-child{border-top:0}
+body.ide .enquiry-row:hover{background:var(--canvas)}
+body.ide .enquiry-row-main small{color:var(--muted)}
+body.ide .enquiry-preview{color:var(--muted)}
+body.ide .enquiry-row.unread .enquiry-preview{color:var(--ink)}
+body.ide .org-pill.status-new{background:var(--violet-soft);color:var(--violet)}
+body.ide .org-pill.status-replied{background:hsla(48,70%,60%,.13);color:hsl(23,90%,72%)}
+body.ide .org-pill.status-joined{background:hsla(141,70%,60%,.13);color:hsl(143,74%,72%)}
+body.ide .enquiry-message{background:var(--canvas)}
+body.ide .enquiry-message.mine{background:var(--violet-soft)}
+body.ide .enquiry-who{color:var(--muted)}
+body.ide .enquiry-status select{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .enquiry-invite{border-top:1px solid var(--line)}
+body.ide .chip-tabs a,body.ide .status-tabs a{border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+body.ide .chip-tabs a:hover,body.ide .status-tabs a:hover{color:var(--ink)}
+body.ide .chip-tabs a[aria-current],body.ide .status-tabs a[aria-current]{border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
+body.ide .org-note .icon{color:var(--violet)}
+body.ide .data-table th{border-bottom:1px solid var(--line);color:var(--muted)}
+body.ide .data-table td{border-bottom:1px solid var(--line)}
+body.ide .data-table tr:last-child td{border-bottom:0}
+body.ide .status-pill{background:var(--canvas);color:var(--muted)}
+body.ide .status-pill.live{background:hsla(133,70%,60%,.13);color:hsl(137,76%,72%)}
+body.ide .status-pill.pending{background:hsla(53,70%,60%,.13);color:hsl(37,90%,72%)}
+body.ide .status-pill.rejected{background:hsla(5,70%,60%,.13);color:var(--danger)}
+body.ide .promo-form input:not([type=checkbox]):not([type=file]),body.ide .promo-form select,body.ide .promo-form textarea{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .promo-audiences{border:1px solid var(--line)}
+body.ide.app .promo-preview h2{color:var(--muted)}
+body.ide .promo-tabs{border-bottom:1px solid var(--line)}
+body.ide .promo-tabs a{border-bottom:2px solid transparent;color:var(--muted)}
+body.ide .promo-tabs a.active{border-color:var(--violet);color:var(--ink)}
+body.ide .promo-tabs span{background:var(--canvas)}
+body.ide .promo-facts dt{color:var(--muted)}
+body.ide .promo-review-actions{border-top:1px solid var(--line)}
+body.ide .promo-note input{border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+body.ide .guidance-stats b{color:var(--ink)}
 /* overview.css */
 body.ide .engagement-loop{background:var(--ide-panel);border:1px solid var(--ide-line)}
 body.ide .healthy-badge{background:var(--ide-panel-2);color:hsl(163,77%,72%)}

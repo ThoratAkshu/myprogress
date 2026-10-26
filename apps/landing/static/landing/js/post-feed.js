@@ -1,23 +1,30 @@
 // Post feed: "more" opens a post's full text in place, and Expand opens the post in a viewer with the
 // video or article on the left and its details on the right. Without JavaScript the links open the post page.
 (() => {
-  document.querySelectorAll("[data-clamp]").forEach(text => {
-    const more = text.nextElementSibling?.matches("[data-more]") ? text.nextElementSibling : null;
-    if (!more) return;
-    const measure = () => {
-      if (text.hasAttribute("data-open")) return;
-      const clamped = text.scrollHeight > text.clientHeight + 2;
-      text.toggleAttribute("data-clamped", clamped);
-      more.hidden = !clamped;
-    };
-    measure();
-    window.addEventListener("load", measure, { once: true });
-    more.addEventListener("click", () => {
-      const open = text.toggleAttribute("data-open");
-      more.textContent = open ? "less" : "more";
-      if (!open) text.closest(".post-card")?.scrollIntoView({ block: "nearest" });
+  // Cards added later (For you keeps loading as you scroll) get the same set-up through MyProgressFeed.enhance.
+  function clampTexts(root) {
+    root.querySelectorAll("[data-clamp]:not([data-clamp-ready])").forEach(text => {
+      text.dataset.clampReady = "";
+      const more = text.nextElementSibling?.matches("[data-more]") ? text.nextElementSibling : null;
+      if (!more) return;
+      const measure = () => {
+        if (text.hasAttribute("data-open")) return;
+        const clamped = text.scrollHeight > text.clientHeight + 2;
+        text.toggleAttribute("data-clamped", clamped);
+        more.hidden = !clamped;
+      };
+      measure();
+      if (document.readyState === "complete") requestAnimationFrame(measure);
+      else window.addEventListener("load", measure, { once: true });
+      more.addEventListener("click", () => {
+        const open = text.toggleAttribute("data-open");
+        more.textContent = open ? "less" : "more";
+        if (!open) text.closest(".post-card")?.scrollIntoView({ block: "nearest" });
+      });
     });
-  });
+  }
+  clampTexts(document);
+  window.MyProgressFeed = { enhance(root) { clampTexts(root); enhanceArticles(root); } };
 
   // Chapters and transcript lines jump the post's video to that moment.
   document.addEventListener("click", event => {
@@ -288,10 +295,12 @@ window.MyProgressVideo = (() => {
     fetch(video.dataset.countView, { method: "POST", headers: { "X-CSRFToken": csrf(), "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin", keepalive: true }).catch(() => {});
   }, true);
 
-  // Feeds: the video most on screen plays; the others pause.
-  const feedVideos = [...document.querySelectorAll("video[data-feed-video]")];
-  if (!still && "IntersectionObserver" in window && feedVideos.length) {
-    const watcher = new IntersectionObserver(entries => entries.forEach(entry => {
+  // Feeds: the video most on screen plays; the others pause. watchFeed also sets up cards added later.
+  let watcher = null;
+  function watchFeed(root) {
+    const feedVideos = [...root.querySelectorAll("video[data-feed-video]:not([data-feed-ready])")];
+    if (still || !("IntersectionObserver" in window) || !feedVideos.length) return;
+    watcher = watcher || new IntersectionObserver(entries => entries.forEach(entry => {
       const video = entry.target;
       if (entry.intersectionRatio >= 0.6) {
         if (video.dataset.held === undefined) play(video);
@@ -301,6 +310,7 @@ window.MyProgressVideo = (() => {
       }
     }), { threshold: [0, 0.6, 1] });
     feedVideos.forEach(video => {
+      video.dataset.feedReady = "";
       const frame = video.closest("[data-video]");
       video.removeAttribute("controls");
       video.tabIndex = 0;  // Space pauses it, Enter opens it in Watch
@@ -316,6 +326,7 @@ window.MyProgressVideo = (() => {
     });
     showSound();
   }
+  watchFeed(document);
   let resume = [];  // another tab or app: pause, and carry on when they come back
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -326,5 +337,5 @@ window.MyProgressVideo = (() => {
       resume = [];
     }
   });
-  return { play, toggle, setSound, soundOn: () => soundOn, still };
+  return { play, toggle, setSound, soundOn: () => soundOn, still, watchFeed };
 })();

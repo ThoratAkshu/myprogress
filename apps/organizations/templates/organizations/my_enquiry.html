@@ -1,0 +1,12 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ enquiry.organization.name }} · Your enquiries{% endblock %}
+{% block content %}<div class="section-page org-page find-page">
+{% include "organizations/_find_tabs.html" %}
+<a class="page-back" href="{% url 'organizations:my_enquiries' %}">{% icon "chevron-left" 16 %}All your enquiries</a>
+<section class="card enquiry-head"><span class="org-logo sm" aria-hidden="true">{{ enquiry.organization|face }}</span>
+<div><h2>{{ enquiry.organization.name }}</h2><p class="muted">{{ enquiry.topic }}{% if enquiry.batch and enquiry.organization.is_listed %} · <a href="{% url 'organizations:batch' enquiry.batch.pk %}">The class</a>{% endif %}{% if enquiry.organization.is_listed %} · <a href="{% url 'organizations:listing' enquiry.organization.slug %}">The centre</a>{% endif %}</p></div>
+<em class="org-pill status-{{ enquiry.status }}">{% if enquiry.status == 'new' %}Waiting for a reply{% else %}{{ enquiry.get_status_display }}{% endif %}</em></section>
+{% include "organizations/_enquiry_thread.html" with centre_view=False %}
+{% if can_reply %}<form method="post" class="card org-form enquiry-reply">{% csrf_token %}<label>{{ form.text.label }}{{ form.text }}{% for error in form.text.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label><div class="org-form-actions"><button class="button primary">{% icon "send" 16 %}Send</button><small class="muted">The centre's teachers get a notification.</small></div></form>
+{% else %}<p class="card muted enquiry-closed">{% icon "lock" 16 %}This enquiry is {{ enquiry.get_status_display|lower }}.{% if enquiry.organization.is_listed %} <a href="{% url 'organizations:listing' enquiry.organization.slug %}#enquire">Send a new one</a> if you have more questions.{% endif %}</p>{% endif %}
+</div>{% endblock %}

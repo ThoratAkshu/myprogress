@@ -1,0 +1,16 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Admissions · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% include "organizations/_admissions_tabs.html" %}
+<form class="admissions-filter" method="get"><nav class="status-tabs" aria-label="Show">{% for key, label, total in filters %}<a href="?show={{ key }}{% if query %}&q={{ query|urlencode }}{% endif %}"{% if key == show %} aria-current="true"{% endif %}>{{ label }} <span>{{ total }}</span></a>{% endfor %}</nav>
+<label class="find-q">{% icon "search" 16 %}<span class="sr-only">Search enquiries</span><input type="search" name="q" value="{{ query }}" placeholder="Name, class or message" maxlength="80"></label><input type="hidden" name="show" value="{{ show }}"></form>
+{% if page.object_list %}<div class="card enquiry-list">{% for enquiry in page.object_list %}{% with last=enquiry.last_message %}
+<a class="enquiry-row{% if enquiry.unread_for_centre %} unread{% endif %}" href="{% url 'organizations:enquiry' organization.slug enquiry.pk %}">
+<span class="avatar {{ enquiry.student|avatar_tone }}" aria-hidden="true">{{ enquiry.student|face }}</span>
+<span class="enquiry-row-main"><b>{{ enquiry.student|public_name }}</b><small>{{ enquiry.topic }}{% if enquiry.phone %} · {{ enquiry.phone }}{% endif %}</small><span class="enquiry-preview">{% if last.from_centre %}You: {% endif %}{{ last.text|truncatechars:120 }}</span></span>
+<span class="enquiry-row-side"><small class="muted">{{ enquiry.last_message_at|ago }}</small><em class="org-pill status-{{ enquiry.status }}">{{ enquiry.get_status_display }}</em>{% if enquiry.unread_for_centre %}<span class="unread-dot" title="Unread"><span class="sr-only">Unread</span></span>{% endif %}</span>
+</a>{% endwith %}{% endfor %}</div>
+{% if page.has_other_pages %}<nav class="pager" aria-label="Pages">{% if page.has_previous %}<a class="button soft" href="?show={{ show }}&q={{ query|urlencode }}&page={{ page.previous_page_number }}">{% icon "chevron-left" 16 %}Newer</a>{% endif %}<span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button soft" href="?show={{ show }}&q={{ query|urlencode }}&page={{ page.next_page_number }}">Older{% icon "chevron-right" 16 %}</a>{% endif %}</nav>{% endif %}
+{% else %}<section class="card org-empty">{% icon "message" 28 %}<h2>{% if query or show != 'open' %}Nothing here{% else %}No open enquiries{% endif %}</h2><p class="muted">Students send enquiries from your page and your classes in Find a coaching centre.{% if not class_count %} <a href="{% url 'organizations:batches' organization.slug %}">List a class</a> so they can find you by course and place.{% endif %}</p></section>{% endif %}
+</div>{% endblock %}

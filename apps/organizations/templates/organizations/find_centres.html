@@ -1,0 +1,21 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}Coaching centres{% endblock %}
+{% block content %}<div class="section-page org-page find-page">
+{% include "organizations/_find_tabs.html" %}
+<div class="find-bar">
+<form class="card find-search" method="get" role="search"><label class="find-q"><span class="sr-only">Centre, course or area</span>{% icon "search" 18 %}<input type="search" name="q" value="{{ query }}" placeholder="Centre, course, area or PIN code" maxlength="80"></label>
+{% if cities %}<label><span class="sr-only">City</span><select name="city"><option value="">Any city</option>{% for name in cities %}<option value="{{ name }}"{% if name == city %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>{% endif %}
+<label><span class="sr-only">Type</span><select name="kind"><option value="">Any type</option>{% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<button class="button primary">Search</button></form>
+<form class="card find-code" method="get"><label><b>Have an invite code?</b><span class="muted small">Your centre may have given you one.</span><span class="find-code-row"><input name="code" value="{{ code }}" placeholder="Invite code" maxlength="24" autocomplete="off" required><button class="button soft">Open</button></span></label></form>
+</div>
+{% if page.object_list %}<p class="muted find-count">{{ page.paginator.count }} centre{{ page.paginator.count|pluralize }}{% if query or city or kind %} match{{ page.paginator.count|pluralize:"es," }} your search · <a href="{% url 'organizations:find_centres' %}">Clear</a>{% endif %}</p>
+<div class="find-grid">{% for organization in page.object_list %}<a class="card find-card" href="{% url 'organizations:listing' organization.slug %}">
+<span class="find-card-head"><span class="org-logo sm">{{ organization|face }}</span><span><b>{{ organization.name }}</b><small class="muted">{{ organization.get_kind_display }}{% if organization.place %} · {{ organization.place }}{% endif %}</small></span></span>
+{% if organization.listing_pitch %}<span class="find-pitch">{{ organization.listing_pitch }}</span>{% elif organization.about %}<span class="find-pitch">{{ organization.about|truncatechars:120 }}</span>{% endif %}
+{% if organization.course_list %}<ul class="course-chips">{% for course in organization.course_list|slice:":4" %}<li>{{ course }}</li>{% endfor %}</ul>{% endif %}
+<span class="find-card-foot"><span class="muted small">{% icon "users" 14 %}{{ organization.student_count }} student{{ organization.student_count|pluralize }}{% if organization.class_count %} · {{ organization.class_count }} class{{ organization.class_count|pluralize:"es" }}{% endif %}</span>{% if organization.my_state == "active" %}<span class="find-state member">{% icon "check" 14 %}You're a member</span>{% elif organization.my_state == "pending" %}<span class="find-state">{% icon "clock" 14 %}Request sent</span>{% else %}<span class="find-state join">Ask to join {% icon "chevron-right" 14 %}</span>{% endif %}</span>
+</a>{% endfor %}</div>
+{% if page.has_other_pages %}<nav class="pager" aria-label="Pages">{% if page.has_previous %}<a class="button soft" href="{% url 'organizations:find_centres' %}?q={{ query|urlencode }}&city={{ city|urlencode }}&kind={{ kind|urlencode }}&page={{ page.previous_page_number }}">{% icon "chevron-left" 16 %}Previous</a>{% endif %}<span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button soft" href="{% url 'organizations:find_centres' %}?q={{ query|urlencode }}&city={{ city|urlencode }}&kind={{ kind|urlencode }}&page={{ page.next_page_number }}">Next{% icon "chevron-right" 16 %}</a>{% endif %}</nav>{% endif %}
+{% else %}<section class="card empty-state">{% icon "users" 36 %}{% if listed_count %}<h2>No centres match</h2><p>Try another course or city, or clear the search.</p><a class="button soft" href="{% url 'organizations:find_centres' %}">Clear the search</a>{% else %}<h2>No coaching centres are listed yet</h2><p>Centres appear here once they choose to be listed. If your centre is already on MyProgress, ask them for an invite code or link.</p>{% endif %}</section>{% endif %}
+</div>{% endblock %}

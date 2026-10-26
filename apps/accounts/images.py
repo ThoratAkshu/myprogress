@@ -55,3 +55,18 @@ def channel_banner(upload):
     buffer = io.BytesIO()
     image.save(buffer, "JPEG", quality=85, optimize=True, progressive=True)
     return ContentFile(buffer.getvalue(), name=f"{uuid.uuid4().hex}.jpg")
+
+
+PROMOTION_SIZE = (1200, 628)  # the usual feed post shape, 1.91:1
+PROMOTION_MAX_BYTES = 4 * 1024 * 1024
+
+
+def promotion_image(upload):
+    """A 1200x628 JPEG for a sponsored post, cropped from the centre so every post in the feed has the same shape."""
+    image = _open(upload, PROMOTION_MAX_BYTES, "image")
+    if image.width < 400:
+        raise ValidationError("The image needs to be at least 400 pixels wide so it stays sharp.")
+    image = ImageOps.fit(image.convert("RGB"), PROMOTION_SIZE, Image.LANCZOS)
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=85, optimize=True, progressive=True)
+    return ContentFile(buffer.getvalue(), name=f"{uuid.uuid4().hex}.jpg")

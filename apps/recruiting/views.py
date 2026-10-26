@@ -14,6 +14,7 @@ from apps.accounts.models import Profile
 from apps.core.models import ActivityEvent
 from apps.notifications.services import notify
 from apps.core.services import CODE_ACTIONS, CONTRIBUTION_ACTIONS, active_coding_days, language_breakdown, platform_languages, visible_developers
+from apps.resumes.models import ResumeSettings
 from .models import ContactRequest, Shortlist, ShortlistEntry
 def requests_url():
     """Where developers answer recruiters: Learn, then Network."""
@@ -57,6 +58,7 @@ def talent_search_view(request):
     page = Paginator(profiles.order_by(*ordering, "pk"), 12).get_page(request.GET.get("page"))
     candidate_ids = [profile.user_id for profile in page]
     shortlisted = set(ShortlistEntry.objects.filter(shortlist__owner=request.user, candidate_id__in=candidate_ids).values_list("candidate_id", flat=True))
+    resume_blocked = set(ResumeSettings.objects.filter(user_id__in=candidate_ids, recruiters_can_download=False).values_list("user_id", flat=True))
     request_status = dict(ContactRequest.objects.filter(recruiter=request.user, developer_id__in=candidate_ids).order_by("created_at").values_list("developer_id", "status"))
     for profile in page:
         repositories = profile.user.repositories.all()
@@ -67,6 +69,7 @@ def talent_search_view(request):
         profile.coding_days = active_coding_days(profile.user)
         profile.is_shortlisted = profile.user_id in shortlisted
         profile.contact_status = request_status.get(profile.user_id)
+        profile.resume_ok = profile.user_id not in resume_blocked
     query = request.GET.copy()
     query.pop("page", None)
     context = {"score_options": [("", "Any"), ("25", "25+"), ("50", "50+"), ("75", "75+")], "stage_options": [("", "Any"), ("student", "Students"), ("professional", "Professionals")], "verified_recruiter": daily_contact_limit(request.user) == DAILY_CONTACT_LIMIT, "unverified_limit": UNVERIFIED_DAILY_CONTACT_LIMIT, "full_limit": DAILY_CONTACT_LIMIT, "section": "talent", "page": page, "filters": filters, "sort": sort, "sorts": SORTS, "languages": platform_languages(), "shortlists": request.user.shortlists.all(), "querystring": query.urlencode(), "has_filters": any(filters[key] for key in ["q", "language", "skill", "location", "min_score", "active"])}
@@ -91,7 +94,8 @@ def shortlists_view(request):
     entries = active.entries.select_related("candidate__profile") if active else []
     stage_counts = dict(active.entries.values_list("stage").annotate(total=Count("id"))) if active else {}
     pipeline = [{"key": key, "label": label, "count": stage_counts.get(key, 0)} for key, label in ShortlistEntry.STAGE_CHOICES]
-    context = {"section": "shortlists", "shortlists": shortlists, "active": active, "entries": entries, "pipeline": pipeline, "stages": ShortlistEntry.STAGE_CHOICES}
+    resume_blocked = set(ResumeSettings.objects.filter(user__shortlist_entries__shortlist=active, recruiters_can_download=False).values_list("user_id", flat=True)) if active else set()
+    context = {"section": "shortlists", "shortlists": shortlists, "active": active, "entries": entries, "pipeline": pipeline, "stages": ShortlistEntry.STAGE_CHOICES, "resume_blocked": resume_blocked}
     return render(request, "recruiting/shortlists.html", context)
 @recruiter_required
 @require_POST

@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 class Notification(models.Model):
-    KIND_CHOICES = [("follow", "New follower"), ("like", "Like"), ("comment", "Comment"), ("contact_request", "Contact request"), ("contact_response", "Contact response"), ("collaborator", "Repository access"), ("issue", "Issue activity"), ("pull", "Pull request activity"), ("earnings", "Earnings"), ("organization", "Organization")]
+    KIND_CHOICES = [("follow", "New follower"), ("like", "Like"), ("comment", "Comment"), ("contact_request", "Contact request"), ("contact_response", "Contact response"), ("collaborator", "Repository access"), ("issue", "Issue activity"), ("pull", "Pull request activity"), ("earnings", "Earnings"), ("organization", "Organization"), ("promotion", "Sponsored post")]
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     kind = models.CharField(max_length=20, choices=KIND_CHOICES)

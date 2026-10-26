@@ -1,4 +1,4 @@
-{% load ui learning_tags %}{% for post in reels %}{% with author=post.author profile=post.author.profile detail_url=post.get_absolute_url here=request.path %}<article class="reel{% if post.is_tall %} is-tall{% endif %}" data-reel data-post="{{ post.pk }}" aria-label="{{ post.title }}">
+{% load ui learning_tags %}{% for item in reel_items %}{% if not item.post %}{% include "learning/_reel_ad.html" %}{% else %}{% with post=item.post %}{% with author=post.author profile=post.author.profile detail_url=post.get_absolute_url here=request.path %}<article class="reel{% if post.is_tall %} is-tall{% endif %}" data-reel data-post="{{ post.pk }}" aria-label="{{ post.title }}">
 <div class="reel-frame{% if not post.video_file %} is-embed{% endif %}" data-video style="--ratio:{% if post.is_tall %}0.5625{% else %}1.7778{% endif %}">{% if post.video_file %}<video data-autoplay muted loop playsinline preload="none" tabindex="0" src="{{ post.video_src }}"{% if post.thumbnail %} poster="{{ post.thumbnail_src }}"{% endif %} data-count-view="{% url 'learning:watched' post.pk %}">{% if post.captions %}<track kind="captions" label="Captions" src="{% url 'learning:captions' post.pk %}" default>{% endif %}</video>
 <span class="reel-state" aria-hidden="true">{% icon "play" 56 %}</span>
 <button class="video-sound" type="button" data-video-sound aria-pressed="false" aria-label="Sound">{% icon "volume-x" 18 %}{% icon "volume" 18 %}</button>
@@ -19,4 +19,4 @@
 <span class="reel-action is-static" title="Views">{% icon "eye" 24 %}<span>{{ post.views }}</span></span>
 <a class="reel-action" href="{{ detail_url }}" aria-label="Open the post, with chapters and comments">{% icon "maximize" 22 %}<span>Open</span></a>
 </div>
-</article>{% endwith %}{% endfor %}
+</article>{% endwith %}{% endwith %}{% endif %}{% endfor %}

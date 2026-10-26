@@ -1,0 +1,11 @@
+{% load ui %}<section class="card centre-contact"><h2>{% if batch %}The centre{% else %}Visit or contact{% endif %}</h2>
+{% if batch %}<a class="class-card-centre" href="{% url 'organizations:listing' organization.slug %}"><span class="org-logo xs" aria-hidden="true">{{ organization|face }}</span><span>{{ organization.name }}</span></a>{% endif %}
+<ul class="class-facts">
+{% if organization.address or organization.place %}<li>{% icon "map-pin" 16 %}<span>{% if organization.address %}{{ organization.address }}, {% endif %}{{ organization.place }}{% if organization.pincode %} {{ organization.pincode }}{% endif %}{% if organization.map_url %}<a class="own-line" href="{{ organization.map_url }}" target="_blank" rel="noopener">Open in Google Maps</a>{% endif %}</span></li>{% endif %}
+{% if organization.opening_hours %}<li>{% icon "clock" 16 %}<span>{{ organization.opening_hours }}</span></li>{% endif %}
+{% if organization.contact_phone %}<li>{% icon "phone" 16 %}<a href="tel:{{ organization.contact_phone|cut:' '|cut:'-' }}">{{ organization.contact_phone }}</a></li>{% endif %}
+{% if organization.website %}<li>{% icon "globe" 16 %}<a href="{{ organization.website }}" target="_blank" rel="noopener nofollow">{{ organization.website|cut:"https://"|cut:"http://"|truncatechars:40 }}</a></li>{% endif %}
+</ul>
+{% if not organization.address and not organization.place and not organization.opening_hours and not organization.contact_phone and not organization.website %}<p class="muted small">The centre hasn't added an address or phone yet. Send them an enquiry instead.</p>{% endif %}
+{% if batch %}<a class="button soft block" href="{% url 'organizations:listing' organization.slug %}">See the centre's page</a>{% endif %}
+</section>

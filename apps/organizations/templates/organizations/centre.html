@@ -1,0 +1,32 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page centre-page">
+<a class="page-back" href="{% url 'organizations:find' %}">{% icon "chevron-left" 16 %}Find a class</a>
+{% if viewer_is_staff %}<p class="card centre-preview">{% icon "eye" 16 %}<span>This is your centre's page in Find a coaching centre. Edit the address and contact details in {% if existing.role == 'owner' %}<a href="{% url 'organizations:settings' organization.slug %}">Settings</a>{% else %}Settings (owner){% endif %}, and your classes in <a href="{% url 'organizations:batches' organization.slug %}">Admissions</a>.</span></p>{% endif %}
+<header class="card centre-head">
+<span class="org-logo lg" aria-hidden="true">{{ organization|face }}</span>
+<div><span class="kicker">{{ organization.get_kind_display }}</span><h1>{{ organization.name }}</h1>
+<p class="muted centre-meta">{% if organization.place %}<span>{% icon "map-pin" 14 %}{{ organization.place }}</span>{% endif %}{% if student_count %}<span>{% icon "users" 14 %}{{ student_count }} student{{ student_count|pluralize }} on MyProgress</span>{% endif %}{% if batches %}<span>{% icon "calendar" 14 %}{{ batches|length }} class{{ batches|length|pluralize:"es" }} taking enquiries</span>{% endif %}</p>
+{% if organization.listing_pitch %}<p class="org-pitch"><b>{{ organization.listing_pitch }}</b></p>{% endif %}</div>
+</header>
+<div class="centre-grid">
+<div class="centre-main">
+{% if organization.about or organization.course_list %}<section class="card"><h2>About</h2>{% if organization.about %}<p class="org-about">{{ organization.about|linebreaksbr }}</p>{% endif %}{% if organization.course_list %}<ul class="course-chips" aria-label="Courses">{% for course in organization.course_list %}<li>{{ course }}</li>{% endfor %}</ul>{% endif %}</section>{% endif %}
+<section class="centre-classes" id="classes"><h2>Classes taking enquiries</h2>
+{% if batches %}<div class="find-grid">{% for batch in batches %}{% include "organizations/_batch_card.html" with hide_centre=True %}{% endfor %}</div>
+{% else %}<p class="card muted">No classes are listed right now. Send an enquiry to ask about upcoming batches.</p>{% endif %}</section>
+</div>
+<aside class="centre-side">
+{% include "organizations/_centre_contact.html" %}
+{% include "organizations/_enquiry_form.html" %}
+<section class="card centre-join"><h2>Join the centre</h2>
+{% if existing.status == 'active' %}<p>{% icon "check" 16 %} You're a member.</p><a class="button soft block" href="{% url 'organizations:channel' organization.slug %}">Open the class channel</a>
+{% elif existing.status == 'pending' %}<p class="org-waiting">{% icon "clock" 16 %}Your request is waiting for a teacher to approve it.</p>
+{% elif user.is_authenticated %}<p class="muted small">Members get the centre's live classes, notes and tasks on MyProgress. A teacher approves each request.</p>
+<details class="centre-consent"><summary>What its teachers will see</summary><ul>{% for item in shared %}<li>{{ item }}</li>{% endfor %}</ul><small class="muted">Your private repositories and drafts stay private. Leave any time and they lose access.</small></details>
+<form method="post">{% csrf_token %}<button class="button soft block">Ask to join</button></form>
+{% else %}<p class="muted small">Sign in or create an account to ask to join.</p>{% endif %}
+</section>
+</aside>
+</div>
+</div>{% endblock %}

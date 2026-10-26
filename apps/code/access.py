@@ -6,7 +6,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from apps.accounts.access import user_role
 from apps.accounts.models import Profile
-from apps.core.git_service import list_branches, repository_role, user_can_access, user_can_administer, user_can_change_visibility, user_can_maintain
+from apps.core.git_service import code_version, list_branches, repository_role, user_can_access, user_can_administer, user_can_change_visibility, user_can_maintain
 from apps.core.models import Issue, Repository
 class RepositoryDenied(Exception):
     def __init__(self, response):
@@ -40,6 +40,7 @@ def repository_context(request, repository, active_tab, branches=None):
         "clone_url": request.build_absolute_uri(reverse("landing:git_root", kwargs={"owner_id": repository.owner_id, "slug": repository.slug})),
         "open_issue_count": counts.get("issue", 0),
         "open_pull_count": counts.get("pull", 0),
+        "code_version": code_version(repository),
         "section": "code",
     }
 def breadcrumbs(path):

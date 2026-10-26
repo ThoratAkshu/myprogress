@@ -49,7 +49,7 @@ def visible_to(queryset, member):
     if member.is_staff:
         return queryset
     return queryset.filter(Q(group="") | Q(group__iexact=member.group))
-RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent", "classes-now", "calendar"}
+RESERVED_SLUGS = {"new", "join", "invite", "certificates", "parent", "classes-now", "calendar", "find", "centres", "enquiries"}
 def unique_slug(name):
     base = slugify(name)[:50] or "organization"
     if base in RESERVED_SLUGS:
@@ -73,12 +73,13 @@ def students_of(organization, group=""):
 def display_name(user):
     return user.get_full_name() or getattr(getattr(user, "profile", None), "handle", None) or user.email
 @transaction.atomic
-def join(organization, user, invite=None):
-    """Join from the shared link or an email invite. Returns the membership; it may wait for approval."""
+def join(organization, user, invite=None, require_approval=False):
+    """Join from the shared link or an email invite. Returns the membership; it may wait for approval. Requests from
+    Find a coaching centre always wait (require_approval), since anyone can send one."""
     existing = Membership.objects.filter(organization=organization, user=user).first()
     if existing:
         return existing
-    approved = invite is not None or not organization.join_requires_approval
+    approved = not require_approval and (invite is not None or not organization.join_requires_approval)
     member = Membership.objects.create(organization=organization, user=user, role=invite.role if invite else "student", group=invite.group if invite else "", status="active" if approved else "pending", invited_by=invite.created_by if invite else None)
     if invite:
         invite.accepted_at, invite.accepted_by = timezone.now(), user

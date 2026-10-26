@@ -1,0 +1,16 @@
+{% extends "organizations/base.html" %}{% load ui org_tags %}
+{% block title %}Classes you list · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% include "organizations/_admissions_tabs.html" %}
+<details class="card org-new-task" id="new-class"{% if form.errors or not batches %} open{% endif %}><summary>{% icon "plus" 18 %}<b>List a class</b><small>Course, days, place and fee, so students can find it and ask about it</small></summary>
+<form method="post" class="org-form">{% csrf_token %}{% include "organizations/_batch_fields.html" %}
+<div class="org-form-actions"><button class="button primary">List class</button><small class="muted">Area and city default to your centre's, from Settings.</small></div></form></details>
+<section class="org-task-list">
+{% for batch in batches %}<a class="card org-task" href="{% url 'organizations:batch_edit' organization.slug batch.pk %}">
+<div class="org-task-main"><b>{{ batch.title }}{% if not batch.is_open %} <em class="org-pill">Not taking enquiries</em>{% endif %}</b><small>{{ batch.course }} · {{ batch.get_mode_display }} · {{ batch.schedule }}{% if batch.starts_on %} · {% if batch.has_started %}Started{% else %}Starts{% endif %} {{ batch.starts_on|date:"j M" }}{% endif %}{% if batch.fee is not None %} · {{ batch.fee|rupees }} {{ batch.get_fee_period_display }}{% endif %}</small></div>
+<div class="org-task-progress"><span><b>{{ batch.open_count }}</b> open of {{ batch.enquiry_count }} enquir{{ batch.enquiry_count|pluralize:"y,ies" }}</span></div>
+{% if batch.is_open %}<em class="org-pill approved">Listed</em>{% else %}<em class="org-pill">Closed</em>{% endif %}
+</a>{% empty %}<section class="card org-empty">{% icon "calendar" 28 %}<h2>No classes listed yet</h2><p class="muted">List the batches you're taking students for. Students search them by course, area and city, and send you enquiries.</p></section>{% endfor %}
+</section>
+</div>{% endblock %}

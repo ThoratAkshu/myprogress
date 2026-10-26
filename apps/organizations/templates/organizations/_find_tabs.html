@@ -1,0 +1,6 @@
+{% load ui %}<header class="page-head"><div><span class="kicker">COACHING CENTRES</span><h1>Find a class</h1><p class="muted">Classes run by coaching centres on MyProgress. Search by course and place, ask the centre anything, and join when you're ready.</p></div></header>
+<nav class="org-tabs find-tabs" aria-label="Find a coaching centre">
+<a href="{% url 'organizations:find' %}"{% if find_tab == 'classes' %} aria-current="page"{% endif %}>{% icon "calendar" 16 %}Classes</a>
+<a href="{% url 'organizations:find_centres' %}"{% if find_tab == 'centres' %} aria-current="page"{% endif %}>{% icon "users" 16 %}Centres</a>
+{% if user.is_authenticated and not nav_is_recruiter and not nav_is_organization %}<a href="{% url 'organizations:my_enquiries' %}"{% if find_tab == 'enquiries' %} aria-current="page"{% endif %}>{% icon "message" 16 %}Your enquiries{% if unread %}<span class="tab-badge" aria-label="{{ unread }} with new replies">{{ unread }}</span>{% endif %}</a>{% endif %}
+</nav>

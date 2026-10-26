@@ -37,6 +37,7 @@ POLICY = {
     "landing:git_root": PUBLIC, "landing:git_http": PUBLIC,
     # Repositories: public ones are readable by anyone; private ones and every change are checked per repository.
     "landing:repository": PUBLIC,
+    "code:state": PUBLIC,  # an open code page checks it to offer a refresh after a push; the view checks access
     "code:blob": PUBLIC, "code:raw": PUBLIC, "code:commit": PUBLIC, "code:issues": PUBLIC, "code:issue": PUBLIC, "code:pulls": PUBLIC, "code:pull": PUBLIC,
     "code:issue_create": PUBLIC, "code:issue_comment": PUBLIC, "code:issue_state": PUBLIC, "code:pull_create": PUBLIC, "code:pull_merge": PUBLIC, "code:collaborators": PUBLIC, "code:leave": PUBLIC,
     "repository_invitations:list": PUBLIC, "repository_invitations:detail": PUBLIC,  # the views check who the invitation is for
@@ -75,13 +76,23 @@ POLICY = {
     "organizations:calendar_feed": PUBLIC,  # calendar apps fetch it without signing in; the private address is the key
     "organizations:join": PUBLIC, "organizations:accept_invite": PUBLIC,  # explain the invitation first; joining needs a sign-in
     "organizations:certificate": PUBLIC,  # public certificate verification
+    "organizations:find": PUBLIC, "organizations:listing": PUBLIC,  # Find a coaching centre: only centres that chose to be listed; asking to join needs a sign-in
+    "organizations:find_centres": PUBLIC, "organizations:batch": PUBLIC,  # browsing classes and centres needs no account
+    # Enquiries come from students and professionals; each sees only their own. Centres answer them in Admissions (below).
+    "organizations:enquire": DEVELOPERS, "organizations:my_enquiries": DEVELOPERS, "organizations:my_enquiry": DEVELOPERS,
+    # Resumes: students and professionals make their own; recruiters and organizations hiring open a candidate's (the view checks the candidate allows it).
+    "resumes:mine": DEVELOPERS, "resumes:candidate": HIRING,
+    # Next steps on the home feed (students and professionals); the member activity report checks staff status itself.
+    "guidance:go": DEVELOPERS, "guidance:dismiss": DEVELOPERS, "guidance:report": ALL_ROLES,
+    # Sponsored posts: the views check who may sponsor (centre owners, confirmed recruiters, company owners) and staff status for review.
+    **{f"promotions:{name}": ALL_ROLES for name in ["list", "create", "edit", "action", "review", "review_action", "go", "hide"]},
     "organizations:parent_report": PUBLIC, "organizations:parent_emails": PUBLIC,  # the private link is the key
     **{f"organizations:{name}": ALL_ROLES for name in [
         "home", "overview", "members", "member", "member_action", "parent_access", "invite", "import", "import_template", "leave",
         "channel", "channel_delete", "channel_publish", "release_now", "channel_file", "playlist", "playlist_create", "playlist_save", "tasks", "task", "task_delete", "task_file",
         "review", "submission_file", "settings", "leaderboard", "certificates", "classes", "live_class", "join_class", "class_room", "cancel_class",
         "class_calendar", "calendar_reset", "live_now", "teaching_board", "recording_start", "recording_piece", "recording_finish", "recording_edit", "recording_file",
-        "watch", "class_stream", "class_stream_bytes", "class_chat",
+        "watch", "class_stream", "class_stream_bytes", "class_chat", "admissions", "enquiry", "batches", "batch_edit",
     ]},
     # The finance console has its own sign-in for finance staff (see earnings.views.finance_required).
     **{f"finance:{name}": PUBLIC for name in [

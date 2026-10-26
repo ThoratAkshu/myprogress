@@ -1,0 +1,17 @@
+{% extends "landing/app_base.html" %}{% load static ui %}
+{% block title %}{% if promotion.pk %}Edit sponsored post{% else %}New sponsored post{% endif %}{% endblock %}
+{% block content %}<div class="section-page promo-page">
+<a class="page-back" href="{% url 'promotions:list' %}">{% icon "chevron-left" 16 %}Sponsored posts</a>
+<header class="page-head"><div><span class="kicker">SPONSORED POST</span><h1>{% if promotion.pk %}Edit “{{ promotion.headline }}”{% else %}New sponsored post{% endif %}</h1><p class="muted">{% if promotion.status == "live" or promotion.status == "paused" %}Saving a change sends the post for review again; it keeps running as it was until staff approve the change.{% else %}Save it as a draft, or send it for review. Staff check that it's honest and clear before it goes live.{% endif %}</p></div></header>
+<div class="promo-editor">
+<form method="post" enctype="multipart/form-data" class="card promo-form" data-promo-form>{% csrf_token %}
+{% if form.non_field_errors %}<p class="form-error">{{ form.non_field_errors|join:" " }}</p>{% endif %}
+{% for field in form %}{% if field.is_hidden %}{{ field }}{% elif field.name == "audiences" %}<fieldset class="promo-audiences"><legend>{{ field.label }}</legend><small class="muted">{{ field.help_text }}</small>{% for choice in field %}<label class="org-check">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endfor %}</fieldset>
+{% elif field.name == "remove_image" %}{% if promotion.image %}<label class="org-check">{{ field }}<span>{{ field.label }}</span></label>{% endif %}
+{% else %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small class="form-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}
+<div class="promo-buttons">{% if promotion.status == "live" or promotion.status == "paused" %}<button class="button primary" name="submit" value="1">Save and send for review</button>{% else %}<button class="button primary" name="submit" value="1">Send for review</button><button class="button soft">Save draft</button>{% endif %}</div>
+</form>
+<aside class="promo-preview"><h2 class="muted small">How it looks in the feed</h2>{% include "promotions/_card.html" with promotion=promotion preview=True %}<p class="muted small">Members can hide a sponsored post or report it. Posts with several reports pause until staff review them.</p></aside>
+</div>
+</div>{% endblock %}
+{% block scripts %}<script src="{% static 'promotions/promotions.js' %}" defer></script>{% endblock %}

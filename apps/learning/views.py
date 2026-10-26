@@ -348,12 +348,15 @@ def watch_posts(user):
     return (LearningPost.objects.filter(is_public=True).filter(~Q(video_file="") | Q(video_url__regex=YOUTUBE_VIDEO_REGEX))
             .select_related("author__profile", "project").annotate(like_count=Count("likes", distinct=True), comment_count=Count("comments", distinct=True), seen=Exists(seen))
             .order_by(Case(When(author=user, then=2), When(seen=True, then=1), default=0), "-published_at"))
-def _reels_context(user, reels):
+def _reels_context(user, reels, suggest=False):
+    """The videos for Watch, with ads as their own full-height slides between them: MyProgress's suggestion in the
+    first batch (`suggest`) and sponsored posts, placed as in the home feed."""
+    from apps.promotions.services import with_ads
     for post in reels:
         post.embed_url = "" if post.video_file else youtube_embed_url(post.video_url)
         post.is_tall = "/shorts/" in post.video_url
     authors = {post.author_id for post in reels}
-    return {"reels": reels, "liked_ids": set(PostLike.objects.filter(user=user, post__in=reels).values_list("post_id", flat=True)),
+    return {"reels": reels, "reel_items": with_ads(user, [{"key": f"post:{post.pk}", "post": post} for post in reels], suggest), "liked_ids": set(PostLike.objects.filter(user=user, post__in=reels).values_list("post_id", flat=True)),
             "following_ids": set(user.following_relationships.filter(following_id__in=authors).values_list("following_id", flat=True))}
 @login_required(login_url="landing:home")
 def watch_view(request):
@@ -366,7 +369,7 @@ def watch_view(request):
     start = request.GET.get("post", "")
     first = posts.filter(pk=start).first() if start.isdigit() else None
     reels = [first, *posts.exclude(pk=first.pk)[:WATCH_BATCH - 1]] if first else list(posts[:WATCH_BATCH])
-    return render(request, "learning/watch.html", {"section": "learning", **_reels_context(request.user, reels)})
+    return render(request, "learning/watch.html", {"section": "learning", **_reels_context(request.user, reels, suggest=True)})
 @login_required(login_url="landing:home")
 @require_POST
 @rate_limit("watched", 120, 600)

@@ -1,0 +1,30 @@
+{% extends "organizations/base.html" %}{% load ui org_tags %}
+{% block title %}{{ batch.title }} · {{ organization.name }}{% endblock %}
+{% block content %}<div class="section-page org-page centre-page">
+<a class="page-back" href="{% url 'organizations:find' %}">{% icon "chevron-left" 16 %}Find a class</a>
+{% if viewer_is_staff %}<p class="card centre-preview">{% icon "eye" 16 %}<span>This is how students see this class. <a href="{% url 'organizations:batch_edit' organization.slug batch.pk %}">Edit it in Admissions</a>.</span></p>{% endif %}
+<div class="centre-grid">
+<div class="centre-main">
+<section class="card class-detail">
+<a class="class-card-centre" href="{% url 'organizations:listing' organization.slug %}"><span class="org-logo xs" aria-hidden="true">{{ organization|face }}</span><span>{{ organization.name }}</span></a>
+<h1>{{ batch.title }}</h1>
+<ul class="course-chips" aria-label="About this class"><li>{{ batch.course }}</li><li class="chip-plain">{{ batch.get_level_display }}</li><li class="chip-plain">{{ batch.get_mode_display }}</li></ul>
+{% if not batch.is_open %}<p class="org-waiting">{% icon "lock" 16 %}This class isn't taking enquiries now.</p>{% endif %}
+<dl class="class-spec">
+<div><dt>{% icon "clock" 16 %}When</dt><dd>{{ batch.schedule }}</dd></div>
+{% if batch.starts_on %}<div><dt>{% icon "calendar" 16 %}{% if batch.has_started %}Started{% else %}Starts{% endif %}</dt><dd>{{ batch.starts_on|date:"l, j F Y" }}</dd></div>{% endif %}
+{% if batch.duration %}<div><dt>{% icon "activity" 16 %}Length</dt><dd>{{ batch.duration }}</dd></div>{% endif %}
+<div><dt>{% icon "map-pin" 16 %}Where</dt><dd>{% if batch.mode == 'online' %}Online, join from anywhere{% else %}{{ batch.place|default:"At the centre" }}{% if batch.mode == 'both' %}, or online{% endif %}{% endif %}</dd></div>
+<div><dt>{% icon "credit-card" 16 %}Fee</dt><dd>{% if batch.fee is not None %}{{ batch.fee|rupees }} {{ batch.get_fee_period_display }}{% else %}Ask the centre{% endif %}</dd></div>
+{% if batch.seats %}<div><dt>{% icon "users" 16 %}Seats</dt><dd>{{ batch.seats }}</dd></div>{% endif %}
+</dl>
+{% if batch.description %}<h2>What you'll learn</h2><p class="org-about">{{ batch.description|linebreaksbr }}</p>{% endif %}
+</section>
+</div>
+<aside class="centre-side">
+{% include "organizations/_enquiry_form.html" %}
+{% include "organizations/_centre_contact.html" %}
+</aside>
+</div>
+{% if others %}<section class="centre-more"><h2>More classes at {{ organization.name }}</h2><div class="find-grid">{% for batch in others %}{% include "organizations/_batch_card.html" with hide_centre=True %}{% endfor %}</div></section>{% endif %}
+</div>{% endblock %}

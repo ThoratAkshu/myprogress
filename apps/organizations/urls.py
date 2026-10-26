@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import admissions_views, views
 app_name = "organizations"
 urlpatterns = [
     path("", views.home_view, name="home"),
@@ -12,6 +12,13 @@ urlpatterns = [
     path("classes-now/", views.live_now_view, name="live_now"),
     path("calendar/<str:token>.ics", views.calendar_feed_view, name="calendar_feed"),
     path("calendar/reset/", views.calendar_reset_view, name="calendar_reset"),
+    path("find/", admissions_views.find_view, name="find"),
+    path("find/centres/", views.find_centres_view, name="find_centres"),
+    path("find/classes/<int:batch_id>/", admissions_views.batch_view, name="batch"),
+    path("find/enquiries/", admissions_views.my_enquiries_view, name="my_enquiries"),
+    path("find/enquiries/<int:enquiry_id>/", admissions_views.my_enquiry_view, name="my_enquiry"),
+    path("find/<slug:slug>/", admissions_views.centre_view, name="listing"),
+    path("find/<slug:slug>/enquire/", admissions_views.enquire_view, name="enquire"),
     path("<slug:slug>/", views.overview_view, name="overview"),
     path("<slug:slug>/students/", views.members_view, name="members"),
     path("<slug:slug>/students/<int:user_id>/", views.member_detail_view, name="member"),
@@ -36,6 +43,10 @@ urlpatterns = [
     path("<slug:slug>/submissions/<int:submission_id>/review/", views.review_view, name="review"),
     path("<slug:slug>/submissions/<int:submission_id>/file/", views.submission_file_view, name="submission_file"),
     path("<slug:slug>/settings/", views.settings_view, name="settings"),
+    path("<slug:slug>/admissions/", admissions_views.admissions_view, name="admissions"),
+    path("<slug:slug>/admissions/enquiries/<int:enquiry_id>/", admissions_views.enquiry_view, name="enquiry"),
+    path("<slug:slug>/admissions/classes/", admissions_views.batches_view, name="batches"),
+    path("<slug:slug>/admissions/classes/<int:batch_id>/", admissions_views.batch_edit_view, name="batch_edit"),
     path("<slug:slug>/leaderboard/", views.leaderboard_view, name="leaderboard"),
     path("<slug:slug>/certificates/", views.certificates_view, name="certificates"),
     path("<slug:slug>/live/", views.classes_view, name="classes"),

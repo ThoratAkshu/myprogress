@@ -1,0 +1,10 @@
+{% extends "organizations/base.html" %}{% load ui %}
+{% block title %}{{ batch.title }} · Admissions{% endblock %}
+{% block content %}<div class="section-page org-page">
+{% include "organizations/_head.html" %}
+{% include "organizations/_admissions_tabs.html" %}
+<a class="page-back" href="{% url 'organizations:batches' organization.slug %}">{% icon "chevron-left" 16 %}Classes you list</a>
+<form method="post" class="card org-form">{% csrf_token %}<h2>Edit class</h2>{% include "organizations/_batch_fields.html" %}
+<div class="org-form-actions"><button class="button primary">Save</button>{% if organization.is_listed %}<a class="button soft" href="{% url 'organizations:batch' batch.pk %}">{% icon "eye" 16 %}See it as students do</a>{% endif %}</div></form>
+<form method="post" class="card org-danger" data-confirm="Delete this class? This can't be undone.">{% csrf_token %}<input type="hidden" name="action" value="delete"><h2>Delete class</h2><p class="muted">Only classes nobody has asked about can be deleted. Otherwise turn off "Taking enquiries" above, so the conversations keep their class.</p><button class="button soft">{% icon "trash" 16 %}Delete class</button></form>
+</div>{% endblock %}

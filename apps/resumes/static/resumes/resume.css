@@ -1,0 +1,96 @@
+/* Resume pages. The editor uses the app's theme; the resume itself is always a white A4 sheet with fixed print
+   colours, so it looks the same in every theme, in developer mode and on paper. */
+.resume-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:20px;align-items:start}
+.resume-layout.is-single{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1100px){.resume-layout{grid-template-columns:minmax(0,1fr)}}
+.resume-editor{display:grid;gap:14px;position:sticky;top:76px}
+@media (max-width:1100px){.resume-editor{position:static}}
+.resume-editor h1{margin:0;font-size:22px}
+.resume-editor>p{margin:0;font-size:13.5px}
+.resume-editor fieldset{display:grid;gap:8px;margin:0;padding:12px;border:1px solid var(--line);border-radius:10px}
+.resume-editor legend{padding:0 4px;font-size:13px;font-weight:700}
+.resume-field{display:grid;gap:5px;font-size:13px;font-weight:700}
+.resume-field small{font-weight:400}
+.resume-field input,.resume-field textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-weight:400}
+.resume-field textarea{min-height:96px;resize:vertical}
+.resume-check{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;font-weight:600;text-align:left;cursor:pointer}
+.resume-check input{flex:none;width:auto;height:auto;margin:3px 0 0}
+.resume-check span{flex:1;min-width:0}
+.resume-editor label{margin:0}
+.resume-pick{gap:6px!important}
+.resume-pick .resume-check{padding:3px 0}
+.resume-check small{font-weight:400}
+.resume-templates{grid-template-columns:repeat(2,minmax(0,1fr))}
+.resume-template-choice{display:grid;justify-items:center;gap:6px;padding:8px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:13px}
+.resume-template-choice:has(input:checked){border-color:var(--violet);background:var(--violet-soft)}
+.resume-template-choice input{position:absolute;opacity:0;pointer-events:none}
+.resume-thumb{display:grid;gap:3px;width:64px;height:84px;padding:6px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.resume-thumb i{display:block;border-radius:2px;background:#cbd5e1}
+.resume-thumb.is-modern{grid-template-columns:2fr 1fr;grid-template-rows:16px 1fr}
+.resume-thumb.is-modern i:first-child{grid-column:1/-1;background:#1e3a8a}
+.resume-thumb.is-modern i:last-child{background:#e2e8f0}
+.resume-thumb.is-classic{grid-template-rows:12px 6px 1fr}
+.resume-thumb.is-classic i:first-child{width:60%;justify-self:center;background:#334155}
+.resume-preview{display:grid;gap:12px;min-width:0}
+.resume-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.resume-sheet{--rs-ink:#1f2937;--rs-muted:#5b6474;--rs-accent:#1e3a8a;--rs-line:#e5e7eb;--rs-tint:#f1f5f9;box-sizing:border-box;width:100%;max-width:210mm;min-height:297mm;margin:0 auto;padding:14mm;border-radius:4px;background:#fff;color:var(--rs-ink);box-shadow:0 10px 40px rgba(15,23,42,.18);font:400 12.5px/1.5 "DM Sans",system-ui,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.resume-sheet a{color:var(--rs-accent);text-decoration:none}
+body.app .resume-sheet h1{margin:0;color:var(--rs-ink);font:800 26px/1.15 Manrope,"DM Sans",sans-serif;letter-spacing:0}
+body.app .resume-sheet h2{margin:0 0 6px;padding-bottom:3px;border-bottom:1.5px solid var(--rs-line);color:var(--rs-accent);font:800 11.5px/1.3 Manrope,"DM Sans",sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.resume-sheet section{margin-bottom:14px;break-inside:avoid}
+.resume-sheet p{margin:0}
+.rs-headline{margin-top:3px!important;font-size:14px;font-weight:600}
+.rs-contact{display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px 0 0;padding:0;list-style:none;font-size:11.5px}
+.rs-contact li{display:inline-flex;align-items:center;gap:5px}
+.rs-contact .icon{flex:none}
+.rs-body{margin-top:14px}
+.rs-project{margin-bottom:10px;break-inside:avoid}
+.rs-project:last-child{margin-bottom:0}
+.rs-project-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px}
+.rs-project-head b{font-size:13.5px}
+.rs-tag{padding:1px 7px;border-radius:99px;background:var(--rs-tint);color:var(--rs-muted);font-size:10.5px;font-weight:700}
+.rs-tag.is-private{background:#fef3c7;color:#92400e}
+.rs-meta,.rs-links,.rs-note{color:var(--rs-muted);font-size:11.5px}
+.rs-links{overflow-wrap:anywhere}
+.rs-item{display:grid;margin-bottom:6px;break-inside:avoid}
+.rs-item span{color:var(--rs-muted);font-size:11.5px}
+.rs-chips{display:flex;flex-wrap:wrap;gap:4px;margin:0;padding:0;list-style:none}
+.rs-chips li{padding:2px 8px;border-radius:99px;background:var(--rs-tint);font-size:11px;font-weight:600}
+.rs-bars{display:grid;gap:5px;margin:0 0 4px;padding:0;list-style:none}
+.rs-bars li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center;font-size:11.5px}
+.rs-bars i{grid-column:1/-1;grid-row:2;height:4px;border-radius:99px;background:linear-gradient(90deg,var(--rs-accent) var(--w),var(--rs-line) var(--w))}
+.rs-bars small{color:var(--rs-muted)}
+.rs-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0}
+.rs-stats div{padding:6px 8px;border-radius:6px;background:var(--rs-tint)}
+.rs-stats dt{color:var(--rs-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.rs-stats dd{margin:0;font-size:15px;font-weight:800}
+.rs-stats dd small{color:var(--rs-muted);font-size:9.5px;font-weight:600}
+.rs-foot{margin-top:10px!important;padding-top:6px;border-top:1px solid var(--rs-line);color:var(--rs-muted);font-size:10px;text-align:center}
+/* Modern: a navy name band, the main column with a tinted column beside it */
+.resume-sheet.is-modern .rs-head{margin:-14mm -14mm 0;padding:11mm 14mm 9mm;border-radius:4px 4px 0 0;background:var(--rs-accent);color:#fff}
+body.app .resume-sheet.is-modern .rs-head h1,.resume-sheet.is-modern .rs-head a{color:#fff}
+.resume-sheet.is-modern .rs-headline{color:rgba(255,255,255,.85)}
+.resume-sheet.is-modern .rs-contact{color:rgba(255,255,255,.9)}
+.resume-sheet.is-modern .rs-body{display:grid;grid-template-columns:minmax(0,1fr) 62mm;gap:0 7mm}
+.resume-sheet.is-modern .rs-side{margin:-14px -14mm -4px 0;padding:14px 14mm 4px 6mm;background:var(--rs-tint)}
+.resume-sheet.is-modern .rs-side .rs-chips li,.resume-sheet.is-modern .rs-side .rs-stats div{background:#fff}
+/* Classic: centred name, one column, the short sections side by side at the end */
+.resume-sheet.is-classic .rs-head{padding-bottom:10px;border-bottom:2px solid var(--rs-ink);text-align:center}
+.resume-sheet.is-classic .rs-contact{justify-content:center}
+body.app .resume-sheet.is-classic h2{color:var(--rs-ink)}
+.resume-sheet.is-classic .rs-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 8mm}
+@media screen and (max-width:700px){
+  .resume-sheet{min-height:0;padding:20px}
+  .resume-sheet.is-modern .rs-head{margin:-20px -20px 0;padding:22px 20px 18px}
+  .resume-sheet.is-modern .rs-body,.resume-sheet.is-classic .rs-side{grid-template-columns:minmax(0,1fr)}
+  .resume-sheet.is-modern .rs-side{margin:6px -20px -6px;padding:14px 20px 4px}
+}
+/* Printing (Download PDF): only the sheet, on an A4 page */
+@media print{
+  @page{size:A4;margin:0}
+  body.resume-page{background:#fff!important}
+  body.resume-page>*:not(.app-stage),body.resume-page .app-stage>*:not(main),body.resume-page main>*:not(.resume-layout),.resume-editor,.resume-tools{display:none!important}
+  body.resume-page .app-stage,body.resume-page main{display:block!important;margin:0!important;padding:0!important;max-width:none!important}
+  .resume-layout{display:block}
+  .resume-sheet{width:210mm;max-width:none;min-height:297mm;border-radius:0;box-shadow:none}
+}
