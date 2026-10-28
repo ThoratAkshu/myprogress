@@ -36,7 +36,7 @@ Production settings refuse to start without `ALLOWED_HOSTS`.
 
 ```bash
 python -m venv /opt/myprogress/venv
-/opt/myprogress/venv/bin/pip install -r requirements.txt gunicorn
+/opt/myprogress/venv/bin/pip install -r requirements.txt
 export DJANGO_SETTINGS_MODULE=config.settings.production
 python manage.py check --deploy        # should report no issues
 python manage.py migrate
